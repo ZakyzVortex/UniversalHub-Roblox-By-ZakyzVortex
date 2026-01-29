@@ -227,6 +227,111 @@ TabESP:CreateToggle({Name="Mostrar Vida", CurrentValue=true, Callback=function(v
 TabESP:CreateToggle({Name="Linha Única", CurrentValue=true, Callback=function(v) LINE_ENABLED=v refreshESP() end})
 TabESP:CreateToggle({Name="Contorno 4 Linhas", CurrentValue=true, Callback=function(v) OUTLINE_ENABLED=v refreshESP() end})
 
+-- ================== ESP (Highlight) ==================
+local TabESP = Window:CreateTab("Highlight ESP")
+
+-- Estados
+local ESP_ENABLED = false
+local CREATE_GUI = false -- não usado, mas mantido
+local KeyBind = Enum.KeyCode.H
+local colourTable = {
+    Green = Color3.fromRGB(0, 255, 0),
+    Blue = Color3.fromRGB(0, 0, 255),
+    Red = Color3.fromRGB(255, 0, 0),
+    Yellow = Color3.fromRGB(255, 255, 0),
+    Orange = Color3.fromRGB(255, 165, 0),
+    Purple = Color3.fromRGB(128, 0, 128)
+}
+local colourChosen = colourTable.Red
+
+-- Serviços
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+
+-- Função para pegar o personagem
+local function getCharacter(player)
+    for _, descendant in pairs(Workspace:GetDescendants()) do
+        pcall(function()
+            if descendant.Name == player.Name and descendant:FindFirstChild("HumanoidRootPart") then
+                return descendant
+            end
+        end)
+    end   
+    return Workspace:FindFirstChild(player.Name)
+end
+
+-- Adiciona Highlight
+local function addHighlightToCharacter(player, character)
+    if player == LocalPlayer then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp and not hrp:FindFirstChild("Highlight") then
+        local highlightClone = Instance.new("Highlight")
+        highlightClone.Name = "Highlight"
+        highlightClone.Adornee = character
+        highlightClone.Parent = hrp
+        highlightClone.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlightClone.FillColor = colourChosen
+        highlightClone.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlightClone.FillTransparency = 0.5
+    end
+end
+
+-- Remove Highlight
+local function removeHighlightFromCharacter(character)
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local highlightInstance = hrp:FindFirstChild("Highlight")
+        if highlightInstance then
+            highlightInstance:Destroy()
+        end
+    end
+end
+
+-- Atualiza todos os highlights
+local function updateHighlights()
+    for _, player in pairs(Players:GetPlayers()) do
+        local character = getCharacter(player)
+        if character then
+            if ESP_ENABLED then
+                addHighlightToCharacter(player, character)
+            else
+                removeHighlightFromCharacter(character)
+            end
+        end
+    end
+end
+
+-- Loop de atualização
+RunService.RenderStepped:Connect(updateHighlights)
+
+-- Players entrando e saindo
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function(character)
+        if ESP_ENABLED then
+            addHighlightToCharacter(player, character)
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    local character = player.Character
+    if character then
+        removeHighlightFromCharacter(character)
+    end
+end)
+
+-- ================== UI ==================
+TabESP:CreateToggle({
+    Name="Ativar ESP",
+    CurrentValue=false,
+    Callback=function(v)
+        ESP_ENABLED=v
+    end
+})
+
 -- ================== AIM ASSIST MOBILE ==================
 local TabAim = Window:CreateTab("Aim Assist Mobile")
 
