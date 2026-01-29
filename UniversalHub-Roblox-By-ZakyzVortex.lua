@@ -42,32 +42,35 @@ local TabPlayers = Window:CreateTab("Players")
 local TabWorld = Window:CreateTab("World")
 local TabUtil = Window:CreateTab("Utility")
 
--- ================== ESP AVANÇADO ==================
+-- ================== ESP ==================
 local TabESP = Window:CreateTab("ESP")
 
 -- Estados
 local ESP_ENABLED = false
-local BOX_ENABLED = true
 local NAME_ENABLED = true
 local DISTANCE_ENABLED = true
-local LINE_ENABLED = true
+local LINE_ENABLED = true -- linha única
 local HEALTH_ENABLED = true
+local OUTLINE_ENABLED = true -- quadrado contorno
 
 local ESP_COLOR = Color3.fromRGB(255,0,0)
 local LINE_COLOR = Color3.fromRGB(255,255,255)
+
 local ESP_OBJECTS = {}
+local DRAWINGS = {}
 
-local TEAM_FILTER = "Todos" -- opção inicial
-local teamOptions = {"Todos"}
+local TEAM_FILTER = "All"
 
--- Função para pegar o nome real do time do player
-local function getPlayerTeamName(player)
-    if player.Team then return player.Team.Name end
-    if player.TeamColor then return player.TeamColor.Name end
-    return "NoTeam"
+local function getPlayerTeam(player)
+    if player.Team and player.Team.Name then
+        return player.Team.Name
+    elseif player.TeamColor then
+        return tostring(player.TeamColor)
+    else
+        return "NoTeam"
+    end
 end
 
--- Cria ESP para um player
 local function createESP(player)
     if player == LP then return end
     if not player.Character then return end
@@ -76,35 +79,22 @@ local function createESP(player)
     local hum = player.Character:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then return end
 
-    -- Filtro de time
-    if TEAM_FILTER ~= "Todos" then
-        local playerTeam = getPlayerTeamName(player)
-        if playerTeam ~= TEAM_FILTER then return end
+    if TEAM_FILTER ~= "All" then
+        local myTeam = LP.Team and LP.Team.Name or (LP.TeamColor and tostring(LP.TeamColor)) or "NoTeam"
+        local playerTeam = getPlayerTeam(player)
+        if TEAM_FILTER == "MyTeam" and playerTeam ~= myTeam then return end
+        if TEAM_FILTER == "EnemyTeam" and playerTeam == myTeam then return end
     end
 
-    -- Caixa contorno
-    local box
-    if BOX_ENABLED then
-        box = Instance.new("BoxHandleAdornment")
-        box.Adornee = hrp
-        box.Size = Vector3.new(4,6,2)
-        box.Color3 = ESP_COLOR
-        box.AlwaysOnTop = true
-        box.Transparency = 1
-        box.ZIndex = 5
-        box.LineThickness = 2
-        box.Parent = hrp
-    end
-
-    -- Nome
-    local nameBillboard
-    if NAME_ENABLED then
-        nameBillboard = Instance.new("BillboardGui")
-        nameBillboard.Name = "ESPName"
-        nameBillboard.Adornee = hrp
-        nameBillboard.Size = UDim2.new(0,100,0,50)
-        nameBillboard.StudsOffset = Vector3.new(0,3,0)
-        nameBillboard.AlwaysOnTop = true
+    -- Nome / Distância / Vida
+    local billboard
+    if NAME_ENABLED or DISTANCE_ENABLED or HEALTH_ENABLED then
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = "ESPName"
+        billboard.Adornee = hrp
+        billboard.Size = UDim2.new(0,150,0,50)
+        billboard.StudsOffset = Vector3.new(0,3,0)
+        billboard.AlwaysOnTop = true
 
         local txt = Instance.new("TextLabel")
         txt.Size = UDim2.new(1,0,1,0)
@@ -112,165 +102,130 @@ local function createESP(player)
         txt.TextColor3 = ESP_COLOR
         txt.TextStrokeTransparency = 0
         txt.TextScaled = true
-        txt.Parent = nameBillboard
-        nameBillboard.Parent = hrp
+        txt.TextWrapped = true
+        txt.Parent = billboard
+        billboard.Parent = hrp
 
-        -- Atualiza nome + distância + vida
-        RunService.RenderStepped:Connect(function()
-            if txt.Parent and hum.Health > 0 and hrp.Parent then
-                local dist = math.floor((hrp.Position - HRP.Position).Magnitude)
-                local parts = {}
-                if NAME_ENABLED then table.insert(parts, player.Name) end
-                if DISTANCE_ENABLED then table.insert(parts, dist.."m") end
-                if HEALTH_ENABLED then table.insert(parts, "HP: "..math.floor(hum.Health)) end
-                txt.Text = table.concat(parts, " | ")
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if not txt.Parent or not hum or hum.Health <= 0 then conn:Disconnect() return end
+            local dist = math.floor((hrp.Position - HRP.Position).Magnitude)
+            local parts = {}
+            if NAME_ENABLED then table.insert(parts, player.Name) end
+            if DISTANCE_ENABLED then table.insert(parts, "["..dist.."m]") end
+            if HEALTH_ENABLED then table.insert(parts, "HP:"..math.floor(hum.Health)) end
+            txt.Text = table.concat(parts," | ")
+        end)
+    end
+
+    -- Linha única
+    local line
+    if LINE_ENABLED then
+        line = Drawing.new("Line")
+        line.Color = LINE_COLOR
+        line.Thickness = 1
+        line.Transparency = 1
+        line.Visible = true
+        table.insert(DRAWINGS, line)
+
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if not line or not hrp or not hrp.Parent or hum.Health <= 0 or not ESP_ENABLED then
+                line:Remove()
+                conn:Disconnect()
+                return
+            end
+            local rootPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                line.From = Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y)
+                line.To = Vector2.new(rootPos.X, rootPos.Y)
+                line.Visible = true
+            else
+                line.Visible = false
             end
         end)
     end
 
-    -- Linha
-    local line
-    if LINE_ENABLED then
-        line = Instance.new("LineHandleAdornment")
-        line.Adornee = hrp
-        line.Color3 = LINE_COLOR
-        line.Thickness = 1
-        line.AlwaysOnTop = true
-        line.Parent = hrp
+    -- Contorno 4 linhas sempre de frente para a câmera
+    local outline
+    if OUTLINE_ENABLED then
+        outline = {}
+        for i=1,4 do
+            local l = Drawing.new("Line")
+            l.Color = ESP_COLOR
+            l.Thickness = 2
+            l.Transparency = 1
+            l.Visible = true
+            table.insert(outline, l)
+            table.insert(DRAWINGS, l)
+        end
+
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if not hrp or not hrp.Parent or hum.Health <= 0 or not ESP_ENABLED then
+                for _,l in ipairs(outline) do l:Remove() end
+                conn:Disconnect()
+                return
+            end
+
+            local cam = workspace.CurrentCamera
+            local height = 3
+            local width = 2
+
+            local corners = {
+                hrp.Position + cam.CFrame.RightVector * width + Vector3.new(0,height,0),
+                hrp.Position - cam.CFrame.RightVector * width + Vector3.new(0,height,0),
+                hrp.Position - cam.CFrame.RightVector * width + Vector3.new(0,-height,0),
+                hrp.Position + cam.CFrame.RightVector * width + Vector3.new(0,-height,0)
+            }
+
+            local screen = {}
+            for i,corner in ipairs(corners) do
+                local pos,_ = cam:WorldToViewportPoint(corner)
+                screen[i] = Vector2.new(pos.X,pos.Y)
+            end
+
+            for i=1,4 do
+                outline[i].From = screen[i]
+                outline[i].To = screen[i%4+1]
+                outline[i].Visible = true
+            end
+        end)
     end
 
-    ESP_OBJECTS[player] = {box=box, name=nameBillboard, line=line}
+    ESP_OBJECTS[player] = {billboard=billboard, line=line, outline=outline}
 
-    -- Atualiza se o player respawnar
     player.CharacterAdded:Connect(function()
         task.wait(1)
         if ESP_ENABLED then createESP(player) end
     end)
 end
 
--- Limpa ESP
 local function clearESP()
     for _,v in pairs(ESP_OBJECTS) do
-        if v.box then v.box:Destroy() end
-        if v.name then v.name:Destroy() end
-        if v.line then v.line:Destroy() end
+        if v.billboard then v.billboard:Destroy() end
+        if v.line then v.line:Remove() end
+        if v.outline then for _,l in ipairs(v.outline) do l:Remove() end end
     end
     ESP_OBJECTS = {}
+    for _,d in ipairs(DRAWINGS) do if d then d:Remove() end end
+    DRAWINGS = {}
 end
 
--- Atualiza ESP para todos
 local function refreshESP()
     clearESP()
     if ESP_ENABLED then
-        for _,p in ipairs(Players:GetPlayers()) do
-            createESP(p)
-        end
+        for _,p in ipairs(Players:GetPlayers()) do createESP(p) end
     end
 end
 
--- Atualiza lista de times automaticamente
-local function updateTeamOptions()
-    local teams = {["Todos"]=true}
-    teamOptions = {"Todos"}
-    for _,p in ipairs(Players:GetPlayers()) do
-        local t = getPlayerTeamName(p)
-        if t and not teams[t] then
-            table.insert(teamOptions, t)
-            teams[t] = true
-        end
-    end
-end
-
-updateTeamOptions()
-
--- ================== CONTROLES DA ABA ==================
-TabESP:CreateToggle({
-    Name = "Ativar ESP",
-    CurrentValue = false,
-    Callback = function(v)
-        ESP_ENABLED = v
-        refreshESP()
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Mostrar Boxes",
-    CurrentValue = true,
-    Callback = function(v)
-        BOX_ENABLED = v
-        refreshESP()
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Mostrar Nome",
-    CurrentValue = true,
-    Callback = function(v)
-        NAME_ENABLED = v
-        refreshESP()
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Mostrar Distância",
-    CurrentValue = true,
-    Callback = function(v)
-        DISTANCE_ENABLED = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Mostrar Vida",
-    CurrentValue = true,
-    Callback = function(v)
-        HEALTH_ENABLED = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Mostrar Linhas",
-    CurrentValue = true,
-    Callback = function(v)
-        LINE_ENABLED = v
-        refreshESP()
-    end
-})
-
-TabESP:CreateColorPicker({
-    Name = "Cor do ESP",
-    Color = ESP_COLOR,
-    Callback = function(c)
-        ESP_COLOR = c
-        refreshESP()
-    end
-})
-
-TabESP:CreateDropdown({
-    Name = "Filtrar Times",
-    Options = teamOptions,
-    CurrentOption = "Todos",
-    Callback = function(opt)
-        TEAM_FILTER = opt
-        refreshESP()
-    end
-})
-
--- Atualiza ESP quando players entram/saem
-Players.PlayerAdded:Connect(function(p)
-    task.wait(1)
-    updateTeamOptions()
-    TabESP:Refresh(teamOptions)
-    if ESP_ENABLED then createESP(p) end
-end)
-
-Players.PlayerRemoving:Connect(function(p)
-    if ESP_OBJECTS[p] then
-        if ESP_OBJECTS[p].box then ESP_OBJECTS[p].box:Destroy() end
-        if ESP_OBJECTS[p].name then ESP_OBJECTS[p].name:Destroy() end
-        if ESP_OBJECTS[p].line then ESP_OBJECTS[p].line:Destroy() end
-        ESP_OBJECTS[p] = nil
-    end
-end)
+-- UI toggles
+TabESP:CreateToggle({Name="Ativar ESP", CurrentValue=false, Callback=function(v) ESP_ENABLED=v refreshESP() end})
+TabESP:CreateToggle({Name="Mostrar Nome", CurrentValue=true, Callback=function(v) NAME_ENABLED=v refreshESP() end})
+TabESP:CreateToggle({Name="Mostrar Distância", CurrentValue=true, Callback=function(v) DISTANCE_ENABLED=v refreshESP() end})
+TabESP:CreateToggle({Name="Mostrar Vida", CurrentValue=true, Callback=function(v) HEALTH_ENABLED=v refreshESP() end})
+TabESP:CreateToggle({Name="Linha Única", CurrentValue=true, Callback=function(v) LINE_ENABLED=v refreshESP() end})
+TabESP:CreateToggle({Name="Contorno 4 Linhas", CurrentValue=true, Callback=function(v) OUTLINE_ENABLED=v refreshESP() end})
 
 -- ================== AIM ASSIST MOBILE ==================
 local TabAim = Window:CreateTab("Aim Assist Mobile")
@@ -584,6 +539,5 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 print("✅ Universal Hub carregado sem bugs.")
-
 
 
