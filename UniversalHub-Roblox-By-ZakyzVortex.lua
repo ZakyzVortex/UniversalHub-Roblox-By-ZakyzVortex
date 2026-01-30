@@ -974,8 +974,8 @@ TabHighlight:CreateButton({
 
 -- Estados
 local AIM_ENABLED = false
-local AIM_FOV = 100
-local AIM_SMOOTH = 0.2
+local AIM_FOV = 70
+local AIM_SMOOTH = 0.3
 local AIM_TARGET_PART = "Head"
 local AIM_WALLCHECK = true
 local currentTarget = nil
@@ -1458,7 +1458,7 @@ end)
 
 -- ==================================================================================
 -- ================================= WORLD TAB ======================================
--- ==================================================================================
+--==================================================================================
 
 TabWorld:CreateSection("Tempo e Ambiente")
 
@@ -1548,7 +1548,7 @@ TabFPS:CreateSlider({
     Name = "FPS Cap",
     Range = {60, 240},
     Increment = 10,
-    CurrentValue = 120,
+    CurrentValue = 60,
     Callback = function(v)
         setfpscap(v)
     end
@@ -1605,7 +1605,7 @@ end)
 
 TabConfig:CreateSection("Anti AFK")
 
-local ANTI_AFK_ENABLED = false
+local ANTI_AFK_ENABLED = true
 
 local VirtualUser = game:GetService("VirtualUser")
 LP.Idled:Connect(function()
