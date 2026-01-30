@@ -735,7 +735,7 @@ local function addHighlight(player)
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillColor = highlightColor
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
+    highlight.FillTransparency = 0.7
     highlight.OutlineTransparency = 0
     highlight.Parent = hrp
     
