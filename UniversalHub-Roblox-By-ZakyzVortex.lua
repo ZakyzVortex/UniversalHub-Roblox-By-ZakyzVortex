@@ -735,7 +735,7 @@ local function addHighlight(player)
     highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.FillColor = highlightColor
     highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.7
+    highlight.FillTransparency = 0.5
     highlight.OutlineTransparency = 0
     highlight.Parent = hrp
     
@@ -974,8 +974,8 @@ TabHighlight:CreateButton({
 
 -- Estados
 local AIM_ENABLED = false
-local AIM_FOV = 70
-local AIM_SMOOTH = 0.3
+local AIM_FOV = 100
+local AIM_SMOOTH = 0.2
 local AIM_TARGET_PART = "Head"
 local AIM_WALLCHECK = true
 local currentTarget = nil
@@ -1458,7 +1458,7 @@ end)
 
 -- ==================================================================================
 -- ================================= WORLD TAB ======================================
---==================================================================================
+-- ==================================================================================
 
 TabWorld:CreateSection("Tempo e Ambiente")
 
@@ -1605,7 +1605,7 @@ end)
 
 TabConfig:CreateSection("Anti AFK")
 
-local ANTI_AFK_ENABLED = true
+local ANTI_AFK_ENABLED = false
 
 local VirtualUser = game:GetService("VirtualUser")
 LP.Idled:Connect(function()
