@@ -1,6 +1,3 @@
-Claro, aqui está o script completo:
-
-```lua
 -- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
 -- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
 
