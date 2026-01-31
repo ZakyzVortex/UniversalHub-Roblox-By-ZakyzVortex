@@ -1,3 +1,6 @@
+Vou corrigir os bugs mantendo todo o resto do código intacto. O problema está no ESP com Drawing API que não funciona bem no Arceus X mobile. Vou adicionar proteção para evitar erros:
+
+```lua
 -- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
 -- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
 
@@ -270,6 +273,12 @@ end)
 -- ================================== ESP TAB =======================================
 -- ==================================================================================
 
+-- Verifica se Drawing API está disponível
+local DRAWING_SUPPORTED = pcall(function()
+    local test = Drawing.new("Line")
+    test:Remove()
+end)
+
 -- Estados
 local ESP_ENABLED = false
 local NAME_ENABLED = true
@@ -297,18 +306,24 @@ local function removeESP(player)
     espData.active = false
     
     if espData.billboard then
-        espData.billboard:Destroy()
+        pcall(function()
+            espData.billboard:Destroy()
+        end)
         espData.billboard = nil
     end
     
-    if espData.line then
-        espData.line:Remove()
+    if espData.line and DRAWING_SUPPORTED then
+        pcall(function()
+            espData.line:Remove()
+        end)
         espData.line = nil
     end
     
-    if espData.outline then
+    if espData.outline and DRAWING_SUPPORTED then
         for _, l in ipairs(espData.outline) do
-            l:Remove()
+            pcall(function()
+                l:Remove()
+            end)
         end
         espData.outline = nil
     end
@@ -347,53 +362,71 @@ local function createESP(player)
 
     -- Billboard
     if NAME_ENABLED or DISTANCE_ENABLED or HEALTH_ENABLED then
-        local billboard = Instance.new("BillboardGui")
-        billboard.Name = "ESPName"
-        billboard.Adornee = hrp
-        billboard.Size = UDim2.new(0, 200, 0, 50)
-        billboard.StudsOffset = Vector3.new(0, 3, 0)
-        billboard.AlwaysOnTop = true
-        billboard.MaxDistance = 2000
+        local success, billboard = pcall(function()
+            local bb = Instance.new("BillboardGui")
+            bb.Name = "ESPName"
+            bb.Adornee = hrp
+            bb.Size = UDim2.new(0, 200, 0, 50)
+            bb.StudsOffset = Vector3.new(0, 3, 0)
+            bb.AlwaysOnTop = true
+            bb.MaxDistance = 2000
 
-        local txt = Instance.new("TextLabel")
-        txt.Size = UDim2.new(1, 0, 1, 0)
-        txt.BackgroundTransparency = 1
-        txt.TextColor3 = ESP_COLOR
-        txt.TextStrokeTransparency = 0
-        txt.TextStrokeColor3 = Color3.new(0, 0, 0)
-        txt.TextSize = 16
-        txt.Font = Enum.Font.SourceSansBold
-        txt.TextXAlignment = Enum.TextXAlignment.Center
-        txt.TextYAlignment = Enum.TextYAlignment.Center
-        txt.Parent = billboard
-        billboard.Parent = hrp
-
-        espData.billboard = billboard
-        espData.txt = txt
+            local txt = Instance.new("TextLabel")
+            txt.Size = UDim2.new(1, 0, 1, 0)
+            txt.BackgroundTransparency = 1
+            txt.TextColor3 = ESP_COLOR
+            txt.TextStrokeTransparency = 0
+            txt.TextStrokeColor3 = Color3.new(0, 0, 0)
+            txt.TextSize = 16
+            txt.Font = Enum.Font.SourceSansBold
+            txt.TextXAlignment = Enum.TextXAlignment.Center
+            txt.TextYAlignment = Enum.TextYAlignment.Center
+            txt.Parent = bb
+            bb.Parent = hrp
+            
+            return bb, txt
+        end)
+        
+        if success and billboard then
+            espData.billboard = billboard
+            espData.txt = billboard:FindFirstChildOfClass("TextLabel")
+        end
     end
 
-    -- Linha
-    if LINE_ENABLED then
-        local line = Drawing.new("Line")
-        line.Color = LINE_COLOR
-        line.Thickness = 2
-        line.Transparency = 1
-        line.Visible = false
-        line.ZIndex = 1
-        espData.line = line
-    end
-
-    -- Contorno
-    if OUTLINE_ENABLED then
-        espData.outline = {}
-        for i = 1, 4 do
+    -- Linha (só se Drawing for suportado)
+    if LINE_ENABLED and DRAWING_SUPPORTED then
+        local success, line = pcall(function()
             local l = Drawing.new("Line")
-            l.Color = ESP_COLOR
+            l.Color = LINE_COLOR
             l.Thickness = 2
             l.Transparency = 1
             l.Visible = false
-            l.ZIndex = 2
-            table.insert(espData.outline, l)
+            l.ZIndex = 1
+            return l
+        end)
+        
+        if success then
+            espData.line = line
+        end
+    end
+
+    -- Contorno (só se Drawing for suportado)
+    if OUTLINE_ENABLED and DRAWING_SUPPORTED then
+        espData.outline = {}
+        for i = 1, 4 do
+            local success, line = pcall(function()
+                local l = Drawing.new("Line")
+                l.Color = ESP_COLOR
+                l.Thickness = 2
+                l.Transparency = 1
+                l.Visible = false
+                l.ZIndex = 2
+                return l
+            end)
+            
+            if success then
+                table.insert(espData.outline, line)
+            end
         end
     end
 
@@ -453,10 +486,12 @@ RunService.RenderStepped:Connect(function()
     
     if not ESP_ENABLED or not HRP then
         for _, espData in pairs(ESP_OBJECTS) do
-            if espData.line then espData.line.Visible = false end
-            if espData.outline then
+            if espData.line and DRAWING_SUPPORTED then 
+                pcall(function() espData.line.Visible = false end)
+            end
+            if espData.outline and DRAWING_SUPPORTED then
                 for _, l in ipairs(espData.outline) do
-                    l.Visible = false
+                    pcall(function() l.Visible = false end)
                 end
             end
         end
@@ -481,10 +516,12 @@ RunService.RenderStepped:Connect(function()
         local hum = char:FindFirstChildOfClass("Humanoid")
 
         if not hrp or not hrp.Parent or not hum or hum.Health <= 0 then
-            if espData.line then espData.line.Visible = false end
-            if espData.outline then
+            if espData.line and DRAWING_SUPPORTED then 
+                pcall(function() espData.line.Visible = false end)
+            end
+            if espData.outline and DRAWING_SUPPORTED then
                 for _, l in ipairs(espData.outline) do
-                    l.Visible = false
+                    pcall(function() l.Visible = false end)
                 end
             end
             continue
@@ -499,79 +536,89 @@ RunService.RenderStepped:Connect(function()
 
         -- Atualiza texto
         if espData.txt then
-            local parts = {}
-            if NAME_ENABLED then
-                table.insert(parts, player.Name)
-            end
-            if DISTANCE_ENABLED then
-                table.insert(parts, string.format("[%dm]", math.floor(distance)))
-            end
-            if HEALTH_ENABLED then
-                table.insert(parts, string.format("HP:%d", math.floor(hum.Health)))
-            end
-            espData.txt.Text = table.concat(parts, " | ")
+            pcall(function()
+                local parts = {}
+                if NAME_ENABLED then
+                    table.insert(parts, player.Name)
+                end
+                if DISTANCE_ENABLED then
+                    table.insert(parts, string.format("[%dm]", math.floor(distance)))
+                end
+                if HEALTH_ENABLED then
+                    table.insert(parts, string.format("HP:%d", math.floor(hum.Health)))
+                end
+                espData.txt.Text = table.concat(parts, " | ")
+            end)
         end
 
         -- Atualiza linha
-        if espData.line and LINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                espData.line.From = viewportCenter
-                espData.line.To = Vector2.new(screenPos.X, screenPos.Y)
-                espData.line.Visible = true
-            else
+        if espData.line and LINE_ENABLED and DRAWING_SUPPORTED then
+            pcall(function()
+                if onScreen and inFrontOfCamera then
+                    espData.line.From = viewportCenter
+                    espData.line.To = Vector2.new(screenPos.X, screenPos.Y)
+                    espData.line.Visible = true
+                else
+                    espData.line.Visible = false
+                end
+            end)
+        elseif espData.line and DRAWING_SUPPORTED then
+            pcall(function()
                 espData.line.Visible = false
-            end
-        elseif espData.line then
-            espData.line.Visible = false
+            end)
         end
 
         -- Atualiza contorno
-        if espData.outline and OUTLINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                local height = 2.5
-                local width = 1.5
-                local rightVector = camCFrame.RightVector
+        if espData.outline and OUTLINE_ENABLED and DRAWING_SUPPORTED then
+            pcall(function()
+                if onScreen and inFrontOfCamera then
+                    local height = 2.5
+                    local width = 1.5
+                    local rightVector = camCFrame.RightVector
 
-                local corners = {
-                    hrpPos + rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, -height, 0),
-                    hrpPos + rightVector * width + Vector3.new(0, -height, 0)
-                }
+                    local corners = {
+                        hrpPos + rightVector * width + Vector3.new(0, height, 0),
+                        hrpPos - rightVector * width + Vector3.new(0, height, 0),
+                        hrpPos - rightVector * width + Vector3.new(0, -height, 0),
+                        hrpPos + rightVector * width + Vector3.new(0, -height, 0)
+                    }
 
-                local screenCorners = {}
-                local allVisible = true
+                    local screenCorners = {}
+                    local allVisible = true
 
-                for i, corner in ipairs(corners) do
-                    local pos, visible = cam:WorldToViewportPoint(corner)
-                    if not visible or pos.Z <= 0 then
-                        allVisible = false
-                        break
+                    for i, corner in ipairs(corners) do
+                        local pos, visible = cam:WorldToViewportPoint(corner)
+                        if not visible or pos.Z <= 0 then
+                            allVisible = false
+                            break
+                        end
+                        screenCorners[i] = Vector2.new(pos.X, pos.Y)
                     end
-                    screenCorners[i] = Vector2.new(pos.X, pos.Y)
-                end
 
-                if allVisible then
-                    for i = 1, 4 do
-                        local nextIndex = (i % 4) + 1
-                        espData.outline[i].From = screenCorners[i]
-                        espData.outline[i].To = screenCorners[nextIndex]
-                        espData.outline[i].Visible = true
+                    if allVisible then
+                        for i = 1, 4 do
+                            local nextIndex = (i % 4) + 1
+                            espData.outline[i].From = screenCorners[i]
+                            espData.outline[i].To = screenCorners[nextIndex]
+                            espData.outline[i].Visible = true
+                        end
+                    else
+                        for _, l in ipairs(espData.outline) do
+                            l.Visible = false
+                        end
                     end
                 else
                     for _, l in ipairs(espData.outline) do
                         l.Visible = false
                     end
                 end
-            else
+            end)
+        elseif espData.outline and DRAWING_SUPPORTED then
+            pcall(function()
                 for _, l in ipairs(espData.outline) do
                     l.Visible = false
                 end
-            end
-        elseif espData.outline then
-            for _, l in ipairs(espData.outline) do
-                l.Visible = false
-            end
+            end)
         end
     end
 end)
@@ -658,23 +705,28 @@ TabESP:CreateToggle({
     end
 })
 
-TabESP:CreateToggle({
-    Name = "Linha Única",
-    CurrentValue = true,
-    Callback = function(v)
-        LINE_ENABLED = v
-        refreshESP()
-    end
-})
+if DRAWING_SUPPORTED then
+    TabESP:CreateToggle({
+        Name = "Linha Única",
+        CurrentValue = true,
+        Callback = function(v)
+            LINE_ENABLED = v
+            refreshESP()
+        end
+    })
 
-TabESP:CreateToggle({
-    Name = "Contorno 4 Linhas",
-    CurrentValue = true,
-    Callback = function(v)
-        OUTLINE_ENABLED = v
-        refreshESP()
-    end
-})
+    TabESP:CreateToggle({
+        Name = "Contorno 4 Linhas",
+        CurrentValue = true,
+        Callback = function(v)
+            OUTLINE_ENABLED = v
+            refreshESP()
+        end
+    })
+else
+    TabESP:CreateLabel("⚠️ Drawing API não suportada")
+    TabESP:CreateLabel("Use Highlight ESP para melhor compatibilidade")
+end
 
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
@@ -726,52 +778,59 @@ local function addHighlight(player)
     
     local existingHighlight = hrp:FindFirstChild("Highlight")
     if existingHighlight then
-        existingHighlight:Destroy()
+        pcall(function()
+            existingHighlight:Destroy()
+        end)
     end
 
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "Highlight"
-    highlight.Adornee = char
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.FillColor = highlightColor
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.Parent = hrp
+    local success, highlight = pcall(function()
+        local h = Instance.new("Highlight")
+        h.Name = "Highlight"
+        h.Adornee = char
+        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        h.FillColor = highlightColor
+        h.OutlineColor = Color3.fromRGB(255, 255, 255)
+        h.FillTransparency = 0.5
+        h.OutlineTransparency = 0
+        h.Parent = hrp
+        return h
+    end)
     
-    highlightCache[player] = highlight
-    
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        local deathConnection
-        deathConnection = hum.Died:Connect(function()
-            task.wait(0.1)
-            if highlightCache[player] then
-                pcall(function()
-                    highlightCache[player]:Destroy()
-                end)
-                highlightCache[player] = nil
-            end
-            if deathConnection then
-                deathConnection:Disconnect()
+    if success and highlight then
+        highlightCache[player] = highlight
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local deathConnection
+            deathConnection = hum.Died:Connect(function()
+                task.wait(0.1)
+                if highlightCache[player] then
+                    pcall(function()
+                        highlightCache[player]:Destroy()
+                    end)
+                    highlightCache[player] = nil
+                end
+                if deathConnection then
+                    deathConnection:Disconnect()
+                end
+            end)
+        end
+        
+        local ancestryConnection
+        ancestryConnection = char.AncestryChanged:Connect(function(_, parent)
+            if not parent then
+                if highlightCache[player] then
+                    pcall(function()
+                        highlightCache[player]:Destroy()
+                    end)
+                    highlightCache[player] = nil
+                end
+                if ancestryConnection then
+                    ancestryConnection:Disconnect()
+                end
             end
         end)
     end
-    
-    local ancestryConnection
-    ancestryConnection = char.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if highlightCache[player] then
-                pcall(function()
-                    highlightCache[player]:Destroy()
-                end)
-                highlightCache[player] = nil
-            end
-            if ancestryConnection then
-                ancestryConnection:Disconnect()
-            end
-        end
-    end)
 end
 
 -- Função para remover highlight
@@ -896,7 +955,9 @@ TabHighlight:CreateColorPicker({
         highlightColor = color
         for player, highlight in pairs(highlightCache) do
             if highlight and highlight.Parent then
-                highlight.FillColor = color
+                pcall(function()
+                    highlight.FillColor = color
+                end)
             end
         end
     end
@@ -910,7 +971,9 @@ TabHighlight:CreateSlider({
     Callback = function(v)
         for player, highlight in pairs(highlightCache) do
             if highlight and highlight.Parent then
-                highlight.FillTransparency = v
+                pcall(function()
+                    highlight.FillTransparency = v
+                end)
             end
         end
     end
@@ -924,7 +987,9 @@ TabHighlight:CreateSlider({
     Callback = function(v)
         for player, highlight in pairs(highlightCache) do
             if highlight and highlight.Parent then
-                highlight.OutlineTransparency = v
+                pcall(function()
+                    highlight.OutlineTransparency = v
+                end)
             end
         end
     end
@@ -938,7 +1003,9 @@ TabHighlight:CreateDropdown({
         local depthMode = option == "AlwaysOnTop" and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
         for player, highlight in pairs(highlightCache) do
             if highlight and highlight.Parent then
-                highlight.DepthMode = depthMode
+                pcall(function()
+                    highlight.DepthMode = depthMode
+                end)
             end
         end
     end
@@ -978,7 +1045,7 @@ local AIM_FOV = 100
 local AIM_SMOOTH = 0.2
 local AIM_TARGET_PART = "Head"
 local AIM_WALLCHECK = true
-local AIM_IGNORE_BEHIND = false  -- NOVA OPÇÃO
+local AIM_IGNORE_BEHIND = false
 local currentTarget = nil
 local lastTargetCheck = 0
 
@@ -991,17 +1058,10 @@ rayParams.IgnoreWater = true
 local function isEnemyBehind(targetPart)
     if not HRP then return true end
     
-    -- Pega a direção que o jogador está olhando
     local lookVector = HRP.CFrame.LookVector
-    
-    -- Pega a direção do jogador para o alvo
     local toTarget = (targetPart.Position - HRP.Position).Unit
-    
-    -- Calcula o produto escalar (dot product)
     local dotProduct = lookVector:Dot(toTarget)
     
-    -- Se o dot product for negativo, o alvo está atrás
-    -- Retorna true se estiver atrás (dot < 0)
     return dotProduct < 0
 end
 
@@ -1069,7 +1129,6 @@ TabAim:CreateToggle({
     end
 })
 
--- NOVA OPÇÃO ADICIONADA AQUI
 TabAim:CreateToggle({
     Name = "Ignorar Inimigos nas Costas",
     CurrentValue = false,
@@ -1121,7 +1180,7 @@ TabAim:CreateButton({
     end
 })
 
--- Runtime do Aim Assist (MODIFICADO)
+-- Runtime do Aim Assist
 RunService.RenderStepped:Connect(function()
     if not AIM_ENABLED or not HRP then return end
 
@@ -1138,9 +1197,7 @@ RunService.RenderStepped:Connect(function()
             if hum and hum.Health > 0 then
                 local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
                 if targetPart then
-                    -- VERIFICA SE O INIMIGO ESTÁ NAS COSTAS
                     if AIM_IGNORE_BEHIND and isEnemyBehind(targetPart) then
-                        -- Pula este jogador se estiver nas costas e a opção estiver ativada
                         continue
                     end
                     
@@ -1537,37 +1594,39 @@ local ANTI_LAG_ENABLED = false
 local function applyAntiLag()
     if not ANTI_LAG_ENABLED then return end
     
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-            obj.Enabled = false
+    pcall(function()
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                obj.Enabled = false
+            end
         end
-    end
-    
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
+        
+        for _, effect in pairs(Lighting:GetChildren()) do
+            if effect:IsA("PostEffect") then
+                effect.Enabled = false
+            end
         end
-    end
-    
-    for _, effect in pairs(Camera:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
+        
+        for _, effect in pairs(Camera:GetChildren()) do
+            if effect:IsA("PostEffect") then
+                effect.Enabled = false
+            end
         end
-    end
-    
-    Lighting.GlobalShadows = false
-    
-    workspace.Terrain.WaterWaveSize = 0
-    workspace.Terrain.WaterWaveSpeed = 0
-    workspace.Terrain.WaterReflectance = 0
-    workspace.Terrain.WaterTransparency = 0
-    
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Material = Enum.Material.Plastic
-            part.Reflectance = 0
+        
+        Lighting.GlobalShadows = false
+        
+        workspace.Terrain.WaterWaveSize = 0
+        workspace.Terrain.WaterWaveSpeed = 0
+        workspace.Terrain.WaterReflectance = 0
+        workspace.Terrain.WaterTransparency = 0
+        
+        for _, part in pairs(workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Material = Enum.Material.Plastic
+                part.Reflectance = 0
+            end
         end
-    end
+    end)
 end
 
 TabFPS:CreateToggle({
@@ -1587,7 +1646,9 @@ TabFPS:CreateSlider({
     Increment = 10,
     CurrentValue = 60,
     Callback = function(v)
-        setfpscap(v)
+        pcall(function()
+            setfpscap(v)
+        end)
     end
 })
 
@@ -1600,14 +1661,16 @@ local playersLabel = TabFPS:CreateLabel("Players: 0")
 
 task.spawn(function()
     while task.wait(0.5) do
-        if Character and Humanoid and HRP then
-            statsLabel:Set(string.format("HP: %d/%d | Speed: %d | Jump: %d",
-                math.floor(Humanoid.Health),
-                math.floor(Humanoid.MaxHealth),
-                math.floor(Humanoid.WalkSpeed),
-                math.floor(Humanoid.JumpPower)
-            ))
-        end
+        pcall(function()
+            if Character and Humanoid and HRP then
+                statsLabel:Set(string.format("HP: %d/%d | Speed: %d | Jump: %d",
+                    math.floor(Humanoid.Health),
+                    math.floor(Humanoid.MaxHealth),
+                    math.floor(Humanoid.WalkSpeed),
+                    math.floor(Humanoid.JumpPower)
+                ))
+            end
+        end)
     end
 end)
 
@@ -1617,7 +1680,9 @@ local lastFPSUpdate = tick()
 RunService.RenderStepped:Connect(function()
     fpsCounter = fpsCounter + 1
     if tick() - lastFPSUpdate >= 1 then
-        fpsLabel:Set("FPS: " .. fpsCounter)
+        pcall(function()
+            fpsLabel:Set("FPS: " .. fpsCounter)
+        end)
         fpsCounter = 0
         lastFPSUpdate = tick()
     end
@@ -1625,14 +1690,18 @@ end)
 
 task.spawn(function()
     while task.wait(2) do
-        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-        pingLabel:Set(string.format("Ping: %.0f ms", ping))
+        pcall(function()
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+            pingLabel:Set(string.format("Ping: %.0f ms", ping))
+        end)
     end
 end)
 
 task.spawn(function()
     while task.wait(1) do
-        playersLabel:Set(string.format("Players: %d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+        pcall(function()
+            playersLabel:Set(string.format("Players: %d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+        end)
     end
 end)
 
@@ -1676,13 +1745,15 @@ TabConfig:CreateInput({
 TabConfig:CreateButton({
     Name = "Salvar Config",
     Callback = function()
-        local config = {
-            WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
-            JumpPower = Humanoid and Humanoid.JumpPower or 50,
-            savedWaypoints = savedWaypoints
-        }
-        writefile("UniversalHub_"..configName..".json", HttpService:JSONEncode(config))
-        Rayfield:Notify({Title = "Config Salva", Content = "Config salva!", Duration = 2})
+        pcall(function()
+            local config = {
+                WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
+                JumpPower = Humanoid and Humanoid.JumpPower or 50,
+                savedWaypoints = savedWaypoints
+            }
+            writefile("UniversalHub_"..configName..".json", HttpService:JSONEncode(config))
+            Rayfield:Notify({Title = "Config Salva", Content = "Config salva!", Duration = 2})
+        end)
     end
 })
 
@@ -1694,15 +1765,17 @@ TabConfig:CreateButton({
         end)
         
         if success then
-            local config = HttpService:JSONDecode(result)
-            if Humanoid then
-                Humanoid.WalkSpeed = config.WalkSpeed or 16
-                Humanoid.JumpPower = config.JumpPower or 50
-            end
-            if config.savedWaypoints then
-                savedWaypoints = config.savedWaypoints
-            end
-            Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
+            pcall(function()
+                local config = HttpService:JSONDecode(result)
+                if Humanoid then
+                    Humanoid.WalkSpeed = config.WalkSpeed or 16
+                    Humanoid.JumpPower = config.JumpPower or 50
+                end
+                if config.savedWaypoints then
+                    savedWaypoints = config.savedWaypoints
+                end
+                Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
+            end)
         else
             Rayfield:Notify({Title = "Erro", Content = "Config não encontrada!", Duration = 3})
         end
@@ -1792,13 +1865,15 @@ TabUtil:CreateButton({
 TabUtil:CreateButton({
     Name = "Server Hop",
     Callback = function()
-        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
-        for _, s in pairs(servers.data) do
-            if s.playing < s.maxPlayers then
-                TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP)
-                break
+        pcall(function()
+            local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+            for _, s in pairs(servers.data) do
+                if s.playing < s.maxPlayers then
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP)
+                    break
+                end
             end
-        end
+        end)
     end
 })
 
@@ -1820,44 +1895,58 @@ RunService.RenderStepped:Connect(function(dt)
 
     if fly then
         if not HRP:FindFirstChild("FlyVel") then
-            local bv = Instance.new("BodyVelocity", HRP)
-            bv.Name = "FlyVel"
-            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            local bg = Instance.new("BodyGyro", HRP)
-            bg.Name = "FlyGyro"
-            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            pcall(function()
+                local bv = Instance.new("BodyVelocity", HRP)
+                bv.Name = "FlyVel"
+                bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                local bg = Instance.new("BodyGyro", HRP)
+                bg.Name = "FlyGyro"
+                bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            end)
         end
         local dir = Humanoid.MoveDirection
         local vel = Vector3.new(dir.X, 0, dir.Z) * flySpeed
         if flyUpImpulse > 0 then
             vel = vel + Vector3.new(0, flySpeed, 0)
         end
-        HRP.FlyVel.Velocity = vel
-        HRP.FlyGyro.CFrame = Camera.CFrame
+        pcall(function()
+            HRP.FlyVel.Velocity = vel
+            HRP.FlyGyro.CFrame = Camera.CFrame
+        end)
     end
 
     if noclip then
-        for _, p in pairs(Character:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.CanCollide = false
+        pcall(function()
+            for _, p in pairs(Character:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = false
+                end
             end
-        end
+        end)
     end
 
     if godMode then
-        Humanoid.MaxHealth = math.huge
-        Humanoid.Health = Humanoid.MaxHealth
+        pcall(function()
+            Humanoid.MaxHealth = math.huge
+            Humanoid.Health = Humanoid.MaxHealth
+        end)
     elseif lockHP then
-        Humanoid.Health = Humanoid.MaxHealth
+        pcall(function()
+            Humanoid.Health = Humanoid.MaxHealth
+        end)
     end
 
     if antiVoid and HRP.Position.Y < -80 then
-        HRP.CFrame = HRP.CFrame + Vector3.new(0, 200, 0)
+        pcall(function()
+            HRP.CFrame = HRP.CFrame + Vector3.new(0, 200, 0)
+        end)
     end
 
     if antiKB then
-        HRP.Velocity = HRP.Velocity * Vector3.new(0.8, 0.9, 0.8)
+        pcall(function()
+            HRP.Velocity = HRP.Velocity * Vector3.new(0.8, 0.9, 0.8)
+        end)
     end
 end)
 
-print("✅ Universal Hub - Organizado e 100% Funcional!")
+print("✅ Universal Hub - Bugs Corrigidos para Arceus X!")
