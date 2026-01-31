@@ -1194,11 +1194,13 @@ RunService.RenderStepped:Connect(function()
             if hum and hum.Health > 0 then
                 local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
                 if targetPart then
-                    if AIM_IGNORE_BEHIND and isEnemyBehind(targetPart) then
-                        continue
+                    -- Só verifica se está nas costas quando a opção está ATIVADA
+                    local shouldSkip = false
+                    if AIM_IGNORE_BEHIND then
+                        shouldSkip = isEnemyBehind(targetPart)
                     end
                     
-                    if isVisible(targetPart) then
+                    if not shouldSkip and isVisible(targetPart) then
                         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
                             local mousePos = UserInputService:GetMouseLocation()
