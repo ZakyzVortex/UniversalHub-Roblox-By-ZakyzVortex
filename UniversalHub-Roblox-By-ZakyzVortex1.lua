@@ -61,11 +61,21 @@ local TabConfig = Window:CreateTab("Config")
 local TabUtil = Window:CreateTab("Utility")
 
 -- ==================================================================================
--- =================== SISTEMA UNIVERSAL DE DETECÇÃO DE TIME =======================
+-- =================== SISTEMA UNIVERSAL DE DETECÇÃO DE TIME (CORRIGIDO) ===========
 -- ==================================================================================
 
 local function getPlayerTeam(player)
-	-- 1) getAttribute no Character
+	-- 1) TeamColor nativo do Roblox (PRIORIDADE MÁXIMA)
+	if player.TeamColor then
+		return tostring(player.TeamColor)
+	end
+	
+	-- 2) player.Team nativo do Roblox
+	if player.Team then
+		return tostring(player.Team.Name)
+	end
+
+	-- 3) getAttribute no Character
 	local char = player.Character
 	if char then
 		local attrTeam = char:GetAttribute("Team") or char:GetAttribute("team")
@@ -74,13 +84,13 @@ local function getPlayerTeam(player)
 		end
 	end
 
-	-- 2) getAttribute no Player
+	-- 4) getAttribute no Player
 	local attrPlayer = player:GetAttribute("Team") or player:GetAttribute("team")
 	if attrPlayer then
 		return tostring(attrPlayer)
 	end
 
-	-- 3) ObjectValue/StringValue "Team" dentro do Character (Arsenal usa isso)
+	-- 5) ObjectValue/StringValue "Team" dentro do Character
 	if char then
 		local teamValue = char:FindFirstChild("Team")
 		if teamValue then
@@ -94,7 +104,7 @@ local function getPlayerTeam(player)
 		end
 	end
 
-	-- 4) Dentro de uma pasta "Values" no Character
+	-- 6) Dentro de uma pasta "Values" no Character
 	if char then
 		local valuesFolder = char:FindFirstChild("Values")
 		if valuesFolder then
@@ -111,12 +121,7 @@ local function getPlayerTeam(player)
 		end
 	end
 
-	-- 5) player.Team nativo do Roblox
-	if player.Team then
-		return tostring(player.Team.Name)
-	end
-
-	-- 6) Fallback: ID único por jogador
+	-- 7) Fallback: ID único por jogador
 	return "Player_" .. tostring(player.UserId)
 end
 
@@ -124,16 +129,21 @@ local function getMyTeam()
 	return getPlayerTeam(LP)
 end
 
+local function isSameTeam(player)
+	local myTeam = getMyTeam()
+	local playerTeam = getPlayerTeam(player)
+	return myTeam == playerTeam
+end
+
 local function passesTeamFilter(player, teamFilter)
 	if teamFilter == "All" then return true end
 
-	local myTeam = getMyTeam()
-	local playerTeam = getPlayerTeam(player)
+	local sameTeam = isSameTeam(player)
 
 	if teamFilter == "MyTeam" then
-		return playerTeam == myTeam
+		return sameTeam
 	elseif teamFilter == "EnemyTeam" then
-		return playerTeam ~= myTeam
+		return not sameTeam
 	end
 
 	return true
@@ -359,6 +369,10 @@ local function removeESP(player)
 		end
 		espData.outline = nil
 	end
+	if espData.teamConnection then
+		espData.teamConnection:Disconnect()
+		espData.teamConnection = nil
+	end
 	ESP_OBJECTS[player] = nil
 end
 
@@ -374,8 +388,6 @@ local function createESP(player)
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hrp or not hum or hum.Health <= 0 then return end
-
-	-- NÃO filtrar na criação - filtro será aplicado durante renderização
 
 	local espData = {
 		active = true,
@@ -435,6 +447,8 @@ local function createESP(player)
 	ESP_OBJECTS[player] = espData
 
 	local connections = {}
+	
+	-- Morte do jogador
 	table.insert(connections, hum.Died:Connect(function()
 		task.wait(0.1)
 		removeESP(player)
@@ -442,6 +456,8 @@ local function createESP(player)
 			pcall(function() conn:Disconnect() end)
 		end
 	end))
+	
+	-- Character removido
 	table.insert(connections, char.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			removeESP(player)
@@ -450,6 +466,18 @@ local function createESP(player)
 			end
 		end
 	end))
+	
+	-- ✅ MUDANÇA DE TIME
+	local teamConnection = player:GetPropertyChangedSignal("TeamColor"):Connect(function()
+		if ESP_ENABLED then
+			task.wait(0.1)
+			removeESP(player)
+			createESP(player)
+		end
+	end)
+	espData.teamConnection = teamConnection
+	table.insert(connections, teamConnection)
+	
 	espData.connections = connections
 end
 
@@ -481,6 +509,7 @@ RunService.RenderStepped:Connect(function()
 
 	if not ESP_ENABLED or not HRP then
 		for _, espData in pairs(ESP_OBJECTS) do
+			if espData.billboard then espData.billboard.Enabled = false end
 			if espData.line then espData.line.Visible = false end
 			if espData.outline then
 				for _, l in ipairs(espData.outline) do
@@ -499,26 +528,18 @@ RunService.RenderStepped:Connect(function()
 	for player, espData in pairs(ESP_OBJECTS) do
 		if not espData.active then continue end
 
-		-- ✅ VERIFICAÇÃO DE TIME AQUI
-		if not passesTeamFilter(player, ESP_TEAM_FILTER) then
-			-- Esconde o ESP se não passar no filtro
-			if espData.billboard then
-				espData.billboard.Enabled = false
-			end
-			if espData.line then
-				espData.line.Visible = false
-			end
+		-- ✅ VERIFICAÇÃO DE TIME CORRIGIDA
+		local passesFilter = passesTeamFilter(player, ESP_TEAM_FILTER)
+		
+		if not passesFilter then
+			if espData.billboard then espData.billboard.Enabled = false end
+			if espData.line then espData.line.Visible = false end
 			if espData.outline then
 				for _, l in ipairs(espData.outline) do
 					l.Visible = false
 				end
 			end
 			continue
-		end
-
-		-- Se passou no filtro, mostra o billboard
-		if espData.billboard then
-			espData.billboard.Enabled = true
 		end
 
 		local char = player.Character
@@ -531,6 +552,7 @@ RunService.RenderStepped:Connect(function()
 		local hum = char:FindFirstChildOfClass("Humanoid")
 
 		if not hrp or not hrp.Parent or not hum or hum.Health <= 0 then
+			if espData.billboard then espData.billboard.Enabled = false end
 			if espData.line then espData.line.Visible = false end
 			if espData.outline then
 				for _, l in ipairs(espData.outline) do
@@ -538,6 +560,10 @@ RunService.RenderStepped:Connect(function()
 				end
 			end
 			continue
+		end
+
+		if espData.billboard then
+			espData.billboard.Enabled = true
 		end
 
 		local hrpPos = hrp.Position
@@ -679,7 +705,6 @@ TabESP:CreateToggle({
 	CurrentValue = true,
 	Callback = function(v)
 		NAME_ENABLED = v
-		refreshESP()
 	end
 })
 
@@ -688,7 +713,6 @@ TabESP:CreateToggle({
 	CurrentValue = true,
 	Callback = function(v)
 		DISTANCE_ENABLED = v
-		refreshESP()
 	end
 })
 
@@ -697,7 +721,6 @@ TabESP:CreateToggle({
 	CurrentValue = true,
 	Callback = function(v)
 		HEALTH_ENABLED = v
-		refreshESP()
 	end
 })
 
@@ -706,7 +729,6 @@ TabESP:CreateToggle({
 	CurrentValue = true,
 	Callback = function(v)
 		LINE_ENABLED = v
-		refreshESP()
 	end
 })
 
@@ -715,7 +737,6 @@ TabESP:CreateToggle({
 	CurrentValue = true,
 	Callback = function(v)
 		OUTLINE_ENABLED = v
-		refreshESP()
 	end
 })
 
@@ -725,7 +746,6 @@ TabESP:CreateDropdown({
 	CurrentOption = "All",
 	Callback = function(option)
 		ESP_TEAM_FILTER = option
-		refreshESP()
 	end
 })
 
@@ -746,14 +766,25 @@ TabESP:CreateButton({
 -- ==================================================================================
 
 local HIGHLIGHT_ENABLED = false
-local HIGHLIGHT_TEAM_FILTER = "All" -- ✅ ADICIONADO
+local HIGHLIGHT_TEAM_FILTER = "All"
 local highlightColor = Color3.fromRGB(255, 0, 0)
 local highlightCache = {}
+
+local function removeHighlight(player)
+	if highlightCache[player] then
+		if highlightCache[player].highlight then
+			pcall(function() highlightCache[player].highlight:Destroy() end)
+		end
+		if highlightCache[player].teamConnection then
+			pcall(function() highlightCache[player].teamConnection:Disconnect() end)
+		end
+		highlightCache[player] = nil
+	end
+end
 
 local function addHighlight(player)
 	if player == LP then return end
 	
-	-- ✅ VERIFICAÇÃO DE TIME ADICIONADA
 	if not passesTeamFilter(player, HIGHLIGHT_TEAM_FILTER) then 
 		removeHighlight(player)
 		return 
@@ -764,10 +795,7 @@ local function addHighlight(player)
 	local hrp = char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	if highlightCache[player] then
-		pcall(function() highlightCache[player]:Destroy() end)
-		highlightCache[player] = nil
-	end
+	removeHighlight(player)
 
 	local existingHighlight = hrp:FindFirstChild("Highlight")
 	if existingHighlight then existingHighlight:Destroy() end
@@ -781,17 +809,16 @@ local function addHighlight(player)
 	highlight.FillTransparency = 0.5
 	highlight.OutlineTransparency = 0
 	highlight.Parent = hrp
-	highlightCache[player] = highlight
+	
+	highlightCache[player] = highlightCache[player] or {}
+	highlightCache[player].highlight = highlight
 
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if hum then
 		local deathConnection
 		deathConnection = hum.Died:Connect(function()
 			task.wait(0.1)
-			if highlightCache[player] then
-				pcall(function() highlightCache[player]:Destroy() end)
-				highlightCache[player] = nil
-			end
+			removeHighlight(player)
 			if deathConnection then deathConnection:Disconnect() end
 		end)
 	end
@@ -799,38 +826,37 @@ local function addHighlight(player)
 	local ancestryConnection
 	ancestryConnection = char.AncestryChanged:Connect(function(_, parent)
 		if not parent then
-			if highlightCache[player] then
-				pcall(function() highlightCache[player]:Destroy() end)
-				highlightCache[player] = nil
-			end
+			removeHighlight(player)
 			if ancestryConnection then ancestryConnection:Disconnect() end
 		end
 	end)
-end
-
-local function removeHighlight(player)
-	if highlightCache[player] then
-		pcall(function() highlightCache[player]:Destroy() end)
-		highlightCache[player] = nil
-	end
+	
+	-- ✅ MUDANÇA DE TIME
+	local teamConnection = player:GetPropertyChangedSignal("TeamColor"):Connect(function()
+		if HIGHLIGHT_ENABLED then
+			task.wait(0.1)
+			removeHighlight(player)
+			addHighlight(player)
+		end
+	end)
+	highlightCache[player].teamConnection = teamConnection
 end
 
 local function removeAllHighlights()
-	for player, highlight in pairs(highlightCache) do
-		pcall(function() highlight:Destroy() end)
+	for player, _ in pairs(highlightCache) do
+		removeHighlight(player)
 	end
 	highlightCache = {}
 end
 
 local function updateAllHighlights()
+	removeAllHighlights()
 	if HIGHLIGHT_ENABLED then
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player ~= LP and player.Character then
 				addHighlight(player)
 			end
 		end
-	else
-		removeAllHighlights()
 	end
 end
 
@@ -875,7 +901,6 @@ RunService.RenderStepped:Connect(function()
 	lastHighlightCheck = now
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LP and player.Character then
-			-- ✅ VERIFICAÇÃO DE TIME NO LOOP
 			if not passesTeamFilter(player, HIGHLIGHT_TEAM_FILTER) then
 				removeHighlight(player)
 				continue
@@ -886,7 +911,7 @@ RunService.RenderStepped:Connect(function()
 			local hum = char:FindFirstChildOfClass("Humanoid")
 			if hrp and hum and hum.Health > 0 then
 				local existingHighlight = hrp:FindFirstChild("Highlight")
-				if not existingHighlight and not highlightCache[player] then
+				if not existingHighlight and not (highlightCache[player] and highlightCache[player].highlight) then
 					addHighlight(player)
 				end
 			end
@@ -911,9 +936,9 @@ TabHighlight:CreateColorPicker({
 	Color = Color3.fromRGB(255, 0, 0),
 	Callback = function(color)
 		highlightColor = color
-		for player, highlight in pairs(highlightCache) do
-			if highlight and highlight.Parent then
-				highlight.FillColor = color
+		for player, data in pairs(highlightCache) do
+			if data.highlight and data.highlight.Parent then
+				data.highlight.FillColor = color
 			end
 		end
 	end
@@ -925,9 +950,9 @@ TabHighlight:CreateSlider({
 	Increment = 0.05,
 	CurrentValue = 0.5,
 	Callback = function(v)
-		for player, highlight in pairs(highlightCache) do
-			if highlight and highlight.Parent then
-				highlight.FillTransparency = v
+		for player, data in pairs(highlightCache) do
+			if data.highlight and data.highlight.Parent then
+				data.highlight.FillTransparency = v
 			end
 		end
 	end
@@ -939,9 +964,9 @@ TabHighlight:CreateSlider({
 	Increment = 0.05,
 	CurrentValue = 0,
 	Callback = function(v)
-		for player, highlight in pairs(highlightCache) do
-			if highlight and highlight.Parent then
-				highlight.OutlineTransparency = v
+		for player, data in pairs(highlightCache) do
+			if data.highlight and data.highlight.Parent then
+				data.highlight.OutlineTransparency = v
 			end
 		end
 	end
@@ -953,15 +978,14 @@ TabHighlight:CreateDropdown({
 	CurrentOption = "AlwaysOnTop",
 	Callback = function(option)
 		local depthMode = option == "AlwaysOnTop" and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-		for player, highlight in pairs(highlightCache) do
-			if highlight and highlight.Parent then
-				highlight.DepthMode = depthMode
+		for player, data in pairs(highlightCache) do
+			if data.highlight and data.highlight.Parent then
+				data.highlight.DepthMode = depthMode
 			end
 		end
 	end
 })
 
--- ✅ DROPDOWN DE FILTRO DE TIME ADICIONADO
 TabHighlight:CreateDropdown({
 	Name = "Filtro de Time",
 	Options = {"All", "MyTeam", "EnemyTeam"},
@@ -1026,43 +1050,72 @@ local function getTargetPart(character, partName)
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
--- ✅ WALLCHECK CORRIGIDO
+-- ✅ WALLCHECK COMPLETAMENTE REESCRITO
 local function isVisible(targetPart)
 	if not AIM_WALLCHECK then return true end
+	if not targetPart or not targetPart.Parent then return false end
 	
-	-- Cria novos parâmetros a cada verificação
+	local targetChar = targetPart.Parent
+	local myChar = LP.Character
+	if not myChar then return false end
+	
+	-- Lista de partes a ignorar
+	local ignoreList = {}
+	
+	-- Adiciona todas as partes do nosso personagem
+	for _, v in pairs(myChar:GetDescendants()) do
+		if v:IsA("BasePart") then
+			table.insert(ignoreList, v)
+		end
+	end
+	
+	-- Adiciona todas as partes do personagem alvo
+	for _, v in pairs(targetChar:GetDescendants()) do
+		if v:IsA("BasePart") then
+			table.insert(ignoreList, v)
+		end
+	end
+	
+	-- Cria parâmetros de raycast
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = {LP.Character, targetPart.Parent}
+	params.FilterDescendantsInstances = ignoreList
 	params.IgnoreWater = true
+	params.RespectCanCollide = true
 
 	local origin = Camera.CFrame.Position
 	local targetPos = targetPart.Position
-	local direction = (targetPos - origin).Unit
-	local distance = (targetPos - origin).Magnitude
+	local direction = targetPos - origin
+	local distance = direction.Magnitude
+	local unitDirection = direction.Unit
 
-	-- Faz o raycast
-	local result = workspace:Raycast(origin, direction * distance, params)
+	-- Faz múltiplos raycasts para maior precisão
+	local raycastResult = workspace:Raycast(origin, unitDirection * distance, params)
 	
-	-- Se não bateu em nada, está visível
-	if not result then 
+	-- Se não atingiu nada, está visível
+	if not raycastResult then 
 		return true 
 	end
 
-	-- Se bateu, verifica se foi no próprio alvo
-	local hitPart = result.Instance
+	-- Se atingiu algo, verifica o que é
+	local hitPart = raycastResult.Instance
 	
-	-- Se bateu em uma parte do próprio personagem alvo, está visível
-	if hitPart:IsDescendantOf(targetPart.Parent) then
+	-- Verifica se é parte do alvo (não deveria acontecer pois está na ignoreList)
+	if hitPart:IsDescendantOf(targetChar) then
 		return true
 	end
 	
-	-- Se bateu em algo transparente demais, considera visível
-	if hitPart.Transparency >= 0.95 then
+	-- Verifica se é parte do nosso personagem (não deveria acontecer)
+	if hitPart:IsDescendantOf(myChar) then
 		return true
 	end
 	
-	-- Bateu em algo sólido no caminho = não visível
+	-- Verifica transparência e CanCollide
+	if hitPart.Transparency >= 0.98 or not hitPart.CanCollide then
+		return true
+	end
+	
+	-- Se chegou aqui, há uma parede no caminho
 	return false
 end
 
@@ -1117,7 +1170,6 @@ TabAim:CreateDropdown({
 	end
 })
 
--- Filtro de time do Aim Assist
 TabAim:CreateDropdown({
 	Name = "Filtro de Time",
 	Options = {"All", "MyTeam", "EnemyTeam"},
@@ -1145,7 +1197,17 @@ RunService.RenderStepped:Connect(function()
 	if not AIM_ENABLED or not HRP then return end
 
 	local now = tick()
-	if now - lastTargetCheck < 0.2 then return end
+	if now - lastTargetCheck < 0.1 then 
+		-- Ainda aplica o aim se já tiver um alvo
+		if currentTarget and currentTarget.Parent then
+			local targetPos = currentTarget.Position
+			local camPos = Camera.CFrame.Position
+			local direction = (targetPos - camPos).Unit
+			local newLook = CFrame.new(camPos, camPos + direction)
+			Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
+		end
+		return 
+	end
 	lastTargetCheck = now
 
 	local closestTarget = nil
@@ -1153,20 +1215,22 @@ RunService.RenderStepped:Connect(function()
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LP and player.Character then
-			-- ✅ Filtro de time aplicado aqui
 			if not passesTeamFilter(player, AIM_TEAM_FILTER) then continue end
 
 			local hum = player.Character:FindFirstChildOfClass("Humanoid")
 			if hum and hum.Health > 0 then
 				local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
-				if targetPart and isVisible(targetPart) then
+				if targetPart then
 					local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
 					if onScreen and screenPos.Z > 0 then
-						local mousePos = UserInputService:GetMouseLocation()
-						local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-						if dist < closestDistance then
-							closestDistance = dist
-							closestTarget = targetPart
+						-- Verifica wallcheck ANTES de calcular distância
+						if isVisible(targetPart) then
+							local mousePos = UserInputService:GetMouseLocation()
+							local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+							if dist < closestDistance then
+								closestDistance = dist
+								closestTarget = targetPart
+							end
 						end
 					end
 				end
@@ -1175,16 +1239,6 @@ RunService.RenderStepped:Connect(function()
 	end
 
 	currentTarget = closestTarget
-end)
-
-RunService.RenderStepped:Connect(function()
-	if AIM_ENABLED and currentTarget then
-		local targetPos = currentTarget.Position
-		local camPos = Camera.CFrame.Position
-		local direction = (targetPos - camPos).Unit
-		local newLook = CFrame.new(camPos, camPos + direction)
-		Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
-	end
 end)
 
 -- ==================================================================================
@@ -1828,4 +1882,7 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
-print("✅ Universal Hub - Totalmente Corrigido e Funcional!")
+print("✅ Universal Hub - VERSÃO FINAL CORRIGIDA!")
+print("✅ ESP com detecção de time via TeamColor")
+print("✅ Highlight com detecção de time via TeamColor")
+print("✅ Aim Assist com wallcheck melhorado")
