@@ -1194,13 +1194,10 @@ RunService.RenderStepped:Connect(function()
             if hum and hum.Health > 0 then
                 local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
                 if targetPart then
-                    -- Só verifica se está nas costas quando a opção está ATIVADA
-                    local shouldSkip = false
-                    if AIM_IGNORE_BEHIND then
-                        shouldSkip = isEnemyBehind(targetPart)
-                    end
-                    
-                    if not shouldSkip and isVisible(targetPart) then
+                    -- CORREÇÃO: Verifica se está nas costas E se deve ignorar
+                    if AIM_IGNORE_BEHIND and isEnemyBehind(targetPart) then
+                        -- Pula este alvo
+                    elseif isVisible(targetPart) then
                         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
                             local mousePos = UserInputService:GetMouseLocation()
@@ -1217,17 +1214,6 @@ RunService.RenderStepped:Connect(function()
     end
 
     currentTarget = closestTarget
-end)
-
--- Suavização do movimento da câmera
-RunService.RenderStepped:Connect(function()
-    if AIM_ENABLED and currentTarget then
-        local targetPos = currentTarget.Position
-        local camPos = Camera.CFrame.Position
-        local direction = (targetPos - camPos).Unit
-        local newLook = CFrame.new(camPos, camPos + direction)
-        Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
-    end
 end)
 
 -- ==================================================================================
