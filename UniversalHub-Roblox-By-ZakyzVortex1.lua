@@ -1084,42 +1084,50 @@ local function getTargetPart(character, partName)
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
--- ✅ WALLCHECK COMPLETAMENTE REESCRITO (NÃO MIRA ATRAVÉS DE PAREDES)
+-- ✅ WALLCHECK OTIMIZADO - NÃO ATRAVESSA PAREDES
 local function isVisible(targetPart)
 	if not AIM_WALLCHECK then return true end
 	if not targetPart or not targetPart.Parent then return false end
-	if not LP.Character then return false end
 	
 	local targetChar = targetPart.Parent
 	local myChar = LP.Character
+	if not myChar then return false end
 	
-	-- Cria parâmetros de raycast que EXCLUEM os dois personagens
+	-- Cria parâmetros de raycast
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = {myChar, targetChar}
 	params.IgnoreWater = true
-
+	
 	local origin = Camera.CFrame.Position
 	local targetPos = targetPart.Position
-	local direction = targetPos - origin
+	local direction = (targetPos - origin)
 	local distance = direction.Magnitude
-
-	-- Faz o raycast
-	local result = workspace:Raycast(origin, direction.Unit * distance, params)
 	
-	-- Se não atingiu nada (ou só atingiu os personagens excluídos), está visível
-	if not result then 
+	-- Faz o raycast
+	local raycastResult = workspace:Raycast(origin, direction, params)
+	
+	-- Se não atingiu nada, está visível
+	if not raycastResult then 
 		return true 
 	end
-
-	local hitPart = result.Instance
 	
-	-- Verifica se é MUITO transparente ou não colidível
-	if hitPart.Transparency >= 0.99 or not hitPart.CanCollide then
-		return true
+	-- Se atingiu algo, verifica se é uma parede sólida
+	local hitPart = raycastResult.Instance
+	
+	-- Ignora partes transparentes ou sem colisão
+	if hitPart.Transparency >= 0.95 or not hitPart.CanCollide then
+		-- Faz um segundo raycast a partir do ponto de impacto
+		local newOrigin = raycastResult.Position + direction.Unit * 0.1
+		local remainingDistance = distance - (raycastResult.Position - origin).Magnitude
+		local secondRaycast = workspace:Raycast(newOrigin, direction.Unit * remainingDistance, params)
+		
+		if not secondRaycast then
+			return true
+		end
 	end
 	
-	-- Se bateu em algo sólido, NÃO está visível
+	-- Há uma parede sólida bloqueando
 	return false
 end
 
@@ -1198,29 +1206,19 @@ TabAim:CreateButton({
 
 -- Runtime do Aim Assist
 RunService.RenderStepped:Connect(function()
-	if not AIM_ENABLED or not HRP then 
-		currentTarget = nil
-		return 
-	end
+	if not AIM_ENABLED or not HRP then return end
 
 	local now = tick()
 	if now - lastTargetCheck < 0.1 then 
-		-- Ainda aplica o aim se já tiver um alvo válido
-		if currentTarget and currentTarget.Parent then
-			-- Verifica se o alvo ainda é válido
-			local targetChar = currentTarget.Parent
-			local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
-			if targetPlayer and passesTeamFilter(targetPlayer, AIM_TEAM_FILTER) then
-				if isVisible(currentTarget) then
-					local targetPos = currentTarget.Position
-					local camPos = Camera.CFrame.Position
-					local direction = (targetPos - camPos).Unit
-					local newLook = CFrame.new(camPos, camPos + direction)
-					Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
-					return
-				end
-			end
-			-- Se não passou nas verificações, remove o alvo
+		-- Ainda aplica o aim se já tiver um alvo válido e visível
+		if currentTarget and currentTarget.Parent and isVisible(currentTarget) then
+			local targetPos = currentTarget.Position
+			local camPos = Camera.CFrame.Position
+			local direction = (targetPos - camPos).Unit
+			local newLook = CFrame.new(camPos, camPos + direction)
+			Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
+		else
+			-- Se o alvo ficou invisível, remove ele
 			currentTarget = nil
 		end
 		return 
@@ -1232,17 +1230,16 @@ RunService.RenderStepped:Connect(function()
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LP and player.Character then
-			-- ✅ Filtro de time aplicado aqui
 			if not passesTeamFilter(player, AIM_TEAM_FILTER) then continue end
 
 			local hum = player.Character:FindFirstChildOfClass("Humanoid")
 			if hum and hum.Health > 0 then
 				local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
 				if targetPart then
-					-- ✅ WALLCHECK VERIFICADO PRIMEIRO
-					if isVisible(targetPart) then
-						local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-						if onScreen and screenPos.Z > 0 then
+					local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+					if onScreen and screenPos.Z > 0 then
+						-- Verifica wallcheck ANTES de considerar como alvo
+						if isVisible(targetPart) then
 							local mousePos = UserInputService:GetMouseLocation()
 							local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
 							if dist < closestDistance then
@@ -1258,8 +1255,6 @@ RunService.RenderStepped:Connect(function()
 
 	currentTarget = closestTarget
 end)
-
--- (CONTINUA...)
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
