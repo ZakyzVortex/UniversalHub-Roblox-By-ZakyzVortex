@@ -375,8 +375,7 @@ local function createESP(player)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hrp or not hum or hum.Health <= 0 then return end
 
-	-- Filtro de time usando função centralizada
-	if not passesTeamFilter(player, ESP_TEAM_FILTER) then return end
+	-- NÃO filtrar na criação - filtro será aplicado durante renderização
 
 	local espData = {
 		active = true,
@@ -499,6 +498,28 @@ RunService.RenderStepped:Connect(function()
 
 	for player, espData in pairs(ESP_OBJECTS) do
 		if not espData.active then continue end
+
+		-- ✅ VERIFICAÇÃO DE TIME AQUI
+		if not passesTeamFilter(player, ESP_TEAM_FILTER) then
+			-- Esconde o ESP se não passar no filtro
+			if espData.billboard then
+				espData.billboard.Enabled = false
+			end
+			if espData.line then
+				espData.line.Visible = false
+			end
+			if espData.outline then
+				for _, l in ipairs(espData.outline) do
+					l.Visible = false
+				end
+			end
+			continue
+		end
+
+		-- Se passou no filtro, mostra o billboard
+		if espData.billboard then
+			espData.billboard.Enabled = true
+		end
 
 		local char = player.Character
 		if not char or char ~= espData.character then
@@ -725,11 +746,19 @@ TabESP:CreateButton({
 -- ==================================================================================
 
 local HIGHLIGHT_ENABLED = false
+local HIGHLIGHT_TEAM_FILTER = "All" -- ✅ ADICIONADO
 local highlightColor = Color3.fromRGB(255, 0, 0)
 local highlightCache = {}
 
 local function addHighlight(player)
 	if player == LP then return end
+	
+	-- ✅ VERIFICAÇÃO DE TIME ADICIONADA
+	if not passesTeamFilter(player, HIGHLIGHT_TEAM_FILTER) then 
+		removeHighlight(player)
+		return 
+	end
+	
 	local char = player.Character
 	if not char then return end
 	local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -846,6 +875,12 @@ RunService.RenderStepped:Connect(function()
 	lastHighlightCheck = now
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LP and player.Character then
+			-- ✅ VERIFICAÇÃO DE TIME NO LOOP
+			if not passesTeamFilter(player, HIGHLIGHT_TEAM_FILTER) then
+				removeHighlight(player)
+				continue
+			end
+			
 			local char = player.Character
 			local hrp = char:FindFirstChild("HumanoidRootPart")
 			local hum = char:FindFirstChildOfClass("Humanoid")
@@ -913,7 +948,7 @@ TabHighlight:CreateSlider({
 })
 
 TabHighlight:CreateDropdown({
-	Name = "Modo de Profundência",
+	Name = "Modo de Profundidade",
 	Options = {"AlwaysOnTop", "Occluded"},
 	CurrentOption = "AlwaysOnTop",
 	Callback = function(option)
@@ -923,6 +958,17 @@ TabHighlight:CreateDropdown({
 				highlight.DepthMode = depthMode
 			end
 		end
+	end
+})
+
+-- ✅ DROPDOWN DE FILTRO DE TIME ADICIONADO
+TabHighlight:CreateDropdown({
+	Name = "Filtro de Time",
+	Options = {"All", "MyTeam", "EnemyTeam"},
+	CurrentOption = "All",
+	Callback = function(option)
+		HIGHLIGHT_TEAM_FILTER = option
+		updateAllHighlights()
 	end
 })
 
@@ -963,10 +1009,6 @@ local AIM_TEAM_FILTER = "EnemyTeam"
 local currentTarget = nil
 local lastTargetCheck = 0
 
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-rayParams.IgnoreWater = true
-
 local function getTargetPart(character, partName)
 	local part = character:FindFirstChild(partName)
 	if part and part:IsA("BasePart") then return part end
@@ -984,21 +1026,43 @@ local function getTargetPart(character, partName)
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
+-- ✅ WALLCHECK CORRIGIDO
 local function isVisible(targetPart)
 	if not AIM_WALLCHECK then return true end
-	rayParams.FilterDescendantsInstances = {LP.Character, targetPart.Parent}
+	
+	-- Cria novos parâmetros a cada verificação
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {LP.Character, targetPart.Parent}
+	params.IgnoreWater = true
 
 	local origin = Camera.CFrame.Position
 	local targetPos = targetPart.Position
-	local direction = targetPos - origin
+	local direction = (targetPos - origin).Unit
+	local distance = (targetPos - origin).Magnitude
 
-	local result = workspace:Raycast(origin, direction, rayParams)
-	if not result then return true end
+	-- Faz o raycast
+	local result = workspace:Raycast(origin, direction * distance, params)
+	
+	-- Se não bateu em nada, está visível
+	if not result then 
+		return true 
+	end
 
+	-- Se bateu, verifica se foi no próprio alvo
 	local hitPart = result.Instance
-	if hitPart.Transparency >= 0.9 then return true end
-	if hitPart:IsDescendantOf(targetPart.Parent) then return true end
-
+	
+	-- Se bateu em uma parte do próprio personagem alvo, está visível
+	if hitPart:IsDescendantOf(targetPart.Parent) then
+		return true
+	end
+	
+	-- Se bateu em algo transparente demais, considera visível
+	if hitPart.Transparency >= 0.95 then
+		return true
+	end
+	
+	-- Bateu em algo sólido no caminho = não visível
 	return false
 end
 
@@ -1089,7 +1153,7 @@ RunService.RenderStepped:Connect(function()
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if player ~= LP and player.Character then
-			-- Filtro de time aplicado aqui
+			-- ✅ Filtro de time aplicado aqui
 			if not passesTeamFilter(player, AIM_TEAM_FILTER) then continue end
 
 			local hum = player.Character:FindFirstChildOfClass("Humanoid")
@@ -1764,4 +1828,4 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 end)
 
-print("✅ Universal Hub - Organizado e 100% Funcional!")
+print("✅ Universal Hub - Totalmente Corrigido e Funcional!")
