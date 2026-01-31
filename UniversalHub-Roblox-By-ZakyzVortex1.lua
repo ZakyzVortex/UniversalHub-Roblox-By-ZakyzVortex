@@ -1194,10 +1194,16 @@ RunService.RenderStepped:Connect(function()
             if hum and hum.Health > 0 then
                 local targetPart = getTargetPart(player.Character, AIM_TARGET_PART)
                 if targetPart then
-                    -- CORREÇÃO: Verifica se está nas costas E se deve ignorar
-                    if AIM_IGNORE_BEHIND and isEnemyBehind(targetPart) then
-                        -- Pula este alvo
-                    elseif isVisible(targetPart) then
+                    -- Verifica se deve ignorar inimigos nas costas
+                    local skipTarget = false
+                    if AIM_IGNORE_BEHIND then
+                        if isEnemyBehind(targetPart) then
+                            skipTarget = true
+                        end
+                    end
+                    
+                    -- Se não deve pular E é visível, considera como alvo
+                    if not skipTarget and isVisible(targetPart) then
                         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen and screenPos.Z > 0 then
                             local mousePos = UserInputService:GetMouseLocation()
