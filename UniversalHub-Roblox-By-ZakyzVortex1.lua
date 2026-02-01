@@ -973,41 +973,16 @@ local AIM_WALLCHECK = true
 local AIM_TEAM_FILTER = "Enemy"
 local currentTarget = nil
 
--- WALLCHECK MELHORADO COM MAIS VERIFICAÇÕES
+-- Função para verificar se o jogador está visível
 local function isVisible(targetPart)
-    if not AIM_WALLCHECK then return true end
-    if not Character or not targetPart then return false end
-    if not targetPart.Parent then return false end
+    if not targetPart or not HRP then return false end
     
-    -- Verifica se o alvo ainda está vivo
-    local targetHum = targetPart.Parent:FindFirstChildOfClass("Humanoid")
-    if targetHum and targetHum.Health <= 0 then return false end
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {Character, targetPart.Parent}
     
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-    -- Ignora o próprio personagem E o personagem do alvo
-    rayParams.FilterDescendantsInstances = {Character, targetPart.Parent}
-    rayParams.IgnoreWater = true
-    
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin)
-    
-    local result = workspace:Raycast(origin, direction, rayParams)
-    
-    -- Se não atingiu nada, está visível
-    if not result then return true end
-    
-    -- Se atingiu algo transparente (vidro, etc), considera visível
-    if result.Instance.Transparency >= 0.9 then return true end
-    
-    -- Se atingiu parte do próprio alvo, está visível
-    if result.Instance:IsDescendantOf(targetPart.Parent) then return true end
-    
-    -- Verifica se é uma parte não sólida
-    if not result.Instance.CanCollide then return true end
-    
-    -- Caso contrário, está atrás de uma parede
-    return false
+    local ray = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), raycastParams)
+    return ray == nil
 end
 
 local function getTargetPart(character, partName)
