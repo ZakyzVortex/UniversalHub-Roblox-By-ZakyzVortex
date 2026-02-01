@@ -47,6 +47,7 @@ local Window = Rayfield:CreateWindow({
 
 -- ================== CREATE TABS ==================
 local TabMove = Window:CreateTab("Movement")
+local TabCombat = Window:CreateTab("Cdjjsj")
 local TabCombat = Window:CreateTab("Combat")
 local TabESP = Window:CreateTab("ESP")
 local TabHighlight = Window:CreateTab("Highlight ESP")
@@ -240,6 +241,372 @@ UserInputService.JumpRequest:Connect(function()
 		Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 	end
 end)
+
+-- ==================================================================================
+-- ================================ TEAM ESP SYSTEM =================================
+-- ==================================================================================
+
+local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- CONFIG ESP
+local ESPTeams = {}
+local ESPObjects = {}
+
+-- CONFIGURAÇÕES
+local ESP_ENABLED = true
+local ESP_BOX = true
+local ESP_NAME = true
+local ESP_DISTANCE = true
+local ESP_HEALTH = true
+local ESP_TRACER = false
+local ESP_MAX_DISTANCE = 1000
+
+-- ==================================================================================
+-- ================================ UI DO SELETOR ===================================
+-- ==================================================================================
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "TeamSelectorUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
+
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.fromScale(0.35, 0.5)
+Main.Position = UDim2.fromScale(0.325, 0.25)
+Main.BackgroundColor3 = Color3.fromRGB(15,15,15)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+
+local UICorner = Instance.new("UICorner", Main)
+UICorner.CornerRadius = UDim.new(0,16)
+
+-- Title
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1,0,0,40)
+Title.Text = "TEAM ESP"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+
+-- Controles ESP
+local ControlsFrame = Instance.new("Frame", Main)
+ControlsFrame.Position = UDim2.new(0,10,0,50)
+ControlsFrame.Size = UDim2.new(1,-20,0,120)
+ControlsFrame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+ControlsFrame.BorderSizePixel = 0
+
+Instance.new("UICorner", ControlsFrame).CornerRadius = UDim.new(0,10)
+
+local function createToggle(name, yPos, callback)
+    local Toggle = Instance.new("TextButton", ControlsFrame)
+    Toggle.Position = UDim2.new(0,10,0,yPos)
+    Toggle.Size = UDim2.new(0.45,-15,0,25)
+    Toggle.BackgroundColor3 = Color3.fromRGB(30,30,30)
+    Toggle.Text = name
+    Toggle.Font = Enum.Font.Gotham
+    Toggle.TextSize = 12
+    Toggle.TextColor3 = Color3.fromRGB(255,255,255)
+    Toggle.AutoButtonColor = false
+    
+    Instance.new("UICorner", Toggle).CornerRadius = UDim.new(0,8)
+    
+    local enabled = true
+    Toggle.BackgroundColor3 = Color3.fromRGB(0,150,0)
+    
+    Toggle.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        Toggle.BackgroundColor3 = enabled and Color3.fromRGB(0,150,0) or Color3.fromRGB(150,0,0)
+        callback(enabled)
+    end)
+end
+
+-- Toggles
+createToggle("Box", 10, function(v) ESP_BOX = v end)
+createToggle("Name", 10, function(v) ESP_NAME = v end)
+createToggle("Distance", 45, function(v) ESP_DISTANCE = v end)
+createToggle("Health", 45, function(v) ESP_HEALTH = v end)
+createToggle("Tracer", 80, function(v) ESP_TRACER = v end)
+
+-- Scroll de times
+local Scroll = Instance.new("ScrollingFrame", Main)
+Scroll.Position = UDim2.new(0,0,0,180)
+Scroll.Size = UDim2.new(1,0,1,-180)
+Scroll.CanvasSize = UDim2.new(0,0,0,0)
+Scroll.ScrollBarImageTransparency = 0.5
+Scroll.BackgroundTransparency = 1
+Scroll.BorderSizePixel = 0
+
+local Layout = Instance.new("UIListLayout", Scroll)
+Layout.Padding = UDim.new(0,8)
+Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- Criar botão por time
+local function createTeamToggle(team)
+    local Button = Instance.new("TextButton", Scroll)
+    Button.Size = UDim2.new(1,-20,0,40)
+    Button.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    Button.Text = team.Name
+    Button.Font = Enum.Font.Gotham
+    Button.TextSize = 14
+    Button.TextColor3 = team.TeamColor.Color
+    Button.AutoButtonColor = false
+
+    Instance.new("UICorner", Button).CornerRadius = UDim.new(0,12)
+
+    ESPTeams[team.Name] = true
+
+    Button.MouseButton1Click:Connect(function()
+        ESPTeams[team.Name] = not ESPTeams[team.Name]
+
+        Button.BackgroundColor3 = ESPTeams[team.Name]
+            and Color3.fromRGB(40,40,40)
+            or Color3.fromRGB(20,20,20)
+    end)
+
+    Scroll.CanvasSize += UDim2.new(0,0,0,48)
+end
+
+-- Popular times
+for _,team in pairs(Teams:GetTeams()) do
+    createTeamToggle(team)
+end
+
+Teams.ChildAdded:Connect(createTeamToggle)
+
+-- ==================================================================================
+-- ================================= ESP FUNCTIONS ==================================
+-- ==================================================================================
+
+local function TeamESPEnabled(player)
+    return ESPTeams[player.Team and player.Team.Name]
+end
+
+local function createESP(player)
+    if player == LocalPlayer then return end
+    
+    local ESPFolder = Instance.new("Folder")
+    ESPFolder.Name = "ESP_" .. player.Name
+    ESPFolder.Parent = game:GetService("CoreGui")
+    
+    -- Box
+    local Box = Drawing.new("Square")
+    Box.Visible = false
+    Box.Color = Color3.new(1,1,1)
+    Box.Thickness = 2
+    Box.Transparency = 1
+    Box.Filled = false
+    
+    -- Name
+    local NameTag = Drawing.new("Text")
+    NameTag.Visible = false
+    NameTag.Center = true
+    NameTag.Outline = true
+    NameTag.Font = 2
+    NameTag.Size = 13
+    NameTag.Color = Color3.new(1,1,1)
+    
+    -- Distance
+    local DistanceTag = Drawing.new("Text")
+    DistanceTag.Visible = false
+    DistanceTag.Center = true
+    DistanceTag.Outline = true
+    DistanceTag.Font = 2
+    DistanceTag.Size = 12
+    DistanceTag.Color = Color3.new(1,1,1)
+    
+    -- Health Bar
+    local HealthBar = Drawing.new("Square")
+    HealthBar.Visible = false
+    HealthBar.Thickness = 1
+    HealthBar.Filled = true
+    HealthBar.Color = Color3.new(0,1,0)
+    HealthBar.Transparency = 0.8
+    
+    local HealthBarOutline = Drawing.new("Square")
+    HealthBarOutline.Visible = false
+    HealthBarOutline.Thickness = 1
+    HealthBarOutline.Filled = false
+    HealthBarOutline.Color = Color3.new(0,0,0)
+    HealthBarOutline.Transparency = 1
+    
+    -- Tracer
+    local Tracer = Drawing.new("Line")
+    Tracer.Visible = false
+    Tracer.Thickness = 1
+    Tracer.Transparency = 1
+    Tracer.Color = Color3.new(1,1,1)
+    
+    ESPObjects[player] = {
+        Box = Box,
+        NameTag = NameTag,
+        DistanceTag = DistanceTag,
+        HealthBar = HealthBar,
+        HealthBarOutline = HealthBarOutline,
+        Tracer = Tracer,
+        Folder = ESPFolder
+    }
+end
+
+local function removeESP(player)
+    if ESPObjects[player] then
+        ESPObjects[player].Box:Remove()
+        ESPObjects[player].NameTag:Remove()
+        ESPObjects[player].DistanceTag:Remove()
+        ESPObjects[player].HealthBar:Remove()
+        ESPObjects[player].HealthBarOutline:Remove()
+        ESPObjects[player].Tracer:Remove()
+        ESPObjects[player].Folder:Destroy()
+        ESPObjects[player] = nil
+    end
+end
+
+local function updateESP()
+    if not ESP_ENABLED then return end
+    
+    local camera = workspace.CurrentCamera
+    local screenSize = camera.ViewportSize
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        
+        if not ESPObjects[player] then
+            createESP(player)
+        end
+        
+        local esp = ESPObjects[player]
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if character and humanoid and rootPart and humanoid.Health > 0 then
+            local teamEnabled = TeamESPEnabled(player)
+            local distance = (rootPart.Position - camera.CFrame.Position).Magnitude
+            
+            if teamEnabled and distance <= ESP_MAX_DISTANCE then
+                local teamColor = player.Team and player.Team.TeamColor.Color or Color3.new(1,1,1)
+                
+                local vector, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+                
+                if onScreen then
+                    -- Calcular tamanho do box
+                    local head = character:FindFirstChild("Head")
+                    local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                    local legPos = camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+                    
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 2
+                    
+                    -- Box
+                    if ESP_BOX then
+                        esp.Box.Size = Vector2.new(width, height)
+                        esp.Box.Position = Vector2.new(vector.X - width / 2, vector.Y - height / 2)
+                        esp.Box.Color = teamColor
+                        esp.Box.Visible = true
+                    else
+                        esp.Box.Visible = false
+                    end
+                    
+                    -- Name
+                    if ESP_NAME then
+                        esp.NameTag.Text = player.Name
+                        esp.NameTag.Position = Vector2.new(vector.X, vector.Y - height / 2 - 15)
+                        esp.NameTag.Color = teamColor
+                        esp.NameTag.Visible = true
+                    else
+                        esp.NameTag.Visible = false
+                    end
+                    
+                    -- Distance
+                    if ESP_DISTANCE then
+                        esp.DistanceTag.Text = string.format("[%dm]", math.floor(distance))
+                        esp.DistanceTag.Position = Vector2.new(vector.X, vector.Y + height / 2 + 5)
+                        esp.DistanceTag.Visible = true
+                    else
+                        esp.DistanceTag.Visible = false
+                    end
+                    
+                    -- Health Bar
+                    if ESP_HEALTH then
+                        local healthPercent = humanoid.Health / humanoid.MaxHealth
+                        local barHeight = height * healthPercent
+                        
+                        esp.HealthBar.Size = Vector2.new(3, barHeight)
+                        esp.HealthBar.Position = Vector2.new(vector.X - width / 2 - 7, vector.Y + height / 2 - barHeight)
+                        esp.HealthBar.Color = Color3.new(1 - healthPercent, healthPercent, 0)
+                        esp.HealthBar.Visible = true
+                        
+                        esp.HealthBarOutline.Size = Vector2.new(5, height + 2)
+                        esp.HealthBarOutline.Position = Vector2.new(vector.X - width / 2 - 8, vector.Y - height / 2 - 1)
+                        esp.HealthBarOutline.Visible = true
+                    else
+                        esp.HealthBar.Visible = false
+                        esp.HealthBarOutline.Visible = false
+                    end
+                    
+                    -- Tracer
+                    if ESP_TRACER then
+                        esp.Tracer.From = Vector2.new(screenSize.X / 2, screenSize.Y)
+                        esp.Tracer.To = Vector2.new(vector.X, vector.Y)
+                        esp.Tracer.Color = teamColor
+                        esp.Tracer.Visible = true
+                    else
+                        esp.Tracer.Visible = false
+                    end
+                else
+                    esp.Box.Visible = false
+                    esp.NameTag.Visible = false
+                    esp.DistanceTag.Visible = false
+                    esp.HealthBar.Visible = false
+                    esp.HealthBarOutline.Visible = false
+                    esp.Tracer.Visible = false
+                end
+            else
+                esp.Box.Visible = false
+                esp.NameTag.Visible = false
+                esp.DistanceTag.Visible = false
+                esp.HealthBar.Visible = false
+                esp.HealthBarOutline.Visible = false
+                esp.Tracer.Visible = false
+            end
+        else
+            esp.Box.Visible = false
+            esp.NameTag.Visible = false
+            esp.DistanceTag.Visible = false
+            esp.HealthBar.Visible = false
+            esp.HealthBarOutline.Visible = false
+            esp.Tracer.Visible = false
+        end
+    end
+end
+
+-- ==================================================================================
+-- ================================== CONNECTIONS ===================================
+-- ==================================================================================
+
+Players.PlayerAdded:Connect(function(player)
+    createESP(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    removeESP(player)
+end)
+
+RunService.RenderStepped:Connect(updateESP)
+
+-- Inicializar ESP para jogadores existentes
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LocalPlayer then
+        createESP(player)
+    end
+end
+
+-- Função global
+_G.TeamESPEnabled = TeamESPEnabled
 
 -- ==================================================================================
 -- ================================ COMBAT TAB ======================================
