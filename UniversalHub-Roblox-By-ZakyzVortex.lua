@@ -1627,6 +1627,7 @@ TabWorld:CreateButton({
 TabFPS:CreateSection("Anti-Lag")
 
 local DELETE_3D_ENABLED = false
+local descendantAddedConnection = nil
 
 -- Advanced Anti-Lag System by RIP#6666
 local function setupAdvancedAntiLag()
@@ -1884,24 +1885,30 @@ local function setupAdvancedAntiLag()
 end
 
 local function hide3D(obj)
-    if obj:IsDescendantOf(LocalPlayer.Character) then return end
-    if obj:IsA("BasePart") then
-        obj.Transparency = 1
-    elseif obj:IsA("Decal") then
-        obj.Transparency = 1
-    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-        obj.Enabled = false
-    end
+    pcall(function()
+        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
+            return 
+        end
+        
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+        elseif obj:IsA("Decal") then
+            obj.Transparency = 1
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+        end
+    end)
 end
 
 local function apply3DDelete()
     if not DELETE_3D_ENABLED then return end
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        hide3D(obj)
-    end
+    
+    pcall(function()
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            hide3D(obj)
+        end
+    end)
 end
-
-local descendantAddedConnection = nil
 
 TabFPS:CreateToggle({
     Name = "Advanced Anti-Lag (RIP)",
@@ -1920,8 +1927,13 @@ TabFPS:CreateToggle({
         DELETE_3D_ENABLED = v
         if v then
             apply3DDelete()
+            -- Auto-hide new objects
+            if descendantAddedConnection then
+                descendantAddedConnection:Disconnect()
+            end
             descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
         else
+            -- Disconnect listener when disabled
             if descendantAddedConnection then
                 descendantAddedConnection:Disconnect()
                 descendantAddedConnection = nil
