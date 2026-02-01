@@ -90,7 +90,7 @@ local Window = Rayfield:CreateWindow({
 
 -- ================== CREATE TABS ==================
 local TabMove = Window:CreateTab("Movement")
-local TabCombat = Window:CreateTab("Combat")
+local TabCombat = Window:CreateTab("Auto Farm")
 local TabESP = Window:CreateTab("ESP")
 local TabHighlight = Window:CreateTab("Highlight ESP")
 local TabAim = Window:CreateTab("Aim Assist")
@@ -204,29 +204,43 @@ end)
 -- ================================ COMBAT TAB ======================================
 -- ==================================================================================
 
+-- SERVIÇOS
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+
+-- ==================================================================================
+-- AUTO CLICKER
+-- ==================================================================================
+
 TabCombat:CreateSection("Auto Clicker")
 
--- Estados
 local AUTO_CLICKER_ENABLED = false
 local AUTO_CLICKER_CPS = 10
 local lastClick = 0
 
--- Função de clique
 local function performClick()
     if not AUTO_CLICKER_ENABLED then return end
-    mouse1click()
+    
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.01)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end
 
--- Toggle Auto Clicker
 TabCombat:CreateToggle({
     Name = "Ativar Auto Clicker",
     CurrentValue = false,
     Callback = function(v)
         AUTO_CLICKER_ENABLED = v
+        if v then lastClick = tick() end
     end
 })
 
--- CPS Slider
 TabCombat:CreateSlider({
     Name = "CPS (Cliques por Segundo)",
     Range = {1, 50},
@@ -237,8 +251,7 @@ TabCombat:CreateSlider({
     end
 })
 
--- Auto Clicker Loop
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function()
     if not AUTO_CLICKER_ENABLED then return end
     
     local now = tick()
@@ -250,47 +263,58 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ==================================================================================
+-- HIT RANGE EXTENDER
+-- ==================================================================================
+
 TabCombat:CreateSection("Hit Range Extender")
 
--- Estados
 local HIT_RANGE_ENABLED = false
 local HIT_RANGE_SIZE = 10
 local originalSizes = {}
+local originalTransparencies = {}
 
--- Função para estender hitboxes
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if not originalSizes[player] then
-                    originalSizes[player] = hrp.Size
+            
+            if hrp and hrp:IsA("BasePart") then
+                if not originalSizes[player.UserId] then
+                    originalSizes[player.UserId] = hrp.Size
+                    originalTransparencies[player.UserId] = hrp.Transparency
                 end
                 
                 if HIT_RANGE_ENABLED then
                     hrp.Size = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
                     hrp.Transparency = 0.7
                     hrp.CanCollide = false
+                    hrp.Massless = true
                 else
-                    hrp.Size = originalSizes[player]
-                    hrp.Transparency = 1
+                    hrp.Size = originalSizes[player.UserId] or Vector3.new(2, 2, 1)
+                    hrp.Transparency = originalTransparencies[player.UserId] or 1
+                    hrp.CanCollide = false
+                    hrp.Massless = false
                 end
             end
         end
     end
 end
 
--- Toggle Hit Range
+Players.PlayerRemoving:Connect(function(player)
+    originalSizes[player.UserId] = nil
+    originalTransparencies[player.UserId] = nil
+end)
+
 TabCombat:CreateToggle({
     Name = "Ativar Hit Range Extender",
     CurrentValue = false,
     Callback = function(v)
         HIT_RANGE_ENABLED = v
-        extendHitboxes()
+        if not v then extendHitboxes() end
     end
 })
 
--- Size Slider
 TabCombat:CreateSlider({
     Name = "Tamanho da Hitbox",
     Range = {5, 30},
@@ -298,16 +322,76 @@ TabCombat:CreateSlider({
     CurrentValue = 10,
     Callback = function(v)
         HIT_RANGE_SIZE = v
-        extendHitboxes()
+        if HIT_RANGE_ENABLED then extendHitboxes() end
     end
 })
 
--- Loop contínuo para hitboxes
 RunService.Heartbeat:Connect(function()
     if HIT_RANGE_ENABLED then
         extendHitboxes()
     end
 end)
+
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if HIT_RANGE_ENABLED then extendHitboxes() end
+    end)
+end)
+
+-- ==================================================================================
+-- AUTO PRESS (PROXIMITY PROMPT)
+-- ==================================================================================
+
+TabCombat:CreateSection("Auto Press")
+
+local AUTO_PRESS_ENABLED = false
+local AUTO_PRESS_INTERVAL = 0.25
+local promptAtual = nil
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+    promptAtual = prompt
+end)
+
+ProximityPromptService.PromptHidden:Connect(function(prompt)
+    if promptAtual == prompt then
+        promptAtual = nil
+    end
+end)
+
+TabCombat:CreateToggle({
+    Name = "Ativar Auto Press",
+    CurrentValue = false,
+    Callback = function(v)
+        AUTO_PRESS_ENABLED = v
+    end
+})
+
+TabCombat:CreateSlider({
+    Name = "Intervalo (segundos)",
+    Range = {0.1, 2},
+    Increment = 0.05,
+    CurrentValue = 0.25,
+    Callback = function(v)
+        AUTO_PRESS_INTERVAL = v
+    end
+})
+
+-- Loop Auto Press
+task.spawn(function()
+    while true do
+        if AUTO_PRESS_ENABLED and promptAtual and promptAtual.Enabled then
+            pcall(function()
+                fireproximityprompt(promptAtual, promptAtual.HoldDuration or 0)
+            end)
+        end
+        task.wait(AUTO_PRESS_INTERVAL)
+    end
+end)
+
+-- ==================================================================================
+-- FIM DO COMBAT TAB
+-- ==================================================================================
 
 -- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
 local ESP_ENABLED = false
@@ -319,7 +403,7 @@ local OUTLINE_ENABLED = true
 local ESP_COLOR = Color3.fromRGB(255, 0, 0)
 local LINE_COLOR = Color3.fromRGB(255, 255, 255)
 local ESP_OBJECTS = {}
-local ESP_TEAM_FILTER = "All"  -- All, Team, Enemy
+local ESP_TEAM_FILTER = "Enemy"  -- All, Team, Enemy
 
 local function removeESP(player)
     local espData = ESP_OBJECTS[player]
@@ -625,7 +709,7 @@ TabESP:CreateToggle({
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"All"},
+    CurrentOption = {"Enemy"},
     MultipleOptions = false,
     Flag = "ESPTeamFilter",
     Callback = function(option)
@@ -703,7 +787,7 @@ TabESP:CreateColorPicker({
 
 -- ==================== HIGHLIGHT ESP (CORRIGIDO) ====================
 local HIGHLIGHT_ENABLED = false
-local HIGHLIGHT_TEAM_FILTER = "All"
+local HIGHLIGHT_TEAM_FILTER = "Enemy"
 local teamColor = Color3.fromRGB(0, 255, 0)
 local enemyColor = Color3.fromRGB(255, 0, 0)
 local highlightCache = {}
@@ -876,7 +960,7 @@ TabHighlight:CreateToggle({
 TabHighlight:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"All"},
+    CurrentOption = {"Enemy"},
     MultipleOptions = false,
     Flag = "HighlightTeamFilter",
     Callback = function(option)
@@ -1062,7 +1146,7 @@ TabAim:CreateToggle({
 
 TabAim:CreateSlider({
     Name = "FOV (Campo de Visão)",
-    Range = {10, 500},
+    Range = {10, 800},
     Increment = 10,
     CurrentValue = 100,
     Flag = "AimFOV",
@@ -1441,7 +1525,7 @@ local DEFAULT_FOV = Camera.FieldOfView
 
 TabVisuals:CreateSlider({
     Name = "FOV",
-    Range = {70, 120},
+    Range = {70, 180},
     Increment = 1,
     CurrentValue = DEFAULT_FOV,
     Callback = function(v)
@@ -1542,51 +1626,306 @@ TabWorld:CreateButton({
 
 TabFPS:CreateSection("Anti-Lag")
 
-local ANTI_LAG_ENABLED = false
+local DELETE_3D_ENABLED = false
 
-local function applyAntiLag()
-    if not ANTI_LAG_ENABLED then return end
+-- Advanced Anti-Lag System by RIP#6666
+local function setupAdvancedAntiLag()
+    if not _G.Ignore then
+        _G.Ignore = {}
+    end
+    if _G.SendNotifications == nil then
+        _G.SendNotifications = false -- Disabled notifications for cleaner experience
+    end
+    if _G.ConsoleLogs == nil then
+        _G.ConsoleLogs = false
+    end
+
+    if not game:IsLoaded() then
+        repeat task.wait() until game:IsLoaded()
+    end
+
+    _G.Settings = {
+        Players = {
+            ["Ignore Me"] = true,
+            ["Ignore Others"] = true,
+            ["Ignore Tools"] = true
+        },
+        Meshes = {
+            NoMesh = false,
+            NoTexture = true,
+            Destroy = false
+        },
+        Images = {
+            Invisible = false,
+            Destroy = false
+        },
+        Explosions = {
+            Smaller = true,
+            Invisible = false,
+            Destroy = false
+        },
+        Particles = {
+            Invisible = true,
+            Destroy = false
+        },
+        TextLabels = {
+            LowerQuality = true,
+            Invisible = false,
+            Destroy = false
+        },
+        MeshParts = {
+            LowerQuality = true,
+            Invisible = false,
+            NoTexture = false,
+            NoMesh = false,
+            Destroy = false
+        },
+        Other = {
+            ["FPS Cap"] = 60,
+            ["No Camera Effects"] = true,
+            ["No Clothes"] = false,
+            ["Low Water Graphics"] = true,
+            ["No Shadows"] = true,
+            ["Low Rendering"] = false,
+            ["Low Quality Parts"] = true,
+            ["Low Quality Models"] = true,
+            ["Reset Materials"] = true,
+            ["Lower Quality MeshParts"] = true,
+            ClearNilInstances = false
+        }
+    }
+
+    local Players, Lighting, StarterGui, MaterialService = game:GetService("Players"), game:GetService("Lighting"), game:GetService("StarterGui"), game:GetService("MaterialService")
+    local ME, CanBeEnabled = Players.LocalPlayer, {"ParticleEmitter", "Trail", "Smoke", "Fire", "Sparkles"}
     
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-            obj.Enabled = false
+    local function PartOfCharacter(Inst)
+        for i, v in pairs(Players:GetPlayers()) do
+            if v ~= ME and v.Character and Inst:IsDescendantOf(v.Character) then
+                return true
+            end
         end
+        return false
     end
     
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
+    local function DescendantOfIgnore(Inst)
+        for i, v in pairs(_G.Ignore) do
+            if Inst:IsDescendantOf(v) then
+                return true
+            end
         end
+        return false
     end
     
-    for _, effect in pairs(Camera:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
+    local function CheckIfBad(Inst)
+        if not Inst:IsDescendantOf(Players) and (_G.Settings.Players["Ignore Others"] and not PartOfCharacter(Inst) 
+        or not _G.Settings.Players["Ignore Others"]) and (_G.Settings.Players["Ignore Me"] and ME.Character and not Inst:IsDescendantOf(ME.Character) 
+        or not _G.Settings.Players["Ignore Me"]) and (_G.Settings.Players["Ignore Tools"] and not Inst:IsA("BackpackItem") and not Inst:FindFirstAncestorWhichIsA("BackpackItem") 
+        or not _G.Settings.Players["Ignore Tools"]) and (_G.Ignore and not table.find(_G.Ignore, Inst) and not DescendantOfIgnore(Inst) 
+        or (not _G.Ignore or type(_G.Ignore) ~= "table" or #_G.Ignore <= 0)) then
+            if Inst:IsA("DataModelMesh") then
+                if Inst:IsA("SpecialMesh") then
+                    if _G.Settings.Meshes.NoMesh then
+                        Inst.MeshId = ""
+                    end
+                    if _G.Settings.Meshes.NoTexture then
+                        Inst.TextureId = ""
+                    end
+                end
+                if _G.Settings.Meshes.Destroy then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("FaceInstance") then
+                if _G.Settings.Images.Invisible then
+                    Inst.Transparency = 1
+                    Inst.Shiny = 1
+                end
+                if _G.Settings.Images.Destroy then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("ShirtGraphic") then
+                if _G.Settings.Images.Invisible then
+                    Inst.Graphic = ""
+                end
+                if _G.Settings.Images.Destroy then
+                    Inst:Destroy()
+                end
+            elseif table.find(CanBeEnabled, Inst.ClassName) then
+                if _G.Settings.Particles and _G.Settings.Particles.Invisible then
+                    Inst.Enabled = false
+                end
+                if _G.Settings.Particles and _G.Settings.Particles.Destroy then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("PostEffect") and (_G.Settings.Other and _G.Settings.Other["No Camera Effects"]) then
+                Inst.Enabled = false
+            elseif Inst:IsA("Explosion") then
+                if _G.Settings.Explosions and _G.Settings.Explosions.Smaller then
+                    Inst.BlastPressure = 1
+                    Inst.BlastRadius = 1
+                end
+                if _G.Settings.Explosions and _G.Settings.Explosions.Invisible then
+                    Inst.BlastPressure = 1
+                    Inst.BlastRadius = 1
+                    Inst.Visible = false
+                end
+                if _G.Settings.Explosions and _G.Settings.Explosions.Destroy then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("Clothing") or Inst:IsA("SurfaceAppearance") or Inst:IsA("BaseWrap") then
+                if _G.Settings.Other and _G.Settings.Other["No Clothes"] then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("BasePart") and not Inst:IsA("MeshPart") then
+                if _G.Settings.Other and _G.Settings.Other["Low Quality Parts"] then
+                    Inst.Material = Enum.Material.Plastic
+                    Inst.Reflectance = 0
+                end
+            elseif Inst:IsA("TextLabel") and Inst:IsDescendantOf(workspace) then
+                if _G.Settings.TextLabels and _G.Settings.TextLabels.LowerQuality then
+                    Inst.Font = Enum.Font.SourceSans
+                    Inst.TextScaled = false
+                    Inst.RichText = false
+                    Inst.TextSize = 14
+                end
+                if _G.Settings.TextLabels and _G.Settings.TextLabels.Invisible then
+                    Inst.Visible = false
+                end
+                if _G.Settings.TextLabels and _G.Settings.TextLabels.Destroy then
+                    Inst:Destroy()
+                end
+            elseif Inst:IsA("Model") then
+                if _G.Settings.Other and _G.Settings.Other["Low Quality Models"] then
+                    Inst.LevelOfDetail = 1
+                end
+            elseif Inst:IsA("MeshPart") then
+                if _G.Settings.MeshParts and _G.Settings.MeshParts.LowerQuality then
+                    Inst.RenderFidelity = 2
+                    Inst.Reflectance = 0
+                    Inst.Material = Enum.Material.Plastic
+                end
+                if _G.Settings.MeshParts and _G.Settings.MeshParts.Invisible then
+                    Inst.Transparency = 1
+                    Inst.RenderFidelity = 2
+                    Inst.Reflectance = 0
+                    Inst.Material = Enum.Material.Plastic
+                end
+                if _G.Settings.MeshParts and _G.Settings.MeshParts.NoTexture then
+                    Inst.TextureID = ""
+                end
+                if _G.Settings.MeshParts and _G.Settings.MeshParts.NoMesh then
+                    Inst.MeshId = ""
+                end
+                if _G.Settings.MeshParts and _G.Settings.MeshParts.Destroy then
+                    Inst:Destroy()
+                end
+            end
         end
     end
-    
-    Lighting.GlobalShadows = false
-    
-    workspace.Terrain.WaterWaveSize = 0
-    workspace.Terrain.WaterWaveSpeed = 0
-    workspace.Terrain.WaterReflectance = 0
-    workspace.Terrain.WaterTransparency = 0
-    
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.Material = Enum.Material.Plastic
-            part.Reflectance = 0
+
+    -- Apply terrain settings
+    coroutine.wrap(pcall)(function()
+        if _G.Settings.Other and _G.Settings.Other["Low Water Graphics"] then
+            local terrain = workspace:FindFirstChildOfClass("Terrain")
+            if not terrain then
+                repeat task.wait() until workspace:FindFirstChildOfClass("Terrain")
+                terrain = workspace:FindFirstChildOfClass("Terrain")
+            end
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0
+            if sethiddenproperty then
+                sethiddenproperty(terrain, "Decoration", false)
+            end
         end
+    end)
+
+    -- Apply lighting settings
+    coroutine.wrap(pcall)(function()
+        if _G.Settings.Other and _G.Settings.Other["No Shadows"] then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            Lighting.ShadowSoftness = 0
+            if sethiddenproperty then
+                sethiddenproperty(Lighting, "Technology", 2)
+            end
+        end
+    end)
+
+    -- Apply rendering settings
+    coroutine.wrap(pcall)(function()
+        if _G.Settings.Other and _G.Settings.Other["Low Rendering"] then
+            settings().Rendering.QualityLevel = 1
+            settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
+        end
+    end)
+
+    -- Reset materials
+    coroutine.wrap(pcall)(function()
+        if _G.Settings.Other and _G.Settings.Other["Reset Materials"] then
+            for i, v in pairs(MaterialService:GetChildren()) do
+                v:Destroy()
+            end
+            MaterialService.Use2022Materials = false
+        end
+    end)
+
+    -- Process existing descendants
+    local Descendants = game:GetDescendants()
+    for i, v in pairs(Descendants) do
+        CheckIfBad(v)
+    end
+
+    -- Monitor new descendants
+    game.DescendantAdded:Connect(function(value)
+        task.wait(_G.LoadedWait or 1)
+        CheckIfBad(value)
+    end)
+end
+
+local function hide3D(obj)
+    if obj:IsDescendantOf(LocalPlayer.Character) then return end
+    if obj:IsA("BasePart") then
+        obj.Transparency = 1
+    elseif obj:IsA("Decal") then
+        obj.Transparency = 1
+    elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+        obj.Enabled = false
     end
 end
 
+local function apply3DDelete()
+    if not DELETE_3D_ENABLED then return end
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        hide3D(obj)
+    end
+end
+
+local descendantAddedConnection = nil
+
 TabFPS:CreateToggle({
-    Name = "Ativar Anti-Lag",
+    Name = "Advanced Anti-Lag (RIP)",
     CurrentValue = false,
     Callback = function(v)
-        ANTI_LAG_ENABLED = v
         if v then
-            applyAntiLag()
+            setupAdvancedAntiLag()
+        end
+    end
+})
+
+TabFPS:CreateToggle({
+    Name = "3D Delete (Hide World)",
+    CurrentValue = false,
+    Callback = function(v)
+        DELETE_3D_ENABLED = v
+        if v then
+            apply3DDelete()
+            descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
+        else
+            if descendantAddedConnection then
+                descendantAddedConnection:Disconnect()
+                descendantAddedConnection = nil
+            end
         end
     end
 })
