@@ -1019,11 +1019,6 @@ local AIM_TEAM_FILTER = "EnemyTeam"  -- Aim mira apenas em inimigos por padrão
 local currentTarget = nil
 local lastTargetCheck = 0
 
--- Raycast params
-local rayParams = RaycastParams.new()
-rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-rayParams.IgnoreWater = true
-
 -- Função para pegar parte do corpo
 local function getTargetPart(character, partName)
     local part = character:FindFirstChild(partName)
@@ -1044,27 +1039,17 @@ local function getTargetPart(character, partName)
     return character:FindFirstChild("HumanoidRootPart")
 end
 
--- Função de wallcheck
+-- Função de wallcheck (versão fixed)
 local function isVisible(targetPart)
     if not AIM_WALLCHECK then return true end
+    if not targetPart or not HRP then return false end
     
-    rayParams.FilterDescendantsInstances = {LP.Character, targetPart.Parent}
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {Character, targetPart.Parent}
     
-    local origin = Camera.CFrame.Position
-    local targetPos = targetPart.Position
-    local direction = targetPos - origin
-    
-    local result = workspace:Raycast(origin, direction, rayParams)
-    
-    if not result then return true end
-    
-    local hitPart = result.Instance
-    
-    if hitPart.Transparency >= 0.9 then return true end
-    
-    if hitPart:IsDescendantOf(targetPart.Parent) then return true end
-    
-    return false
+    local ray = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), raycastParams)
+    return ray == nil
 end
 
 -- UI do Aim Assist
@@ -1124,17 +1109,6 @@ TabAim:CreateDropdown({
     CurrentOption = "Head",
     Callback = function(option)
         AIM_TARGET_PART = option
-        currentTarget = nil
-    end
-})
-
--- ===== TEAM FILTER DROPDOWN NO AIM ASSIST =====
-TabAim:CreateDropdown({
-    Name = "Filtro de Time",
-    Options = {"All", "MyTeam", "EnemyTeam"},
-    CurrentOption = "EnemyTeam",
-    Callback = function(option)
-        AIM_TEAM_FILTER = option
         currentTarget = nil
     end
 })
