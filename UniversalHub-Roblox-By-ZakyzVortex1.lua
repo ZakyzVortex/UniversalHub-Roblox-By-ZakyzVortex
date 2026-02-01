@@ -204,6 +204,15 @@ end)
 -- ================================ COMBAT TAB ======================================
 -- ==================================================================================
 
+-- Serviços necessários
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+
 TabCombat:CreateSection("Auto Clicker")
 
 -- Estados
@@ -211,10 +220,19 @@ local AUTO_CLICKER_ENABLED = false
 local AUTO_CLICKER_CPS = 10
 local lastClick = 0
 
--- Função de clique
+-- Função de clique CORRIGIDA
 local function performClick()
     if not AUTO_CLICKER_ENABLED then return end
-    mouse1click()
+    
+    -- Método 1: Virtual Input (mais confiável)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.01)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    
+    -- OU Método 2: Se o jogo aceita mouse1press/mouse1release
+    -- mouse1press()
+    -- task.wait(0.01)
+    -- mouse1release()
 end
 
 -- Toggle Auto Clicker
@@ -223,6 +241,9 @@ TabCombat:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         AUTO_CLICKER_ENABLED = v
+        if v then
+            lastClick = tick() -- Reset timer ao ativar
+        end
     end
 })
 
@@ -237,8 +258,8 @@ TabCombat:CreateSlider({
     end
 })
 
--- Auto Clicker Loop
-RunService.RenderStepped:Connect(function()
+-- Auto Clicker Loop OTIMIZADO
+RunService.Heartbeat:Connect(function()
     if not AUTO_CLICKER_ENABLED then return end
     
     local now = tick()
@@ -250,35 +271,52 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
+-- ==================================================================================
+
 TabCombat:CreateSection("Hit Range Extender")
 
 -- Estados
 local HIT_RANGE_ENABLED = false
 local HIT_RANGE_SIZE = 10
 local originalSizes = {}
+local originalTransparencies = {}
 
--- Função para estender hitboxes
+-- Função para estender hitboxes CORRIGIDA
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if not originalSizes[player] then
-                    originalSizes[player] = hrp.Size
+            
+            if hrp and hrp:IsA("BasePart") then
+                -- Salvar valores originais
+                if not originalSizes[player.UserId] then
+                    originalSizes[player.UserId] = hrp.Size
+                    originalTransparencies[player.UserId] = hrp.Transparency
                 end
                 
                 if HIT_RANGE_ENABLED then
+                    -- Aplicar hitbox expandida
                     hrp.Size = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
                     hrp.Transparency = 0.7
                     hrp.CanCollide = false
+                    hrp.Massless = true -- Evita problemas de física
                 else
-                    hrp.Size = originalSizes[player]
-                    hrp.Transparency = 1
+                    -- Restaurar valores originais
+                    hrp.Size = originalSizes[player.UserId] or Vector3.new(2, 2, 1)
+                    hrp.Transparency = originalTransparencies[player.UserId] or 1
+                    hrp.CanCollide = false
+                    hrp.Massless = false
                 end
             end
         end
     end
 end
+
+-- Limpar dados quando jogador sai
+Players.PlayerRemoving:Connect(function(player)
+    originalSizes[player.UserId] = nil
+    originalTransparencies[player.UserId] = nil
+end)
 
 -- Toggle Hit Range
 TabCombat:CreateToggle({
@@ -286,7 +324,11 @@ TabCombat:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         HIT_RANGE_ENABLED = v
-        extendHitboxes()
+        
+        if not v then
+            -- Restaurar todas as hitboxes ao desativar
+            extendHitboxes()
+        end
     end
 })
 
@@ -298,15 +340,27 @@ TabCombat:CreateSlider({
     CurrentValue = 10,
     Callback = function(v)
         HIT_RANGE_SIZE = v
-        extendHitboxes()
+        if HIT_RANGE_ENABLED then
+            extendHitboxes()
+        end
     end
 })
 
--- Loop contínuo para hitboxes
+-- Loop contínuo para hitboxes (mais eficiente)
 RunService.Heartbeat:Connect(function()
     if HIT_RANGE_ENABLED then
         extendHitboxes()
     end
+end)
+
+-- Detectar novos jogadores
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.5) -- Esperar character carregar
+        if HIT_RANGE_ENABLED then
+            extendHitboxes()
+        end
+    end)
 end)
 
 -- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
