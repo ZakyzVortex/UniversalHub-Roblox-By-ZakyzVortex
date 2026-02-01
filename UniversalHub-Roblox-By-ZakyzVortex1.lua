@@ -1,7 +1,31 @@
--- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
+-- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED & CORRECTED) ==================
 -- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
 
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- Verificar se HttpGet está disponível e carregar Rayfield com tratamento de erro
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+end)
+
+if not success or not Rayfield then
+    warn("❌ ERRO: Não foi possível carregar o Rayfield!")
+    warn("Motivo: " .. tostring(Rayfield))
+    warn("Verifique se:")
+    warn("1. O HTTP está habilitado no jogo")
+    warn("2. A URL https://sirius.menu/rayfield está acessível")
+    warn("3. O loadstring está permitido")
+    warn("4. Você está usando um executor que suporta HTTP requests")
+    
+    -- Criar notificação visual do erro
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "❌ Erro no Universal Hub";
+        Text = "Não foi possível carregar o Rayfield. Verifique o console.";
+        Duration = 10;
+    })
+    
+    return -- Para a execução do script
+end
+
+print("✅ Rayfield carregado com sucesso!")
 
 -- ================== SERVICES ==================
 local Players = game:GetService("Players")
