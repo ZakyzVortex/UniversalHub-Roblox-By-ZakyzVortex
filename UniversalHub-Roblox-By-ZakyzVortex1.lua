@@ -1,5 +1,6 @@
--- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
--- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
+-- ================== UNIVERSAL HUB - COMPLETE EDITION ==================
+-- Universal Hub By ZakyzVortex - Sistema de Times + Todas as Funções
+-- Fixed + Official Combined - Ordem Oficial Mantida
 
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
@@ -33,11 +34,9 @@ end
 
 LP.CharacterAdded:Connect(BindCharacter)
 
--- ================== TEAM DETECTION ==================
+-- ================== TEAM DETECTION SYSTEM (FROM FIXED) ==================
 local function isPlayerOnSameTeam(player)
-    -- Se não houver sistema de times, retorna false (considera todos como inimigos)
     if not LP.Team or not player.Team then return false end
-    -- Verifica se estão no mesmo time
     return player.Team == LP.Team
 end
 
@@ -45,14 +44,10 @@ local function shouldShowPlayer(player, filterMode)
     if filterMode == "All" then
         return true
     elseif filterMode == "MyTeam" then
-        -- Só mostra se estiver NO MESMO TIME
-        -- Se não há times no jogo, não mostra ninguém
         if not LP.Team or not player.Team then return false end
         return isPlayerOnSameTeam(player)
     elseif filterMode == "EnemyTeam" then
-        -- Se não há times, todos são considerados inimigos
         if not LP.Team or not player.Team then return true end
-        -- Se há times, só mostra se NÃO estiver no mesmo time
         return not isPlayerOnSameTeam(player)
     end
     return true
@@ -303,16 +298,8 @@ local LINE_ENABLED = true
 local HEALTH_ENABLED = true
 local OUTLINE_ENABLED = true
 
-local ESP_COLOR = Color3.fromRGB(255, 0, 0)
-local LINE_COLOR = Color3.fromRGB(255, 255, 255)
-
 local ESP_OBJECTS = {}
 local TEAM_FILTER = "All"
-
--- Funções auxiliares
-local function getPlayerTeam(player)
-    return player.Team and player.Team.Name or "NoTeam"
-end
 
 -- Função para remover ESP de um jogador
 local function removeESP(player)
@@ -373,252 +360,175 @@ local function createESP(player)
         billboard.Size = UDim2.new(0, 200, 0, 50)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
-        billboard.MaxDistance = 2000
-
-        local txt = Instance.new("TextLabel")
-        txt.Size = UDim2.new(1, 0, 1, 0)
-        txt.BackgroundTransparency = 1
-        txt.TextColor3 = ESP_COLOR
-        txt.TextStrokeTransparency = 0
-        txt.TextStrokeColor3 = Color3.new(0, 0, 0)
-        txt.TextSize = 16
-        txt.Font = Enum.Font.SourceSansBold
-        txt.TextXAlignment = Enum.TextXAlignment.Center
-        txt.TextYAlignment = Enum.TextYAlignment.Center
-        txt.Parent = billboard
         billboard.Parent = hrp
-
+        
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 1, 0)
+        textLabel.BackgroundTransparency = 1
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.TextStrokeTransparency = 0
+        textLabel.TextSize = 14
+        textLabel.Font = Enum.Font.SourceSansBold
+        textLabel.Parent = billboard
+        
         espData.billboard = billboard
-        espData.txt = txt
+        espData.textLabel = textLabel
     end
-
-    -- Linha
+    
+    -- Linha de traçado
     if LINE_ENABLED then
         local line = Drawing.new("Line")
-        line.Color = LINE_COLOR
-        line.Thickness = 2
-        line.Transparency = 1
-        line.Visible = false
-        line.ZIndex = 1
+        line.Visible = true
+        line.Color = Color3.fromRGB(255, 255, 255)
+        line.Thickness = 1
         espData.line = line
     end
-
-    -- Contorno
+    
+    -- Contorno 4 linhas
     if OUTLINE_ENABLED then
-        espData.outline = {}
+        local outline = {}
         for i = 1, 4 do
-            local l = Drawing.new("Line")
-            l.Color = ESP_COLOR
-            l.Thickness = 2
-            l.Transparency = 1
-            l.Visible = false
-            l.ZIndex = 2
-            table.insert(espData.outline, l)
+            local line = Drawing.new("Line")
+            line.Visible = true
+            line.Color = Color3.fromRGB(255, 0, 0)
+            line.Thickness = 2
+            table.insert(outline, line)
         end
+        espData.outline = outline
     end
-
+    
     ESP_OBJECTS[player] = espData
-
-    -- Conexões de cleanup
-    local connections = {}
-    
-    table.insert(connections, hum.Died:Connect(function()
-        task.wait(0.1)
-        removeESP(player)
-        for _, conn in ipairs(connections) do
-            pcall(function() conn:Disconnect() end)
-        end
-    end))
-    
-    table.insert(connections, char.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            removeESP(player)
-            for _, conn in ipairs(connections) do
-                pcall(function() conn:Disconnect() end)
-            end
-        end
-    end))
-    
-    espData.connections = connections
 end
 
--- Função para limpar todo ESP
+-- Função para atualizar ESP
+local function updateESP()
+    for player, espData in pairs(ESP_OBJECTS) do
+        if not player or not player.Parent or not espData.active then
+            removeESP(player)
+            continue
+        end
+        
+        -- Verifica filtro de time
+        if not shouldShowPlayer(player, TEAM_FILTER) then
+            removeESP(player)
+            continue
+        end
+        
+        local char = player.Character
+        if not char then
+            removeESP(player)
+            continue
+        end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        
+        if not hrp or not hum or hum.Health <= 0 then
+            removeESP(player)
+            continue
+        end
+        
+        -- Atualizar Billboard
+        if espData.textLabel then
+            local text = ""
+            
+            if NAME_ENABLED then
+                text = player.Name
+            end
+            
+            if DISTANCE_ENABLED and HRP then
+                local dist = (HRP.Position - hrp.Position).Magnitude
+                text = text .. (text ~= "" and "\n" or "") .. string.format("%.0f studs", dist)
+            end
+            
+            if HEALTH_ENABLED then
+                text = text .. (text ~= "" and "\n" or "") .. string.format("HP: %d/%d", math.floor(hum.Health), math.floor(hum.MaxHealth))
+                
+                local healthPercent = hum.Health / hum.MaxHealth
+                if healthPercent > 0.5 then
+                    espData.textLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                elseif healthPercent > 0.25 then
+                    espData.textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                else
+                    espData.textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                end
+            end
+            
+            espData.textLabel.Text = text
+        end
+        
+        -- Atualizar Linha
+        if espData.line then
+            local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            espData.line.Visible = onScreen and ESP_ENABLED
+            espData.line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+            espData.line.To = Vector2.new(hrpPos.X, hrpPos.Y)
+        end
+        
+        -- Atualizar Contorno
+        if espData.outline then
+            local corners = {}
+            local size = hrp.Size
+            local cf = hrp.CFrame
+            
+            local offsets = {
+                Vector3.new(-size.X/2, size.Y/2, 0),
+                Vector3.new(size.X/2, size.Y/2, 0),
+                Vector3.new(size.X/2, -size.Y/2, 0),
+                Vector3.new(-size.X/2, -size.Y/2, 0)
+            }
+            
+            for _, offset in ipairs(offsets) do
+                local worldPos = cf * offset
+                local screenPos, onScreen = Camera:WorldToViewportPoint(worldPos)
+                table.insert(corners, {pos = Vector2.new(screenPos.X, screenPos.Y), onScreen = onScreen})
+            end
+            
+            local allOnScreen = true
+            for _, corner in ipairs(corners) do
+                if not corner.onScreen then
+                    allOnScreen = false
+                    break
+                end
+            end
+            
+            for i, line in ipairs(espData.outline) do
+                line.Visible = allOnScreen and ESP_ENABLED
+                if allOnScreen then
+                    local nextIndex = (i % 4) + 1
+                    line.From = corners[i].pos
+                    line.To = corners[nextIndex].pos
+                end
+            end
+        end
+    end
+end
+
+-- Função para atualizar todos
+local function refreshESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        removeESP(player)
+    end
+    
+    if ESP_ENABLED then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LP then
+                createESP(player)
+            end
+        end
+    end
+end
+
+-- Função para limpar tudo
 local function clearAllESP()
     for player, _ in pairs(ESP_OBJECTS) do
         removeESP(player)
     end
-    ESP_OBJECTS = {}
 end
 
--- Função para atualizar ESP
-local function refreshESP()
-    clearAllESP()
-    if ESP_ENABLED then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LP then
-                task.spawn(createESP, p)
-            end
-        end
-    end
-end
-
--- Update loop
-local lastESPUpdate = 0
-local UPDATE_RATE = 1/60
-
-RunService.RenderStepped:Connect(function()
-    local now = tick()
-    if now - lastESPUpdate < UPDATE_RATE then return end
-    lastESPUpdate = now
-    
-    if not ESP_ENABLED or not HRP then
-        for _, espData in pairs(ESP_OBJECTS) do
-            if espData.line then espData.line.Visible = false end
-            if espData.outline then
-                for _, l in ipairs(espData.outline) do
-                    l.Visible = false
-                end
-            end
-        end
-        return
-    end
-
-    local cam = Camera
-    local camCFrame = cam.CFrame
-    local viewportSize = cam.ViewportSize
-    local viewportCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-
-    for player, espData in pairs(ESP_OBJECTS) do
-        if not espData.active then continue end
-
-        local char = player.Character
-        if not char or char ~= espData.character then
-            removeESP(player)
-            continue
-        end
-
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        local hum = char:FindFirstChildOfClass("Humanoid")
-
-        if not hrp or not hrp.Parent or not hum or hum.Health <= 0 then
-            if espData.line then espData.line.Visible = false end
-            if espData.outline then
-                for _, l in ipairs(espData.outline) do
-                    l.Visible = false
-                end
-            end
-            continue
-        end
-
-        local hrpPos = hrp.Position
-        local toTarget = hrpPos - HRP.Position
-        local distance = toTarget.Magnitude
-
-        local screenPos, onScreen = cam:WorldToViewportPoint(hrpPos)
-        local inFrontOfCamera = screenPos.Z > 0
-
-        -- Atualiza texto
-        if espData.txt then
-            local parts = {}
-            if NAME_ENABLED then
-                table.insert(parts, player.Name)
-            end
-            if DISTANCE_ENABLED then
-                table.insert(parts, string.format("[%dm]", math.floor(distance)))
-            end
-            if HEALTH_ENABLED then
-                table.insert(parts, string.format("HP:%d", math.floor(hum.Health)))
-            end
-            espData.txt.Text = table.concat(parts, " | ")
-        end
-
-        -- Atualiza linha
-        if espData.line and LINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                espData.line.From = viewportCenter
-                espData.line.To = Vector2.new(screenPos.X, screenPos.Y)
-                espData.line.Visible = true
-            else
-                espData.line.Visible = false
-            end
-        elseif espData.line then
-            espData.line.Visible = false
-        end
-
-        -- Atualiza contorno
-        if espData.outline and OUTLINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                local height = 2.5
-                local width = 1.5
-                local rightVector = camCFrame.RightVector
-
-                local corners = {
-                    hrpPos + rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, -height, 0),
-                    hrpPos + rightVector * width + Vector3.new(0, -height, 0)
-                }
-
-                local screenCorners = {}
-                local allVisible = true
-
-                for i, corner in ipairs(corners) do
-                    local pos, visible = cam:WorldToViewportPoint(corner)
-                    if not visible or pos.Z <= 0 then
-                        allVisible = false
-                        break
-                    end
-                    screenCorners[i] = Vector2.new(pos.X, pos.Y)
-                end
-
-                if allVisible then
-                    for i = 1, 4 do
-                        local nextIndex = (i % 4) + 1
-                        espData.outline[i].From = screenCorners[i]
-                        espData.outline[i].To = screenCorners[nextIndex]
-                        espData.outline[i].Visible = true
-                    end
-                else
-                    for _, l in ipairs(espData.outline) do
-                        l.Visible = false
-                    end
-                end
-            else
-                for _, l in ipairs(espData.outline) do
-                    l.Visible = false
-                end
-            end
-        elseif espData.outline then
-            for _, l in ipairs(espData.outline) do
-                l.Visible = false
-            end
-        end
-    end
-end)
-
--- Sistema para jogadores existentes
-local function initializeExistingPlayers()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character then
-            if ESP_ENABLED then
-                createESP(player)
-            end
-        end
-        
-        player.CharacterAdded:Connect(function(char)
-            char:WaitForChild("HumanoidRootPart", 5)
-            task.wait(0.5)
-            if ESP_ENABLED then
-                createESP(player)
-            end
-        end)
-    end
-end
-
--- Sistema para jogadores novos
+-- Eventos de jogadores
 Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function(char)
-        char:WaitForChild("HumanoidRootPart", 5)
+    player.CharacterAdded:Connect(function()
         task.wait(0.5)
         if ESP_ENABLED then
             createESP(player)
@@ -637,7 +547,24 @@ Players.PlayerRemoving:Connect(function(player)
     removeESP(player)
 end)
 
-initializeExistingPlayers()
+-- Loop de atualização
+local lastESPUpdate = 0
+RunService.RenderStepped:Connect(function()
+    if not ESP_ENABLED then return end
+    
+    local now = tick()
+    if now - lastESPUpdate < 0.033 then return end
+    lastESPUpdate = now
+    
+    updateESP()
+end)
+
+-- Inicializar jogadores existentes
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= LP and player.Character then
+        createESP(player)
+    end
+end
 
 -- UI do ESP
 TabESP:CreateSection("Controles do ESP")
@@ -886,7 +813,7 @@ RunService.RenderStepped:Connect(function()
     lastHighlightCheck = now
     
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character then
+        if player ~= LP and player.Character and shouldShowPlayer(player, HIGHLIGHT_TEAM_FILTER) then
             local char = player.Character
             local hrp = char:FindFirstChild("HumanoidRootPart")
             local hum = char:FindFirstChildOfClass("Humanoid")
@@ -1183,13 +1110,17 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================================================================================
--- ============================== PROTECTION TAB ====================================
+-- ============================ PROTECTION TAB ======================================
 -- ==================================================================================
 
 TabProt:CreateSection("Proteções")
 
-local godMode, lockHP, antiKB, antiVoid, noclip = false, false, false, false, false
+local godMode = false
+local lockHP = false
+local antiVoid = false
+local antiKB = false
 
+-- God Mode
 TabProt:CreateToggle({
     Name = "God Mode",
     CurrentValue = false,
@@ -1198,22 +1129,16 @@ TabProt:CreateToggle({
     end
 })
 
+-- Lock HP
 TabProt:CreateToggle({
-    Name = "Lock HP",
+    Name = "Travar HP no Máximo",
     CurrentValue = false,
     Callback = function(v)
         lockHP = v
     end
 })
 
-TabProt:CreateToggle({
-    Name = "Anti Knockback",
-    CurrentValue = false,
-    Callback = function(v)
-        antiKB = v
-    end
-})
-
+-- Anti Void
 TabProt:CreateToggle({
     Name = "Anti Void",
     CurrentValue = false,
@@ -1222,8 +1147,17 @@ TabProt:CreateToggle({
     end
 })
 
+-- Anti Knockback
+TabProt:CreateToggle({
+    Name = "Anti Knockback",
+    CurrentValue = false,
+    Callback = function(v)
+        antiKB = v
+    end
+})
+
 -- ==================================================================================
--- ================================ PLAYERS TAB =====================================
+-- ============================== PLAYERS TAB =======================================
 -- ==================================================================================
 
 TabPlayers:CreateSection("Teleporte e Spectate")
@@ -1456,53 +1390,45 @@ TabVisuals:CreateButton({
 
 TabVisuals:CreateSection("Iluminação")
 
-local FULLBRIGHT_ENABLED = false
-
-local function toggleFullbright(enabled)
-    if enabled then
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 100000
-        Lighting.GlobalShadows = false
-        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
-    else
-        Lighting.Brightness = 1
-        Lighting.GlobalShadows = true
-    end
-end
+local originalBrightness = Lighting.Brightness
+local originalClockTime = Lighting.ClockTime
+local originalFogEnd = Lighting.FogEnd
+local originalGlobalShadows = Lighting.GlobalShadows
 
 TabVisuals:CreateToggle({
     Name = "Fullbright",
     CurrentValue = false,
     Callback = function(v)
-        FULLBRIGHT_ENABLED = v
-        toggleFullbright(v)
+        if v then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = false
+        else
+            Lighting.Brightness = originalBrightness
+            Lighting.ClockTime = originalClockTime
+            Lighting.FogEnd = originalFogEnd
+            Lighting.GlobalShadows = originalGlobalShadows
+        end
     end
 })
 
 TabVisuals:CreateSection("Câmera")
 
-local NO_CAMERA_SHAKE = false
-
 TabVisuals:CreateToggle({
-    Name = "No Camera Shake",
+    Name = "Remover Zoom Máximo",
     CurrentValue = false,
     Callback = function(v)
-        NO_CAMERA_SHAKE = v
+        if v then
+            LP.CameraMaxZoomDistance = math.huge
+        else
+            LP.CameraMaxZoomDistance = 128
+        end
     end
 })
 
-RunService.RenderStepped:Connect(function()
-    if NO_CAMERA_SHAKE then
-        local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.CameraOffset = Vector3.new(0, 0, 0)
-        end
-    end
-end)
-
 -- ==================================================================================
--- ================================= WORLD TAB ======================================
+-- ================================ WORLD TAB =======================================
 -- ==================================================================================
 
 TabWorld:CreateSection("Tempo e Ambiente")
@@ -1511,31 +1437,31 @@ TabWorld:CreateSlider({
     Name = "Hora do Dia",
     Range = {0, 24},
     Increment = 0.5,
-    CurrentValue = 14,
+    CurrentValue = 12,
     Callback = function(v)
         Lighting.ClockTime = v
     end
 })
 
 TabWorld:CreateSlider({
-    Name = "Gravidade",
-    Range = {60, 500},
-    Increment = 10,
-    CurrentValue = 196,
+    Name = "Final da Névoa",
+    Range = {100, 100000},
+    Increment = 100,
+    CurrentValue = 1000,
     Callback = function(v)
-        workspace.Gravity = v
+        Lighting.FogEnd = v
     end
 })
 
 TabWorld:CreateButton({
-    Name = "Remover Fog",
+    Name = "Remover Completamente a Névoa",
     Callback = function()
-        Lighting.FogEnd = 1e6
+        Lighting.FogEnd = 100000
     end
 })
 
 -- ==================================================================================
--- =============================== FPS/STATS TAB ====================================
+-- ================================ FPS/STATS TAB ===================================
 -- ==================================================================================
 
 TabFPS:CreateSection("Anti-Lag")
@@ -1543,33 +1469,6 @@ TabFPS:CreateSection("Anti-Lag")
 local ANTI_LAG_ENABLED = false
 
 local function applyAntiLag()
-    if not ANTI_LAG_ENABLED then return end
-    
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-            obj.Enabled = false
-        end
-    end
-    
-    for _, effect in pairs(Lighting:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
-        end
-    end
-    
-    for _, effect in pairs(Camera:GetChildren()) do
-        if effect:IsA("PostEffect") then
-            effect.Enabled = false
-        end
-    end
-    
-    Lighting.GlobalShadows = false
-    
-    workspace.Terrain.WaterWaveSize = 0
-    workspace.Terrain.WaterWaveSpeed = 0
-    workspace.Terrain.WaterReflectance = 0
-    workspace.Terrain.WaterTransparency = 0
-    
     for _, part in pairs(workspace:GetDescendants()) do
         if part:IsA("BasePart") then
             part.Material = Enum.Material.Plastic
@@ -1780,6 +1679,8 @@ TabConfig:CreateButton({
 
 TabUtil:CreateSection("Noclip")
 
+local noclip = false
+
 TabUtil:CreateToggle({
     Name = "Noclip",
     CurrentValue = false,
@@ -1866,10 +1767,14 @@ RunService.RenderStepped:Connect(function(dt)
     if antiKB then
         HRP.Velocity = HRP.Velocity * Vector3.new(0.8, 0.9, 0.8)
     end
+    
+    if antiFall and HRP.Velocity.Y < -50 then
+        HRP.Velocity = Vector3.new(HRP.Velocity.X, 0, HRP.Velocity.Z)
+    end
 end)
 
 print("✅ Universal Hub - Complete Edition - 100% Funcional!")
 print("🎯 Sistema de Times Integrado em ESP, Highlight e Aim Assist!")
 print("📊 Filtros: All / MyTeam / EnemyTeam")
-print("⚡ Todas as funcionalidades do oficial mantidas!")
-print("🔥 By ZakyzVortex - Organizado e Otimizado!")
+print("⚡ Todas as funcionalidades do oficial + sistema de times do fixed!")
+print("🔥 By ZakyzVortex - Organizado na ordem oficial!")
