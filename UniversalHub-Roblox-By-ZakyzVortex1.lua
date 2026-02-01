@@ -545,10 +545,11 @@ TabESP:CreateSection("Filtros")
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    CurrentOption = "All",
+    CurrentOption = {"All"},
+    MultipleOptions = false,
     Flag = "ESPTeamFilter",
     Callback = function(option)
-        ESP_TEAM_FILTER = option
+        ESP_TEAM_FILTER = typeof(option) == "table" and option[1] or option
         refreshESP()
     end
 })
@@ -848,10 +849,11 @@ TabHighlight:CreateSection("Filtros")
 TabHighlight:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    CurrentOption = "All",
+    CurrentOption = {"All"},
+    MultipleOptions = false,
     Flag = "HighlightTeamFilter",
     Callback = function(option)
-        HIGHLIGHT_TEAM_FILTER = option
+        HIGHLIGHT_TEAM_FILTER = typeof(option) == "table" and option[1] or option
         refreshHighlights()
     end
 })
@@ -958,7 +960,6 @@ local AIM_PART = "Head"
 local AIM_VISIBLE_CHECK = true
 local AIM_MAX_DISTANCE = 1000
 local AIM_FOV_RADIUS = 200
-local AIM_TEAM_FILTER = "EnemyTeam"  -- All, MyTeam, EnemyTeam
 local currentTarget = nil
 local lastTargetUpdate = 0
 
@@ -972,28 +973,24 @@ local function isVisible(targetPart)
     if not targetPart or not HRP then return false end
     if not AIM_VISIBLE_CHECK then return true end
     
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {Character, targetPart.Parent}
-    raycastParams.IgnoreWater = true
+    rayParams.FilterDescendantsInstances = {Character, targetPart.Parent}
     
     local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin)
+    local targetPos = targetPart.Position
+    local direction = targetPos - origin
     
-    local result = workspace:Raycast(origin, direction, raycastParams)
+    local result = workspace:Raycast(origin, direction, rayParams)
     
-    -- Se não acertou nada, está visível
     if not result then return true end
     
     local hitPart = result.Instance
     
-    -- Se acertou uma parte do próprio alvo, está visível
-    if hitPart:IsDescendantOf(targetPart.Parent) then return true end
-    
-    -- Se acertou algo transparente (>90%), considera visível
+    -- Permite objetos transparentes
     if hitPart.Transparency >= 0.9 then return true end
     
-    -- Se chegou aqui, há algo bloqueando
+    -- Permite se acertou alguma parte do próprio alvo
+    if hitPart:IsDescendantOf(targetPart.Parent) then return true end
+    
     return false
 end
 
@@ -1034,8 +1031,8 @@ local function isValidTarget(player)
     local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoid or humanoid.Health <= 0 then return false end
     
-    -- VERIFICAÇÃO DE TIME: usa o filtro configurado
-    if not shouldShowPlayer(player, AIM_TEAM_FILTER) then
+    -- VERIFICAÇÃO DE TIME: apenas inimigos
+    if not shouldShowPlayer(player, "EnemyTeam") then
         return false
     end
     
@@ -1156,12 +1153,9 @@ TabAim:CreateToggle({
         
         -- Mostrar notificação ao ativar/desativar
         if v then
-            local filterText = AIM_TEAM_FILTER == "All" and "todos os jogadores" 
-                or AIM_TEAM_FILTER == "MyTeam" and "apenas seu time" 
-                or "apenas inimigos"
             Rayfield:Notify({
                 Title = "Aim Assist Ativado",
-                Content = "Alvo: " .. filterText,
+                Content = "Mirando apenas em inimigos",
                 Duration = 2
             })
         end
@@ -1179,17 +1173,6 @@ TabAim:CreateToggle({
 })
 
 TabAim:CreateSection("Configurações de Alvo")
-
-TabAim:CreateDropdown({
-    Name = "Filtro de Time",
-    Options = {"All", "MyTeam", "EnemyTeam"},
-    CurrentOption = "EnemyTeam",
-    Flag = "AimTeamFilter",
-    Callback = function(option)
-        AIM_TEAM_FILTER = option
-        currentTarget = nil
-    end
-})
 
 TabAim:CreateSlider({
     Name = "FOV (Raio)",
