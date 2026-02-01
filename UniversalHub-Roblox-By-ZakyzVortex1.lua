@@ -90,7 +90,7 @@ local Window = Rayfield:CreateWindow({
 
 -- ================== CREATE TABS ==================
 local TabMove = Window:CreateTab("Movement")
-local TabCombat = Window:CreateTab("AUTO FARM")
+local TabCombat = Window:CreateTab("Auto Farm")
 local TabESP = Window:CreateTab("ESP")
 local TabHighlight = Window:CreateTab("Highlight ESP")
 local TabAim = Window:CreateTab("Aim Assist")
