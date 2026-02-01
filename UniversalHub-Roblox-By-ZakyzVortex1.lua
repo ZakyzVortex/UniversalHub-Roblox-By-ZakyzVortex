@@ -204,50 +204,43 @@ end)
 -- ================================ COMBAT TAB ======================================
 -- ==================================================================================
 
--- Serviços necessários
+-- SERVIÇOS
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local LP = Players.LocalPlayer
 local Mouse = LP:GetMouse()
 
+-- ==================================================================================
+-- AUTO CLICKER
+-- ==================================================================================
+
 TabCombat:CreateSection("Auto Clicker")
 
--- Estados
 local AUTO_CLICKER_ENABLED = false
 local AUTO_CLICKER_CPS = 10
 local lastClick = 0
 
--- Função de clique CORRIGIDA
 local function performClick()
     if not AUTO_CLICKER_ENABLED then return end
     
-    -- Método 1: Virtual Input (mais confiável)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
     task.wait(0.01)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-    
-    -- OU Método 2: Se o jogo aceita mouse1press/mouse1release
-    -- mouse1press()
-    -- task.wait(0.01)
-    -- mouse1release()
 end
 
--- Toggle Auto Clicker
 TabCombat:CreateToggle({
     Name = "Ativar Auto Clicker",
     CurrentValue = false,
     Callback = function(v)
         AUTO_CLICKER_ENABLED = v
-        if v then
-            lastClick = tick() -- Reset timer ao ativar
-        end
+        if v then lastClick = tick() end
     end
 })
 
--- CPS Slider
 TabCombat:CreateSlider({
     Name = "CPS (Cliques por Segundo)",
     Range = {1, 50},
@@ -258,7 +251,6 @@ TabCombat:CreateSlider({
     end
 })
 
--- Auto Clicker Loop OTIMIZADO
 RunService.Heartbeat:Connect(function()
     if not AUTO_CLICKER_ENABLED then return end
     
@@ -272,36 +264,33 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ==================================================================================
+-- HIT RANGE EXTENDER
+-- ==================================================================================
 
 TabCombat:CreateSection("Hit Range Extender")
 
--- Estados
 local HIT_RANGE_ENABLED = false
 local HIT_RANGE_SIZE = 10
 local originalSizes = {}
 local originalTransparencies = {}
 
--- Função para estender hitboxes CORRIGIDA
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
             
             if hrp and hrp:IsA("BasePart") then
-                -- Salvar valores originais
                 if not originalSizes[player.UserId] then
                     originalSizes[player.UserId] = hrp.Size
                     originalTransparencies[player.UserId] = hrp.Transparency
                 end
                 
                 if HIT_RANGE_ENABLED then
-                    -- Aplicar hitbox expandida
                     hrp.Size = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
                     hrp.Transparency = 0.7
                     hrp.CanCollide = false
-                    hrp.Massless = true -- Evita problemas de física
+                    hrp.Massless = true
                 else
-                    -- Restaurar valores originais
                     hrp.Size = originalSizes[player.UserId] or Vector3.new(2, 2, 1)
                     hrp.Transparency = originalTransparencies[player.UserId] or 1
                     hrp.CanCollide = false
@@ -312,27 +301,20 @@ local function extendHitboxes()
     end
 end
 
--- Limpar dados quando jogador sai
 Players.PlayerRemoving:Connect(function(player)
     originalSizes[player.UserId] = nil
     originalTransparencies[player.UserId] = nil
 end)
 
--- Toggle Hit Range
 TabCombat:CreateToggle({
     Name = "Ativar Hit Range Extender",
     CurrentValue = false,
     Callback = function(v)
         HIT_RANGE_ENABLED = v
-        
-        if not v then
-            -- Restaurar todas as hitboxes ao desativar
-            extendHitboxes()
-        end
+        if not v then extendHitboxes() end
     end
 })
 
--- Size Slider
 TabCombat:CreateSlider({
     Name = "Tamanho da Hitbox",
     Range = {5, 30},
@@ -340,28 +322,76 @@ TabCombat:CreateSlider({
     CurrentValue = 10,
     Callback = function(v)
         HIT_RANGE_SIZE = v
-        if HIT_RANGE_ENABLED then
-            extendHitboxes()
-        end
+        if HIT_RANGE_ENABLED then extendHitboxes() end
     end
 })
 
--- Loop contínuo para hitboxes (mais eficiente)
 RunService.Heartbeat:Connect(function()
     if HIT_RANGE_ENABLED then
         extendHitboxes()
     end
 end)
 
--- Detectar novos jogadores
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function()
-        task.wait(0.5) -- Esperar character carregar
-        if HIT_RANGE_ENABLED then
-            extendHitboxes()
-        end
+        task.wait(0.5)
+        if HIT_RANGE_ENABLED then extendHitboxes() end
     end)
 end)
+
+-- ==================================================================================
+-- AUTO PRESS (PROXIMITY PROMPT)
+-- ==================================================================================
+
+TabCombat:CreateSection("Auto Press")
+
+local AUTO_PRESS_ENABLED = false
+local AUTO_PRESS_INTERVAL = 0.25
+local promptAtual = nil
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+    promptAtual = prompt
+end)
+
+ProximityPromptService.PromptHidden:Connect(function(prompt)
+    if promptAtual == prompt then
+        promptAtual = nil
+    end
+end)
+
+TabCombat:CreateToggle({
+    Name = "Ativar Auto Press",
+    CurrentValue = false,
+    Callback = function(v)
+        AUTO_PRESS_ENABLED = v
+    end
+})
+
+TabCombat:CreateSlider({
+    Name = "Intervalo (segundos)",
+    Range = {0.1, 2},
+    Increment = 0.05,
+    CurrentValue = 0.25,
+    Callback = function(v)
+        AUTO_PRESS_INTERVAL = v
+    end
+})
+
+-- Loop Auto Press
+task.spawn(function()
+    while true do
+        if AUTO_PRESS_ENABLED and promptAtual and promptAtual.Enabled then
+            pcall(function()
+                fireproximityprompt(promptAtual, promptAtual.HoldDuration or 0)
+            end)
+        end
+        task.wait(AUTO_PRESS_INTERVAL)
+    end
+end)
+
+-- ==================================================================================
+-- FIM DO COMBAT TAB
+-- ==================================================================================
 
 -- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
 local ESP_ENABLED = false
