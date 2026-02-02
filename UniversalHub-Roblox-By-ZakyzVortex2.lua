@@ -1267,376 +1267,275 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================================================================================
--- ============================== PLAYER AIM TAB ====================================
+-- ============================ PLAYER AIM TAB  ===================
 -- ==================================================================================
-
--- ================== VARIÁVEIS GLOBAIS ==================
-
-local PLAYER_AIM_ENABLED = false
-local PLAYER_AIM_SMOOTHNESS = 0.15
-local PLAYER_AIM_PART = "Head"
-local PLAYER_AIM_PREDICTION = 0.13
-local PLAYER_AIM_WALLCHECK = true
-local PLAYER_AIM_SHAKE_X = 0
-local PLAYER_AIM_SHAKE_Y = 0
-local PLAYER_AIM_FOV_RADIUS = 200
-
-local SELECTED_PLAYER_NAME = nil
-local SELECTED_PLAYER = nil
-local PLAYER_LIST = {}
-
--- ================== FUNÇÕES AUXILIARES ==================
-
-local function updatePlayerList()
-    PLAYER_LIST = {}
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(PLAYER_LIST, player.Name)
-        end
-    end
-    
-    -- Debug: mostra quantos jogadores foram encontrados
-    print("🔍 [Player Aim] Encontrados " .. #PLAYER_LIST .. " jogadores")
-    for i, name in ipairs(PLAYER_LIST) do
-        print("   " .. i .. ". " .. name)
-    end
-    
-    return PLAYER_LIST
-end
-
-local function getSelectedPlayer()
-    if not SELECTED_PLAYER_NAME then 
-        print("⚠️ [Player Aim] Nenhum jogador selecionado")
-        return nil 
-    end
-    
-    local player = Players:FindFirstChild(SELECTED_PLAYER_NAME)
-    
-    if not player then
-        print("❌ [Player Aim] Jogador '" .. SELECTED_PLAYER_NAME .. "' não encontrado")
-    else
-        print("✅ [Player Aim] Jogador '" .. SELECTED_PLAYER_NAME .. "' encontrado")
-    end
-    
-    return player
-end
-
-local function isPlayerValid(player)
-    if not player then 
-        print("❌ [Player Aim] Player is nil")
-        return false 
-    end
-    
-    if player == LP then 
-        print("❌ [Player Aim] Não pode mirar em si mesmo")
-        return false 
-    end
-    
-    if not player.Character then 
-        print("❌ [Player Aim] " .. player.Name .. " não tem Character")
-        return false 
-    end
-    
-    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        print("❌ [Player Aim] " .. player.Name .. " não tem Humanoid")
-        return false
-    end
-    
-    if humanoid.Health <= 0 then 
-        print("❌ [Player Aim] " .. player.Name .. " está morto (HP: 0)")
-        return false 
-    end
-    
-    print("✅ [Player Aim] " .. player.Name .. " é válido (HP: " .. math.floor(humanoid.Health) .. ")")
-    return true
-end
-
-local function getPlayerAimPart(player)
-    if not player or not player.Character then return nil end
-    
-    local part = nil
-    if PLAYER_AIM_PART == "Head" then
-        part = player.Character:FindFirstChild("Head")
-    elseif PLAYER_AIM_PART == "Torso" then
-        part = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
-    elseif PLAYER_AIM_PART == "HumanoidRootPart" then
-        part = player.Character:FindFirstChild("HumanoidRootPart")
-    end
-    
-    if part then
-        print("✅ [Player Aim] Part encontrada: " .. part.Name .. " em " .. player.Name)
-    else
-        print("❌ [Player Aim] Part '" .. PLAYER_AIM_PART .. "' não encontrada em " .. player.Name)
-    end
-    
-    return part
-end
-
-local function hasLineOfSight(targetPart)
-    if not PLAYER_AIM_WALLCHECK then return true end
-    if not HRP or not targetPart then return false end
-    
-    local origin = Camera.CFrame.Position
-    local direction = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
-    
-    local rayParams = RaycastParams.new()
-    rayParams.FilterDescendantsInstances = {Character, targetPart.Parent}
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.IgnoreWater = true
-    
-    local result = workspace:Raycast(origin, direction, rayParams)
-    
-    local hasLOS = result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
-    
-    if hasLOS then
-        print("✅ [Player Aim] Linha de visão LIVRE")
-    else
-        print("⚠️ [Player Aim] Linha de visão BLOQUEADA por: " .. result.Instance.Name)
-    end
-    
-    return hasLOS
-end
-
-local function predictPosition(targetPart)
-    if not targetPart or PLAYER_AIM_PREDICTION == 0 then
-        return targetPart and targetPart.Position or Vector3.new(0, 0, 0)
-    end
-    
-    local velocity = targetPart.AssemblyVelocity or Vector3.new(0, 0, 0)
-    local predictedPos = targetPart.Position + (velocity * PLAYER_AIM_PREDICTION)
-    
-    return predictedPos
-end
-
-local function applyShake(position)
-    if PLAYER_AIM_SHAKE_X == 0 and PLAYER_AIM_SHAKE_Y == 0 then
-        return position
-    end
-    
-    local shakeX = (math.random() - 0.5) * PLAYER_AIM_SHAKE_X * 2
-    local shakeY = (math.random() - 0.5) * PLAYER_AIM_SHAKE_Y * 2
-    
-    return position + Vector3.new(shakeX, shakeY, 0)
-end
-
-local function smoothAimToPlayer()
-    if not PLAYER_AIM_ENABLED then return end
-    
-    local targetPlayer = getSelectedPlayer()
-    if not isPlayerValid(targetPlayer) then return end
-    
-    local targetPart = getPlayerAimPart(targetPlayer)
-    if not targetPart then return end
-    
-    -- Verificação de FOV Radius
-    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-    if onScreen then
-        local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
-        local distance = (centerScreen - targetScreen).Magnitude
-        
-        if distance > PLAYER_AIM_FOV_RADIUS then
-            print("⚠️ [Player Aim] Alvo fora do FOV Radius (Distância: " .. math.floor(distance) .. " > " .. PLAYER_AIM_FOV_RADIUS .. ")")
-            return -- Jogador fora do FOV radius
-        end
-    end
-    
-    if not hasLineOfSight(targetPart) then return end
-    
-    local predictedPos = predictPosition(targetPart)
-    local shakenPos = applyShake(predictedPos)
-    
-    local targetCFrame = CFrame.new(Camera.CFrame.Position, shakenPos)
-    
-    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, PLAYER_AIM_SMOOTHNESS)
-end
-
--- ================== INTERFACE DA ABA ==================
 
 TabPlayerAim:CreateSection("🎯 Seleção de Jogador")
 
-TabPlayerAim:CreateLabel("IMPORTANTE: Selecione um jogador antes de ativar!")
+-- Variáveis do Player Aim
+local PlayerAimEnabled = false
+local PlayerAimSmoothness = 0.15
+local PlayerAimPart = "Head"
+local PlayerAimFOVRadius = 100
+local PlayerAimPrediction = 0.13
+local PlayerAimWallCheck = false
+local TargetPlayerName = nil
+local PlayerAimList = {}
 
-local PlayerDropdown = TabPlayerAim:CreateDropdown({
-    Name = "Escolher Jogador Alvo",
-    Options = updatePlayerList(),
-    CurrentOption = "",
-    Callback = function(option)
-        SELECTED_PLAYER_NAME = option
-        SELECTED_PLAYER = getSelectedPlayer()
-        
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print("🎯 JOGADOR SELECIONADO: " .. option)
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        
-        if SELECTED_PLAYER then
-            Rayfield:Notify({
-                Title = "🎯 Jogador Selecionado",
-                Content = "Alvo: " .. option,
-                Duration = 3
-            })
-        else
-            Rayfield:Notify({
-                Title = "❌ Erro",
-                Content = "Jogador '" .. option .. "' não encontrado!",
-                Duration = 3
-            })
+-- Funções do Player Aim
+local function UpdatePlayerAimList()
+    PlayerAimList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP then
+            table.insert(PlayerAimList, player.Name)
         end
     end
-})
+    return PlayerAimList
+end
 
-TabPlayerAim:CreateButton({
-    Name = "🔄 Atualizar Lista de Jogadores",
-    Callback = function()
-        local newList = updatePlayerList()
-        PlayerDropdown:Refresh(newList)
+local function GetTargetPlayer()
+    if not TargetPlayerName then return nil end
+    local playerName = tostring(TargetPlayerName)
+    return Players:FindFirstChild(playerName)
+end
+
+local function IsPlayerAimValid(player)
+    return player 
+        and player ~= LP 
+        and player.Character 
+        and player.Character:FindFirstChild("Humanoid")
+        and player.Character.Humanoid.Health > 0
+end
+
+local function GetPlayerAimPart(player)
+    if not player or not player.Character then return nil end
+    
+    if PlayerAimPart == "Head" then
+        return player.Character:FindFirstChild("Head")
+    elseif PlayerAimPart == "Torso" then
+        return player.Character:FindFirstChild("UpperTorso") or player.Character:FindFirstChild("Torso")
+    else
+        return player.Character:FindFirstChild("HumanoidRootPart")
+    end
+end
+
+local function CheckPlayerAimFOV(part)
+    if PlayerAimFOVRadius <= 0 then return true end
+    
+    local camera = workspace.CurrentCamera
+    local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+    
+    if not onScreen then return false end
+    
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    local target = Vector2.new(pos.X, pos.Y)
+    
+    return (center - target).Magnitude <= PlayerAimFOVRadius
+end
+
+local function CheckPlayerAimWall(part)
+    if not PlayerAimWallCheck then return true end
+    
+    local camera = workspace.CurrentCamera
+    local origin = camera.CFrame.Position
+    local direction = (part.Position - origin)
+    
+    local ray = RaycastParams.new()
+    ray.FilterDescendantsInstances = {LP.Character, part.Parent}
+    ray.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local result = workspace:Raycast(origin, direction, ray)
+    return not result or result.Instance:IsDescendantOf(part.Parent)
+end
+
+local function GetPartVelocity(part)
+    if part.AssemblyLinearVelocity then
+        return part.AssemblyLinearVelocity
+    elseif part.Velocity then
+        return part.Velocity
+    elseif part.AssemblyVelocity then
+        return part.AssemblyVelocity
+    else
+        return Vector3.new(0, 0, 0)
+    end
+end
+
+-- Player Aim Loop (SEM LOGS PESADOS)
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if not PlayerAimEnabled then return end
+        
+        local player = GetTargetPlayer()
+        if not player or not IsPlayerAimValid(player) then return end
+        
+        local part = GetPlayerAimPart(player)
+        if not part then return end
+        
+        if not CheckPlayerAimFOV(part) then return end
+        if not CheckPlayerAimWall(part) then return end
+        
+        local targetPos = part.Position
+        if PlayerAimPrediction > 0 then
+            local velocity = GetPartVelocity(part)
+            targetPos = targetPos + (velocity * PlayerAimPrediction)
+        end
+        
+        local camera = workspace.CurrentCamera
+        local lookAt = CFrame.new(camera.CFrame.Position, targetPos)
+        camera.CFrame = camera.CFrame:Lerp(lookAt, PlayerAimSmoothness)
+    end)
+end)
+
+-- Interface do Player Aim
+TabPlayerAim:CreateLabel("Selecione um jogador específico para mirar")
+
+local PlayerAimDropdown = TabPlayerAim:CreateDropdown({
+    Name = "Escolher Jogador Alvo",
+    Options = UpdatePlayerAimList(),
+    CurrentOption = "",
+    Callback = function(option)
+        if type(option) == "table" then
+            TargetPlayerName = option[1] or option
+        else
+            TargetPlayerName = option
+        end
+        
         Rayfield:Notify({
-            Title = "✅ Lista Atualizada",
-            Content = "Encontrados " .. #newList .. " jogadores",
+            Title = "🎯 Alvo Selecionado",
+            Content = tostring(TargetPlayerName),
             Duration = 2
         })
     end
 })
 
 TabPlayerAim:CreateButton({
-    Name = "🔍 Ver Jogador Atual",
+    Name = "🔄 Atualizar Lista de Jogadores",
     Callback = function()
-        if SELECTED_PLAYER_NAME then
-            local player = getSelectedPlayer()
-            if player then
-                Rayfield:Notify({
-                    Title = "ℹ️ Jogador Atual",
-                    Content = SELECTED_PLAYER_NAME .. " (Válido: " .. (isPlayerValid(player) and "Sim" or "Não") .. ")",
-                    Duration = 4
-                })
-            else
-                Rayfield:Notify({
-                    Title = "❌ Erro",
-                    Content = "Jogador não existe mais",
-                    Duration = 3
-                })
-            end
-        else
-            Rayfield:Notify({
-                Title = "⚠️ Aviso",
-                Content = "Nenhum jogador selecionado",
-                Duration = 3
-            })
-        end
+        local list = UpdatePlayerAimList()
+        PlayerAimDropdown:Refresh(list)
+        Rayfield:Notify({
+            Title = "✅ Lista Atualizada",
+            Content = #list .. " jogadores",
+            Duration = 2
+        })
     end
 })
 
-TabPlayerAim:CreateSection("⚙️ Ativação do Aim")
-
-TabPlayerAim:CreateLabel("1. Selecione um jogador acima")
-TabPlayerAim:CreateLabel("2. Ative o toggle abaixo")
+TabPlayerAim:CreateSection("⚙️ Controle")
 
 TabPlayerAim:CreateToggle({
-    Name = "🎯 Ativar Aim Automático",
+    Name = "🎯 Ativar Aim no Jogador",
     CurrentValue = false,
-    Callback = function(v)
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print("🎯 TOGGLE AIM: " .. (v and "LIGADO" or "DESLIGADO"))
-        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        
-        if v and not SELECTED_PLAYER_NAME then
+    Callback = function(value)
+        if value and not TargetPlayerName then
             Rayfield:Notify({
                 Title = "⚠️ Aviso",
                 Content = "Selecione um jogador primeiro!",
-                Duration = 3
+                Duration = 2
             })
-            PLAYER_AIM_ENABLED = false
+            PlayerAimEnabled = false
             return
         end
         
-        PLAYER_AIM_ENABLED = v
+        PlayerAimEnabled = value
         
-        if v then
-            Rayfield:Notify({
-                Title = "✅ Aim Ativado",
-                Content = "Mirando em " .. (SELECTED_PLAYER_NAME or "jogador"),
-                Duration = 2
-            })
-        else
-            Rayfield:Notify({
-                Title = "⭕ Aim Desativado",
-                Content = "Aim automático desligado",
-                Duration = 2
-            })
-        end
+        Rayfield:Notify({
+            Title = value and "✅ Aim Ativado" or "⭕ Aim Desativado",
+            Content = value and ("Mirando em: " .. tostring(TargetPlayerName)) or "Desativado",
+            Duration = 2
+        })
     end
 })
 
-TabPlayerAim:CreateSection("🎛️ Configurações do Aim")
+TabPlayerAim:CreateSection("🎛️ Configurações")
 
 TabPlayerAim:CreateSlider({
-    Name = "FOV Radius (Raio de Detecção)",
+    Name = "FOV Radius (pixels)",
     Range = {10, 800},
     Increment = 10,
     CurrentValue = 100,
     Callback = function(v)
-        PLAYER_AIM_FOV_RADIUS = v
-        print("🎯 FOV Radius ajustado para: " .. v .. " pixels")
+        PlayerAimFOVRadius = v
     end
 })
 
 TabPlayerAim:CreateSlider({
-    Name = "Suavidade (menor = mais suave)",
+    Name = "Suavidade (menor = mais rápido)",
     Range = {0.01, 1},
     Increment = 0.01,
     CurrentValue = 0.15,
     Callback = function(v)
-        PLAYER_AIM_SMOOTHNESS = v
-        print("📊 Suavidade ajustada para: " .. v)
+        PlayerAimSmoothness = v
     end
 })
 
 TabPlayerAim:CreateDropdown({
-    Name = "Parte do Corpo Alvo",
+    Name = "Parte do Corpo",
     Options = {"Head", "Torso", "HumanoidRootPart"},
     CurrentOption = "Head",
-    Callback = function(option)
-        PLAYER_AIM_PART = option
-        print("🎯 Parte do corpo: " .. option)
+    Callback = function(v)
+        if type(v) == "table" then
+            PlayerAimPart = v[1] or v
+        else
+            PlayerAimPart = v
+        end
     end
 })
-
-TabPlayerAim:CreateSection("🔧 Configurações Avançadas")
 
 TabPlayerAim:CreateSlider({
     Name = "Predição de Movimento",
     Range = {0, 0.5},
     Increment = 0.01,
-    CurrentValue = 0.13,
+    CurrentValue = 0,
     Callback = function(v)
-        PLAYER_AIM_PREDICTION = v
-        print("🔮 Predição: " .. v)
+        PlayerAimPrediction = v
     end
 })
 
 TabPlayerAim:CreateToggle({
-    Name = "Wallcheck (não mirar através de paredes)",
+    Name = "WallCheck (não mirar através de paredes)",
     CurrentValue = true,
     Callback = function(v)
-        PLAYER_AIM_WALLCHECK = v
-        print("🧱 Wallcheck: " .. (v and "ON" or "OFF"))
+        PlayerAimWallCheck = v
     end
 })
 
-TabPlayerAim:CreateSection("📊 Informações")
+TabPlayerAim:CreateSection("📊 Status")
 
-TabPlayerAim:CreateLabel("FOV Radius: Área de detecção em pixels")
-TabPlayerAim:CreateLabel("Suavidade: Quão rápido o aim se move")
-TabPlayerAim:CreateLabel("Predição: Antecipa movimento do alvo")
-TabPlayerAim:CreateLabel("Wallcheck: Bloqueia aim através de paredes")
+-- Status do Player Aim
+local PlayerAimStatus = TabPlayerAim:CreateLabel("Status: Aguardando...")
 
--- ================== RUNTIME LOOP ==================
-
-RunService.RenderStepped:Connect(function()
-    if not Character or not HRP or not Humanoid then return end
-    smoothAimToPlayer()
+task.spawn(function()
+    while wait(1) do
+        pcall(function()
+            if PlayerAimEnabled and TargetPlayerName then
+                local p = GetTargetPlayer()
+                if p and IsPlayerAimValid(p) then
+                    PlayerAimStatus:Set("✅ ATIVO - Mirando em " .. tostring(TargetPlayerName))
+                else
+                    PlayerAimStatus:Set("❌ Alvo inválido ou morto")
+                end
+            elseif TargetPlayerName then
+                PlayerAimStatus:Set("⏸️ Desativado - Alvo: " .. tostring(TargetPlayerName))
+            else
+                PlayerAimStatus:Set("⚠️ Nenhum jogador selecionado")
+            end
+        end)
+    end
 end)
+
+-- Auto-refresh da lista de jogadores a cada 5 segundos
+task.spawn(function()
+    while wait(5) do
+        pcall(function()
+            PlayerAimDropdown:Refresh(UpdatePlayerAimList())
+        end)
+    end
+end)
+
+-- ==================================================================================
+-- FIM DA ABA PLAYER AIM
+-- ==================================================================================
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
