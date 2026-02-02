@@ -1267,19 +1267,18 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================================================================================
--- ======================== PLAYER-SPECIFIC AIM ASSIST TAB ==========================
+-- ==================== PLAYER AIM ASSISTANT (VERSÃO MOBILE) =======================
 -- ==================================================================================
 
 -- ================== VARIÁVEIS DO PLAYER-SPECIFIC AIM ==================
 
 local PLAYER_AIM_ENABLED = false
-local PLAYER_AIM_SMOOTHNESS = 1
+local PLAYER_AIM_SMOOTHNESS = 0.15
 local PLAYER_AIM_PART = "Head"
-local PLAYER_AIM_PREDICTION = 0.1
+local PLAYER_AIM_PREDICTION = 0.13
 local PLAYER_AIM_WALLCHECK = true
 local PLAYER_AIM_SHAKE_X = 0
 local PLAYER_AIM_SHAKE_Y = 0
-local PLAYER_AIM_MOUSE_BUTTON = "Hold"
 
 local SELECTED_PLAYER_NAME = nil
 local SELECTED_PLAYER = nil
@@ -1386,10 +1385,10 @@ end
 
 -- ================== INTERFACE DA ABA ==================
 
-TabPlayerAim:CreateSection("Player Selection")
+TabPlayerAim:CreateSection("🎯 Seleção de Jogador")
 
 local PlayerDropdown = TabPlayerAim:CreateDropdown({
-    Name = "Selecionar Jogador",
+    Name = "Escolher Jogador Alvo",
     Options = updatePlayerList(),
     CurrentOption = "",
     Callback = function(option)
@@ -1397,8 +1396,8 @@ local PlayerDropdown = TabPlayerAim:CreateDropdown({
         SELECTED_PLAYER = getSelectedPlayer()
         if SELECTED_PLAYER then
             Rayfield:Notify({
-                Title = "Jogador Selecionado",
-                Content = "Mirando em: " .. option,
+                Title = "🎯 Jogador Selecionado",
+                Content = "Alvo: " .. option,
                 Duration = 2
             })
         end
@@ -1406,48 +1405,68 @@ local PlayerDropdown = TabPlayerAim:CreateDropdown({
 })
 
 TabPlayerAim:CreateButton({
-    Name = "Atualizar Lista de Jogadores",
+    Name = "🔄 Atualizar Lista de Jogadores",
     Callback = function()
         local newList = updatePlayerList()
         PlayerDropdown:Refresh(newList)
         Rayfield:Notify({
-            Title = "Lista Atualizada",
+            Title = "✅ Lista Atualizada",
             Content = "Encontrados " .. #newList .. " jogadores",
             Duration = 2
         })
     end
 })
 
-TabPlayerAim:CreateSection("Aim Settings")
+TabPlayerAim:CreateSection("⚙️ Ativação do Aim")
+
+TabPlayerAim:CreateLabel("Ative o toggle abaixo para começar a mirar")
 
 TabPlayerAim:CreateToggle({
-    Name = "Ativar Aim no Jogador",
+    Name = "🎯 Ativar Aim Automático",
     CurrentValue = false,
     Callback = function(v)
-        PLAYER_AIM_ENABLED = v
         if v and not SELECTED_PLAYER_NAME then
             Rayfield:Notify({
-                Title = "Aviso",
+                Title = "⚠️ Aviso",
                 Content = "Selecione um jogador primeiro!",
                 Duration = 3
             })
             PLAYER_AIM_ENABLED = false
+            return
+        end
+        
+        PLAYER_AIM_ENABLED = v
+        
+        if v then
+            Rayfield:Notify({
+                Title = "✅ Aim Ativado",
+                Content = "Mirando automaticamente em " .. (SELECTED_PLAYER_NAME or "jogador"),
+                Duration = 2
+            })
+        else
+            Rayfield:Notify({
+                Title = "⭕ Aim Desativado",
+                Content = "Aim automático desligado",
+                Duration = 2
+            })
         end
     end
 })
 
+TabPlayerAim:CreateSection("🎛️ Configurações do Aim")
+
 TabPlayerAim:CreateSlider({
-    Name = "Suavidade do Aim",
+    Name = "Suavidade (menor = mais suave)",
     Range = {0.01, 1},
     Increment = 0.01,
-    CurrentValue = 1,
+    CurrentValue = 0.15,
     Callback = function(v)
         PLAYER_AIM_SMOOTHNESS = v
     end
 })
 
 TabPlayerAim:CreateDropdown({
-    Name = "Parte do Corpo",
+    Name = "Parte do Corpo Alvo",
     Options = {"Head", "Torso", "HumanoidRootPart"},
     CurrentOption = "Head",
     Callback = function(option)
@@ -1455,27 +1474,29 @@ TabPlayerAim:CreateDropdown({
     end
 })
 
-TabPlayerAim:CreateSection("Advanced Settings")
+TabPlayerAim:CreateSection("🔧 Configurações Avançadas")
 
 TabPlayerAim:CreateSlider({
     Name = "Predição de Movimento",
     Range = {0, 0.5},
     Increment = 0.01,
-    CurrentValue = 0.1,
+    CurrentValue = 0.13,
     Callback = function(v)
         PLAYER_AIM_PREDICTION = v
     end
 })
 
 TabPlayerAim:CreateToggle({
-    Name = "Wallcheck",
+    Name = "Wallcheck (não mirar através de paredes)",
     CurrentValue = true,
     Callback = function(v)
         PLAYER_AIM_WALLCHECK = v
     end
 })
 
-TabPlayerAim:CreateSection("Aim Shake (Humanização)")
+TabPlayerAim:CreateSection("🎲 Humanização (Shake)")
+
+TabPlayerAim:CreateLabel("Adiciona tremor para parecer mais humano")
 
 TabPlayerAim:CreateSlider({
     Name = "Shake Horizontal",
@@ -1497,71 +1518,39 @@ TabPlayerAim:CreateSlider({
     end
 })
 
-TabPlayerAim:CreateSection("Controle de Ativação")
+TabPlayerAim:CreateSection("📊 Status em Tempo Real")
 
-TabPlayerAim:CreateDropdown({
-    Name = "Modo de Ativação",
-    Options = {"Hold", "Toggle"},
-    CurrentOption = "Hold",
-    Callback = function(option)
-        PLAYER_AIM_MOUSE_BUTTON = option
-    end
-})
-
-TabPlayerAim:CreateSection("Status")
-
-local StatusLabel = TabPlayerAim:CreateLabel("Jogador: Nenhum | Status: Inativo")
+local StatusLabel = TabPlayerAim:CreateLabel("🔴 Status: Inativo | Jogador: Nenhum")
 
 -- Atualizar status em tempo real
 task.spawn(function()
     while task.wait(0.5) do
         local targetPlayer = getSelectedPlayer()
-        local status = "Inativo"
+        local status = "🔴 Inativo"
         local playerName = SELECTED_PLAYER_NAME or "Nenhum"
         
         if PLAYER_AIM_ENABLED and targetPlayer then
             if isPlayerValid(targetPlayer) then
                 local targetPart = getPlayerAimPart(targetPlayer)
                 if targetPart and hasLineOfSight(targetPart) then
-                    status = "✅ Ativo - Visível"
+                    status = "🟢 Ativo - Mirando"
                 else
-                    status = "⚠️ Ativo - Sem Linha de Visão"
+                    status = "🟡 Ativo - Sem Visão"
                 end
             else
                 status = "❌ Jogador Inválido"
             end
         end
         
-        StatusLabel:Set("Jogador: " .. playerName .. " | Status: " .. status)
+        StatusLabel:Set(status .. " | Jogador: " .. playerName)
     end
 end)
 
--- ================== RUNTIME DO PLAYER AIM ==================
+-- ================== RUNTIME DO PLAYER AIM (SIMPLIFICADO) ==================
 
-local playerAimActive = false
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        if PLAYER_AIM_MOUSE_BUTTON == "Hold" then
-            playerAimActive = true
-        elseif PLAYER_AIM_MOUSE_BUTTON == "Toggle" then
-            playerAimActive = not playerAimActive
-        end
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton2 then
-        if PLAYER_AIM_MOUSE_BUTTON == "Hold" then
-            playerAimActive = false
-        end
-    end
-end)
-
+-- Loop principal do aim - Roda automaticamente quando toggle está ativo
 RunService.RenderStepped:Connect(function()
-    if PLAYER_AIM_ENABLED and playerAimActive then
+    if PLAYER_AIM_ENABLED then
         smoothAimToPlayer()
     end
 end)
@@ -1579,7 +1568,7 @@ Players.PlayerRemoving:Connect(function(player)
         SELECTED_PLAYER = nil
         PLAYER_AIM_ENABLED = false
         Rayfield:Notify({
-            Title = "Jogador Saiu",
+            Title = "⚠️ Jogador Saiu",
             Content = "O jogador alvo saiu do servidor",
             Duration = 3
         })
