@@ -94,6 +94,7 @@ local TabCombat = Window:CreateTab("Auto Farm")
 local TabESP = Window:CreateTab("ESP")
 local TabHighlight = Window:CreateTab("Highlight ESP")
 local TabAim = Window:CreateTab("Aim Assist")
+local TabPlayerAim = Window:CreateTab("Player Aim")
 local TabProt = Window:CreateTab("Protection")
 local TabPlayers = Window:CreateTab("Players")
 local TabWaypoints = Window:CreateTab("Waypoints")
@@ -403,7 +404,7 @@ local OUTLINE_ENABLED = true
 local ESP_COLOR = Color3.fromRGB(255, 0, 0)
 local LINE_COLOR = Color3.fromRGB(255, 255, 255)
 local ESP_OBJECTS = {}
-local ESP_TEAM_FILTER = "Enemy"  -- All, Team, Enemy
+local ESP_TEAM_FILTER = "All"  -- All, Team, Enemy
 
 local function removeESP(player)
     local espData = ESP_OBJECTS[player]
@@ -709,7 +710,7 @@ TabESP:CreateToggle({
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"Enemy"},
+    CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "ESPTeamFilter",
     Callback = function(option)
@@ -787,7 +788,7 @@ TabESP:CreateColorPicker({
 
 -- ==================== HIGHLIGHT ESP (CORRIGIDO) ====================
 local HIGHLIGHT_ENABLED = false
-local HIGHLIGHT_TEAM_FILTER = "Enemy"
+local HIGHLIGHT_TEAM_FILTER = "All"
 local teamColor = Color3.fromRGB(0, 255, 0)
 local enemyColor = Color3.fromRGB(255, 0, 0)
 local highlightCache = {}
@@ -960,7 +961,7 @@ TabHighlight:CreateToggle({
 TabHighlight:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"Enemy"},
+    CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "HighlightTeamFilter",
     Callback = function(option)
@@ -1267,6 +1268,277 @@ RunService.RenderStepped:Connect(function()
     local newLook = CFrame.new(camPos, camPos + direction)
     Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
 end)
+
+-- ==================================================================================
+-- ============================ PLAYER AIM TAB  ===================
+-- ==================================================================================
+
+TabPlayerAim:CreateSection("🎯 Seleção de Jogador")
+
+-- Variáveis do Player Aim
+local PlayerAimEnabled = false
+local PlayerAimSmoothness = 0.15
+local PlayerAimPart = "Head"
+local PlayerAimFOVRadius = 100
+local PlayerAimPrediction = 0.13
+local PlayerAimWallCheck = true
+local TargetPlayerName = nil
+local PlayerAimList = {}
+
+-- Funções do Player Aim
+local function UpdatePlayerAimList()
+    PlayerAimList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP then
+            table.insert(PlayerAimList, player.Name)
+        end
+    end
+    return PlayerAimList
+end
+
+local function GetTargetPlayer()
+    if not TargetPlayerName then return nil end
+    local playerName = tostring(TargetPlayerName)
+    return Players:FindFirstChild(playerName)
+end
+
+local function IsPlayerAimValid(player)
+    return player 
+        and player ~= LP 
+        and player.Character 
+        and player.Character:FindFirstChild("Humanoid")
+        and player.Character.Humanoid.Health > 0
+end
+
+local function GetPlayerAimPart(player)
+    if not player or not player.Character then return nil end
+    
+    if PlayerAimPart == "Head" then
+        return player.Character:FindFirstChild("Head")
+    elseif PlayerAimPart == "Torso" then
+        return player.Character:FindFirstChild("UpperTorso") or player.Character:FindFirstChild("Torso")
+    else
+        return player.Character:FindFirstChild("HumanoidRootPart")
+    end
+end
+
+local function CheckPlayerAimFOV(part)
+    if PlayerAimFOVRadius <= 0 then return true end
+    
+    local camera = workspace.CurrentCamera
+    local pos, onScreen = camera:WorldToViewportPoint(part.Position)
+    
+    if not onScreen then return false end
+    
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    local target = Vector2.new(pos.X, pos.Y)
+    
+    return (center - target).Magnitude <= PlayerAimFOVRadius
+end
+
+local function CheckPlayerAimWall(part)
+    if not PlayerAimWallCheck then return true end
+    
+    local camera = workspace.CurrentCamera
+    local origin = camera.CFrame.Position
+    local direction = (part.Position - origin)
+    
+    local ray = RaycastParams.new()
+    ray.FilterDescendantsInstances = {LP.Character, part.Parent}
+    ray.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local result = workspace:Raycast(origin, direction, ray)
+    return not result or result.Instance:IsDescendantOf(part.Parent)
+end
+
+local function GetPartVelocity(part)
+    if part.AssemblyLinearVelocity then
+        return part.AssemblyLinearVelocity
+    elseif part.Velocity then
+        return part.Velocity
+    elseif part.AssemblyVelocity then
+        return part.AssemblyVelocity
+    else
+        return Vector3.new(0, 0, 0)
+    end
+end
+
+-- Player Aim Loop (SEM LOGS PESADOS)
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if not PlayerAimEnabled then return end
+        
+        local player = GetTargetPlayer()
+        if not player or not IsPlayerAimValid(player) then return end
+        
+        local part = GetPlayerAimPart(player)
+        if not part then return end
+        
+        if not CheckPlayerAimFOV(part) then return end
+        if not CheckPlayerAimWall(part) then return end
+        
+        local targetPos = part.Position
+        if PlayerAimPrediction > 0 then
+            local velocity = GetPartVelocity(part)
+            targetPos = targetPos + (velocity * PlayerAimPrediction)
+        end
+        
+        local camera = workspace.CurrentCamera
+        local lookAt = CFrame.new(camera.CFrame.Position, targetPos)
+        camera.CFrame = camera.CFrame:Lerp(lookAt, PlayerAimSmoothness)
+    end)
+end)
+
+-- Interface do Player Aim
+TabPlayerAim:CreateLabel("Selecione um jogador específico para mirar")
+
+local PlayerAimDropdown = TabPlayerAim:CreateDropdown({
+    Name = "Escolher Jogador Alvo",
+    Options = UpdatePlayerAimList(),
+    CurrentOption = "",
+    Callback = function(option)
+        if type(option) == "table" then
+            TargetPlayerName = option[1] or option
+        else
+            TargetPlayerName = option
+        end
+        
+        Rayfield:Notify({
+            Title = "🎯 Alvo Selecionado",
+            Content = tostring(TargetPlayerName),
+            Duration = 2
+        })
+    end
+})
+
+TabPlayerAim:CreateButton({
+    Name = "🔄 Atualizar Lista de Jogadores",
+    Callback = function()
+        local list = UpdatePlayerAimList()
+        PlayerAimDropdown:Refresh(list)
+        Rayfield:Notify({
+            Title = "✅ Lista Atualizada",
+            Content = #list .. " jogadores",
+            Duration = 2
+        })
+    end
+})
+
+TabPlayerAim:CreateSection("⚙️ Controle")
+
+TabPlayerAim:CreateToggle({
+    Name = "🎯 Ativar Aim no Jogador",
+    CurrentValue = false,
+    Callback = function(value)
+        if value and not TargetPlayerName then
+            Rayfield:Notify({
+                Title = "⚠️ Aviso",
+                Content = "Selecione um jogador primeiro!",
+                Duration = 2
+            })
+            PlayerAimEnabled = false
+            return
+        end
+        
+        PlayerAimEnabled = value
+        
+        Rayfield:Notify({
+            Title = value and "✅ Aim Ativado" or "⭕ Aim Desativado",
+            Content = value and ("Mirando em: " .. tostring(TargetPlayerName)) or "Desativado",
+            Duration = 2
+        })
+    end
+})
+
+TabPlayerAim:CreateSection("🎛️ Configurações")
+
+TabPlayerAim:CreateSlider({
+    Name = "FOV Radius (pixels)",
+    Range = {10, 800},
+    Increment = 10,
+    CurrentValue = 100,
+    Callback = function(v)
+        PlayerAimFOVRadius = v
+    end
+})
+
+TabPlayerAim:CreateSlider({
+    Name = "Suavidade (menor = mais rápido)",
+    Range = {0.01, 1},
+    Increment = 0.01,
+    CurrentValue = 0.15,
+    Callback = function(v)
+        PlayerAimSmoothness = v
+    end
+})
+
+TabPlayerAim:CreateDropdown({
+    Name = "Parte do Corpo",
+    Options = {"Head", "Torso", "HumanoidRootPart"},
+    CurrentOption = "Head",
+    Callback = function(v)
+        if type(v) == "table" then
+            PlayerAimPart = v[1] or v
+        else
+            PlayerAimPart = v
+        end
+    end
+})
+
+TabPlayerAim:CreateSlider({
+    Name = "Predição de Movimento",
+    Range = {0, 0.5},
+    Increment = 0.01,
+    CurrentValue = 0,
+    Callback = function(v)
+        PlayerAimPrediction = v
+    end
+})
+
+TabPlayerAim:CreateToggle({
+    Name = "WallCheck (não mirar através de paredes)",
+    CurrentValue = true,
+    Callback = function(v)
+        PlayerAimWallCheck = v
+    end
+})
+
+TabPlayerAim:CreateSection("📊 Status")
+
+-- Status do Player Aim
+local PlayerAimStatus = TabPlayerAim:CreateLabel("Status: Aguardando...")
+
+task.spawn(function()
+    while wait(1) do
+        pcall(function()
+            if PlayerAimEnabled and TargetPlayerName then
+                local p = GetTargetPlayer()
+                if p and IsPlayerAimValid(p) then
+                    PlayerAimStatus:Set("✅ ATIVO - Mirando em " .. tostring(TargetPlayerName))
+                else
+                    PlayerAimStatus:Set("❌ Alvo inválido ou morto")
+                end
+            elseif TargetPlayerName then
+                PlayerAimStatus:Set("⏸️ Desativado - Alvo: " .. tostring(TargetPlayerName))
+            else
+                PlayerAimStatus:Set("⚠️ Nenhum jogador selecionado")
+            end
+        end)
+    end
+end)
+
+-- Auto-refresh da lista de jogadores a cada 5 segundos
+task.spawn(function()
+    while wait(5) do
+        pcall(function()
+            PlayerAimDropdown:Refresh(UpdatePlayerAimList())
+        end)
+    end
+end)
+
+-- ==================================================================================
+-- FIM DA ABA PLAYER AIM
+-- ==================================================================================
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
