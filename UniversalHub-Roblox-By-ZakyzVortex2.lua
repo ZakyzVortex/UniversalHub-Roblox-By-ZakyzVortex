@@ -1267,7 +1267,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================================================================================
--- ==================== PLAYER AIM ASSISTANT (VERSÃO MOBILE) =======================
+-- ==================== PLAYER AIM ASSISTANT (VERSÃO MOBILE CORRIGIDA) =============
 -- ==================================================================================
 
 -- ================== VARIÁVEIS DO PLAYER-SPECIFIC AIM ==================
@@ -1293,20 +1293,61 @@ local function updatePlayerList()
             table.insert(PLAYER_LIST, player.Name)
         end
     end
+    
+    -- Debug: mostra quantos jogadores foram encontrados
+    print("🔍 [Player Aim] Encontrados " .. #PLAYER_LIST .. " jogadores")
+    for i, name in ipairs(PLAYER_LIST) do
+        print("   " .. i .. ". " .. name)
+    end
+    
     return PLAYER_LIST
 end
 
 local function getSelectedPlayer()
-    if not SELECTED_PLAYER_NAME then return nil end
-    return Players:FindFirstChild(SELECTED_PLAYER_NAME)
+    if not SELECTED_PLAYER_NAME then 
+        print("⚠️ [Player Aim] Nenhum jogador selecionado")
+        return nil 
+    end
+    
+    local player = Players:FindFirstChild(SELECTED_PLAYER_NAME)
+    
+    if not player then
+        print("❌ [Player Aim] Jogador '" .. SELECTED_PLAYER_NAME .. "' não encontrado")
+    else
+        print("✅ [Player Aim] Jogador '" .. SELECTED_PLAYER_NAME .. "' encontrado")
+    end
+    
+    return player
 end
 
 local function isPlayerValid(player)
-    if not player then return false end
-    if player == LP then return false end
-    if not player.Character then return false end
+    if not player then 
+        print("❌ [Player Aim] Player is nil")
+        return false 
+    end
+    
+    if player == LP then 
+        print("❌ [Player Aim] Não pode mirar em si mesmo")
+        return false 
+    end
+    
+    if not player.Character then 
+        print("❌ [Player Aim] " .. player.Name .. " não tem Character")
+        return false 
+    end
+    
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return false end
+    if not humanoid then
+        print("❌ [Player Aim] " .. player.Name .. " não tem Humanoid")
+        return false
+    end
+    
+    if humanoid.Health <= 0 then 
+        print("❌ [Player Aim] " .. player.Name .. " está morto (HP: 0)")
+        return false 
+    end
+    
+    print("✅ [Player Aim] " .. player.Name .. " é válido (HP: " .. math.floor(humanoid.Health) .. ")")
     return true
 end
 
@@ -1320,6 +1361,12 @@ local function getPlayerAimPart(player)
         part = player.Character:FindFirstChild("Torso") or player.Character:FindFirstChild("UpperTorso")
     elseif PLAYER_AIM_PART == "HumanoidRootPart" then
         part = player.Character:FindFirstChild("HumanoidRootPart")
+    end
+    
+    if part then
+        print("✅ [Player Aim] Part encontrada: " .. part.Name .. " em " .. player.Name)
+    else
+        print("❌ [Player Aim] Part '" .. PLAYER_AIM_PART .. "' não encontrada em " .. player.Name)
     end
     
     return part
@@ -1339,7 +1386,15 @@ local function hasLineOfSight(targetPart)
     
     local result = workspace:Raycast(origin, direction, rayParams)
     
-    return result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
+    local hasLOS = result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
+    
+    if hasLOS then
+        print("✅ [Player Aim] Linha de visão LIVRE")
+    else
+        print("⚠️ [Player Aim] Linha de visão BLOQUEADA por: " .. result.Instance.Name)
+    end
+    
+    return hasLOS
 end
 
 local function predictPosition(targetPart)
@@ -1387,6 +1442,8 @@ end
 
 TabPlayerAim:CreateSection("🎯 Seleção de Jogador")
 
+TabPlayerAim:CreateLabel("IMPORTANTE: Selecione um jogador antes de ativar!")
+
 local PlayerDropdown = TabPlayerAim:CreateDropdown({
     Name = "Escolher Jogador Alvo",
     Options = updatePlayerList(),
@@ -1394,11 +1451,22 @@ local PlayerDropdown = TabPlayerAim:CreateDropdown({
     Callback = function(option)
         SELECTED_PLAYER_NAME = option
         SELECTED_PLAYER = getSelectedPlayer()
+        
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎯 JOGADOR SELECIONADO: " .. option)
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        
         if SELECTED_PLAYER then
             Rayfield:Notify({
                 Title = "🎯 Jogador Selecionado",
                 Content = "Alvo: " .. option,
-                Duration = 2
+                Duration = 3
+            })
+        else
+            Rayfield:Notify({
+                Title = "❌ Erro",
+                Content = "Jogador '" .. option .. "' não encontrado!",
+                Duration = 3
             })
         end
     end
@@ -1417,14 +1485,47 @@ TabPlayerAim:CreateButton({
     end
 })
 
+TabPlayerAim:CreateButton({
+    Name = "🔍 Ver Jogador Atual",
+    Callback = function()
+        if SELECTED_PLAYER_NAME then
+            local player = getSelectedPlayer()
+            if player then
+                Rayfield:Notify({
+                    Title = "ℹ️ Jogador Atual",
+                    Content = SELECTED_PLAYER_NAME .. " (Válido: " .. (isPlayerValid(player) and "Sim" or "Não") .. ")",
+                    Duration = 4
+                })
+            else
+                Rayfield:Notify({
+                    Title = "❌ Erro",
+                    Content = "Jogador não existe mais",
+                    Duration = 3
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "⚠️ Aviso",
+                Content = "Nenhum jogador selecionado",
+                Duration = 3
+            })
+        end
+    end
+})
+
 TabPlayerAim:CreateSection("⚙️ Ativação do Aim")
 
-TabPlayerAim:CreateLabel("Ative o toggle abaixo para começar a mirar")
+TabPlayerAim:CreateLabel("1. Selecione um jogador acima")
+TabPlayerAim:CreateLabel("2. Ative o toggle abaixo")
 
 TabPlayerAim:CreateToggle({
     Name = "🎯 Ativar Aim Automático",
     CurrentValue = false,
     Callback = function(v)
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("🎯 TOGGLE AIM: " .. (v and "LIGADO" or "DESLIGADO"))
+        print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        
         if v and not SELECTED_PLAYER_NAME then
             Rayfield:Notify({
                 Title = "⚠️ Aviso",
@@ -1440,7 +1541,7 @@ TabPlayerAim:CreateToggle({
         if v then
             Rayfield:Notify({
                 Title = "✅ Aim Ativado",
-                Content = "Mirando automaticamente em " .. (SELECTED_PLAYER_NAME or "jogador"),
+                Content = "Mirando em " .. (SELECTED_PLAYER_NAME or "jogador"),
                 Duration = 2
             })
         else
@@ -1462,6 +1563,7 @@ TabPlayerAim:CreateSlider({
     CurrentValue = 0.15,
     Callback = function(v)
         PLAYER_AIM_SMOOTHNESS = v
+        print("📊 Suavidade ajustada para: " .. v)
     end
 })
 
@@ -1471,6 +1573,7 @@ TabPlayerAim:CreateDropdown({
     CurrentOption = "Head",
     Callback = function(option)
         PLAYER_AIM_PART = option
+        print("🎯 Parte do corpo: " .. option)
     end
 })
 
@@ -1483,6 +1586,7 @@ TabPlayerAim:CreateSlider({
     CurrentValue = 0.13,
     Callback = function(v)
         PLAYER_AIM_PREDICTION = v
+        print("🔮 Predição: " .. v)
     end
 })
 
@@ -1491,6 +1595,7 @@ TabPlayerAim:CreateToggle({
     CurrentValue = true,
     Callback = function(v)
         PLAYER_AIM_WALLCHECK = v
+        print("🧱 Wallcheck: " .. (v and "ON" or "OFF"))
     end
 })
 
@@ -1520,7 +1625,7 @@ TabPlayerAim:CreateSlider({
 
 TabPlayerAim:CreateSection("📊 Status em Tempo Real")
 
-local StatusLabel = TabPlayerAim:CreateLabel("🔴 Status: Inativo | Jogador: Nenhum")
+local StatusLabel = TabPlayerAim:CreateLabel("🔴 Inativo | Jogador: Nenhum")
 
 -- Atualizar status em tempo real
 task.spawn(function()
@@ -1546,37 +1651,52 @@ task.spawn(function()
     end
 end)
 
--- ================== RUNTIME DO PLAYER AIM (SIMPLIFICADO) ==================
+-- ================== RUNTIME DO PLAYER AIM ==================
 
--- Loop principal do aim - Roda automaticamente quando toggle está ativo
+-- Loop principal do aim
 RunService.RenderStepped:Connect(function()
     if PLAYER_AIM_ENABLED then
         smoothAimToPlayer()
     end
 end)
 
--- Auto-atualizar lista de jogadores quando alguém entra/sai
-Players.PlayerAdded:Connect(function()
+-- Auto-atualizar lista de jogadores quando alguém entra
+Players.PlayerAdded:Connect(function(player)
     task.wait(1)
+    print("➕ Jogador entrou: " .. player.Name)
     local newList = updatePlayerList()
     PlayerDropdown:Refresh(newList)
 end)
 
+-- Detectar quando jogador sai
 Players.PlayerRemoving:Connect(function(player)
+    print("➖ Jogador saindo: " .. player.Name)
+    
     if SELECTED_PLAYER_NAME == player.Name then
         SELECTED_PLAYER_NAME = nil
         SELECTED_PLAYER = nil
         PLAYER_AIM_ENABLED = false
+        
+        print("⚠️ Jogador alvo saiu do servidor!")
+        
         Rayfield:Notify({
             Title = "⚠️ Jogador Saiu",
-            Content = "O jogador alvo saiu do servidor",
+            Content = player.Name .. " saiu do servidor",
             Duration = 3
         })
     end
+    
     task.wait(0.5)
     local newList = updatePlayerList()
     PlayerDropdown:Refresh(newList)
 end)
+
+-- Debug inicial
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("✅ PLAYER AIM ASSISTANT CARREGADO")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("📋 Jogadores disponíveis:")
+updatePlayerList()
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
