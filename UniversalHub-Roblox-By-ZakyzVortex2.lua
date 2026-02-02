@@ -404,7 +404,7 @@ local OUTLINE_ENABLED = true
 local ESP_COLOR = Color3.fromRGB(255, 0, 0)
 local LINE_COLOR = Color3.fromRGB(255, 255, 255)
 local ESP_OBJECTS = {}
-local ESP_TEAM_FILTER = "Enemy"  -- All, Team, Enemy
+local ESP_TEAM_FILTER = "All"  -- All, Team, Enemy
 
 local function removeESP(player)
     local espData = ESP_OBJECTS[player]
@@ -710,7 +710,7 @@ TabESP:CreateToggle({
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"Enemy"},
+    CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "ESPTeamFilter",
     Callback = function(option)
@@ -788,7 +788,7 @@ TabESP:CreateColorPicker({
 
 -- ==================== HIGHLIGHT ESP (CORRIGIDO) ====================
 local HIGHLIGHT_ENABLED = false
-local HIGHLIGHT_TEAM_FILTER = "Enemy"
+local HIGHLIGHT_TEAM_FILTER = "All"
 local teamColor = Color3.fromRGB(0, 255, 0)
 local enemyColor = Color3.fromRGB(255, 0, 0)
 local highlightCache = {}
@@ -961,7 +961,7 @@ TabHighlight:CreateToggle({
 TabHighlight:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    CurrentOption = {"Enemy"},
+    CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "HighlightTeamFilter",
     Callback = function(option)
@@ -1281,7 +1281,7 @@ local PlayerAimSmoothness = 0.15
 local PlayerAimPart = "Head"
 local PlayerAimFOVRadius = 100
 local PlayerAimPrediction = 0.13
-local PlayerAimWallCheck = false
+local PlayerAimWallCheck = true
 local TargetPlayerName = nil
 local PlayerAimList = {}
 
