@@ -1267,10 +1267,10 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================================================================================
--- ==================== PLAYER AIM ASSISTANT (VERSÃO MOBILE CORRIGIDA) =============
+-- ============================== PLAYER AIM TAB ====================================
 -- ==================================================================================
 
--- ================== VARIÁVEIS DO PLAYER-SPECIFIC AIM ==================
+-- ================== VARIÁVEIS GLOBAIS ==================
 
 local PLAYER_AIM_ENABLED = false
 local PLAYER_AIM_SMOOTHNESS = 0.15
@@ -1279,6 +1279,7 @@ local PLAYER_AIM_PREDICTION = 0.13
 local PLAYER_AIM_WALLCHECK = true
 local PLAYER_AIM_SHAKE_X = 0
 local PLAYER_AIM_SHAKE_Y = 0
+local PLAYER_AIM_FOV_RADIUS = 200
 
 local SELECTED_PLAYER_NAME = nil
 local SELECTED_PLAYER = nil
@@ -1428,6 +1429,19 @@ local function smoothAimToPlayer()
     local targetPart = getPlayerAimPart(targetPlayer)
     if not targetPart then return end
     
+    -- Verificação de FOV Radius
+    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+    if onScreen then
+        local centerScreen = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local targetScreen = Vector2.new(screenPos.X, screenPos.Y)
+        local distance = (centerScreen - targetScreen).Magnitude
+        
+        if distance > PLAYER_AIM_FOV_RADIUS then
+            print("⚠️ [Player Aim] Alvo fora do FOV Radius (Distância: " .. math.floor(distance) .. " > " .. PLAYER_AIM_FOV_RADIUS .. ")")
+            return -- Jogador fora do FOV radius
+        end
+    end
+    
     if not hasLineOfSight(targetPart) then return end
     
     local predictedPos = predictPosition(targetPart)
@@ -1557,6 +1571,17 @@ TabPlayerAim:CreateToggle({
 TabPlayerAim:CreateSection("🎛️ Configurações do Aim")
 
 TabPlayerAim:CreateSlider({
+    Name = "FOV Radius (Raio de Detecção)",
+    Range = {10, 800},
+    Increment = 10,
+    CurrentValue = 100,
+    Callback = function(v)
+        PLAYER_AIM_FOV_RADIUS = v
+        print("🎯 FOV Radius ajustado para: " .. v .. " pixels")
+    end
+})
+
+TabPlayerAim:CreateSlider({
     Name = "Suavidade (menor = mais suave)",
     Range = {0.01, 1},
     Increment = 0.01,
@@ -1599,104 +1624,19 @@ TabPlayerAim:CreateToggle({
     end
 })
 
-TabPlayerAim:CreateSection("🎲 Humanização (Shake)")
+TabPlayerAim:CreateSection("📊 Informações")
 
-TabPlayerAim:CreateLabel("Adiciona tremor para parecer mais humano")
+TabPlayerAim:CreateLabel("FOV Radius: Área de detecção em pixels")
+TabPlayerAim:CreateLabel("Suavidade: Quão rápido o aim se move")
+TabPlayerAim:CreateLabel("Predição: Antecipa movimento do alvo")
+TabPlayerAim:CreateLabel("Wallcheck: Bloqueia aim através de paredes")
 
-TabPlayerAim:CreateSlider({
-    Name = "Shake Horizontal",
-    Range = {0, 5},
-    Increment = 0.1,
-    CurrentValue = 0,
-    Callback = function(v)
-        PLAYER_AIM_SHAKE_X = v
-    end
-})
+-- ================== RUNTIME LOOP ==================
 
-TabPlayerAim:CreateSlider({
-    Name = "Shake Vertical",
-    Range = {0, 5},
-    Increment = 0.1,
-    CurrentValue = 0,
-    Callback = function(v)
-        PLAYER_AIM_SHAKE_Y = v
-    end
-})
-
-TabPlayerAim:CreateSection("📊 Status em Tempo Real")
-
-local StatusLabel = TabPlayerAim:CreateLabel("🔴 Inativo | Jogador: Nenhum")
-
--- Atualizar status em tempo real
-task.spawn(function()
-    while task.wait(0.5) do
-        local targetPlayer = getSelectedPlayer()
-        local status = "🔴 Inativo"
-        local playerName = SELECTED_PLAYER_NAME or "Nenhum"
-        
-        if PLAYER_AIM_ENABLED and targetPlayer then
-            if isPlayerValid(targetPlayer) then
-                local targetPart = getPlayerAimPart(targetPlayer)
-                if targetPart and hasLineOfSight(targetPart) then
-                    status = "🟢 Ativo - Mirando"
-                else
-                    status = "🟡 Ativo - Sem Visão"
-                end
-            else
-                status = "❌ Jogador Inválido"
-            end
-        end
-        
-        StatusLabel:Set(status .. " | Jogador: " .. playerName)
-    end
-end)
-
--- ================== RUNTIME DO PLAYER AIM ==================
-
--- Loop principal do aim
 RunService.RenderStepped:Connect(function()
-    if PLAYER_AIM_ENABLED then
-        smoothAimToPlayer()
-    end
+    if not Character or not HRP or not Humanoid then return end
+    smoothAimToPlayer()
 end)
-
--- Auto-atualizar lista de jogadores quando alguém entra
-Players.PlayerAdded:Connect(function(player)
-    task.wait(1)
-    print("➕ Jogador entrou: " .. player.Name)
-    local newList = updatePlayerList()
-    PlayerDropdown:Refresh(newList)
-end)
-
--- Detectar quando jogador sai
-Players.PlayerRemoving:Connect(function(player)
-    print("➖ Jogador saindo: " .. player.Name)
-    
-    if SELECTED_PLAYER_NAME == player.Name then
-        SELECTED_PLAYER_NAME = nil
-        SELECTED_PLAYER = nil
-        PLAYER_AIM_ENABLED = false
-        
-        print("⚠️ Jogador alvo saiu do servidor!")
-        
-        Rayfield:Notify({
-            Title = "⚠️ Jogador Saiu",
-            Content = player.Name .. " saiu do servidor",
-            Duration = 3
-        })
-    end
-    
-    task.wait(0.5)
-    local newList = updatePlayerList()
-    PlayerDropdown:Refresh(newList)
-end)
-
--- Debug inicial
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("✅ PLAYER AIM ASSISTANT CARREGADO")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("📋 Jogadores disponíveis:")
-updatePlayerList()
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
