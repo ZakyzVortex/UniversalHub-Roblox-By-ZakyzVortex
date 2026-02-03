@@ -196,6 +196,7 @@ TabMove:CreateSection("Fly System")
 -- ================== FLY SYSTEM INTEGRADO ==================
 local flyEnabled = false
 local flySpeed = 1
+local flyUpImpulse = 0
 local tpwalking = false
 local ctrl = {f = 0, b = 0, l = 0, r = 0}
 local lastctrl = {f = 0, b = 0, l = 0, r = 0}
@@ -674,58 +675,77 @@ TabCombat:CreateSection("Auto Walk")
 
 local autoWalkEnabled = false
 local autoWalkConnection = nil
-local autoWalkSpeed = 1
+local autoWalkSpeed = 16 -- velocidade padrão do Roblox
+local autoWalkOriginalSpeed = 16 -- guarda a velocidade original
 
 local function startAutoWalk()
     if autoWalkConnection then
         autoWalkConnection:Disconnect()
+        autoWalkConnection = nil
     end
-    
+
     autoWalkEnabled = true
-    
-    -- Sistema compatível com mobile e PC (MELHORADO)
+
+    -- Salva a velocidade original e aplica a nova
+    local char = LP.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            autoWalkOriginalSpeed = hum.WalkSpeed
+            hum.WalkSpeed = autoWalkSpeed
+        end
+    end
+
+    -- Simula segurar W via VirtualInputManager
+    VirtualInputManager:SendKeyDownEvent(Enum.KeyCode.W)
+
+    -- Loop para manter o personagem movendo na direção da câmera
     autoWalkConnection = RunService.Heartbeat:Connect(function()
         if not autoWalkEnabled then return end
-        
-        -- Atualiza referências do personagem
-        local char = LP.Character
-        if not char then return end
-        
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local root = char:FindFirstChild("HumanoidRootPart")
-        
-        if not hum or not root or hum.Health <= 0 then return end
-        
-        -- Pega a direção da câmera
+
+        local c = LP.Character
+        if not c then return end
+
+        local hum = c:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return end
+
+        -- Garante que a velocidade está aplicada
+        if hum.WalkSpeed ~= autoWalkSpeed then
+            hum.WalkSpeed = autoWalkSpeed
+        end
+
+        -- Pega direção da câmera (sem componente Y)
         local cam = workspace.CurrentCamera
         if not cam then return end
-        
-        local lookVector = cam.CFrame.LookVector
-        local moveVector = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
-        
-        -- Método 1: Humanoid:Move (funciona na maioria dos jogos)
-        hum:Move(moveVector, false)
-        
-        -- Método 2: Definir MoveDirection diretamente (backup)
-        if hum.MoveDirection.Magnitude < 0.1 then
-            -- Se Move não funcionou, tenta mover fisicamente
-            root.CFrame = root.CFrame + (moveVector * autoWalkSpeed * 0.1)
+
+        local look = cam.CFrame.LookVector
+        local moveDir = Vector3.new(look.X, 0, look.Z)
+
+        -- Evita NaN se o vector for zero (câmera olhando para cima/baixo)
+        if moveDir.Magnitude > 0.001 then
+            moveDir = moveDir.Unit
+            hum:Move(moveDir, false)
         end
     end)
 end
 
 local function stopAutoWalk()
     autoWalkEnabled = false
+
+    -- Solta a tecla W
+    VirtualInputManager:SendKeyUpEvent(Enum.KeyCode.W)
+
     if autoWalkConnection then
         autoWalkConnection:Disconnect()
         autoWalkConnection = nil
     end
-    
-    -- Para o movimento do personagem
+
+    -- Restaura velocidade original e para o movimento
     local char = LP.Character
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
         if hum then
+            hum.WalkSpeed = autoWalkOriginalSpeed
             hum:Move(Vector3.new(0, 0, 0), false)
         end
     end
@@ -756,11 +776,19 @@ TabCombat:CreateToggle({
 
 TabCombat:CreateSlider({
     Name = "Velocidade do Auto Walk",
-    Range = {1, 10},
-    Increment = 1,
-    CurrentValue = 1,
+    Range = {16, 300},
+    Increment = 5,
+    CurrentValue = 16,
     Callback = function(v)
         autoWalkSpeed = v
+        -- Aplica imediatamente se o auto walk estiver ativo
+        if autoWalkEnabled then
+            local char = LP.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum.WalkSpeed = v end
+            end
+        end
     end
 })
 
