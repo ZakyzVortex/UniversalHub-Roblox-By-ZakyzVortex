@@ -2205,9 +2205,11 @@ local function setupAdvancedAntiLag()
     end)
 end
 
+-- ✅ FUNÇÃO CORRIGIDA: Usa LP em vez de LocalPlayer
 local function hide3D(obj)
     pcall(function()
-        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
+        -- ✅ CORRIGIDO: Usa "LP" em vez de "LocalPlayer"
+        if LP.Character and obj:IsDescendantOf(LP.Character) then 
             return 
         end
         
@@ -2216,6 +2218,8 @@ local function hide3D(obj)
         elseif obj:IsA("Decal") then
             obj.Transparency = 1
         elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
             obj.Enabled = false
         end
     end)
@@ -2237,6 +2241,11 @@ TabFPS:CreateToggle({
     Callback = function(v)
         if v then
             setupAdvancedAntiLag()
+            Rayfield:Notify({
+                Title = "Anti-Lag Ativado",
+                Content = "Sistema avançado de otimização ativado!",
+                Duration = 2
+            })
         end
     end
 })
@@ -2253,12 +2262,24 @@ TabFPS:CreateToggle({
                 descendantAddedConnection:Disconnect()
             end
             descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
+            
+            Rayfield:Notify({
+                Title = "3D Delete Ativado",
+                Content = "Mundo escondido! FPS otimizado.",
+                Duration = 2
+            })
         else
             -- Disconnect listener when disabled
             if descendantAddedConnection then
                 descendantAddedConnection:Disconnect()
                 descendantAddedConnection = nil
             end
+            
+            Rayfield:Notify({
+                Title = "3D Delete Desativado",
+                Content = "Recarregue o jogo para ver o mundo novamente.",
+                Duration = 3
+            })
         end
     end
 })
