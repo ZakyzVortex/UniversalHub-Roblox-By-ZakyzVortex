@@ -813,7 +813,7 @@ local function refreshESP()
     if ESP_ENABLED then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LP then
-                task.spawn(createESP, p)
+                createESP(p)
             end
         end
     end
