@@ -1831,6 +1831,7 @@ end)
 TabProt:CreateSection("Proteções")
 
 local godMode, lockHP, antiKB, antiVoid, noclip = false, false, false, false, false
+local flyUpImpulse = 0
 
 TabProt:CreateToggle({
     Name = "God Mode",
@@ -2004,10 +2005,10 @@ TabWaypoints:CreateButton({
             return
         end
         if saveWaypoint(waypointNameInput) then
-            -- atualiza dropdown e seleciona automaticamente o waypoint recem salvo
             waypointSelected = waypointNameInput
-            waypointDropdown:Refresh(getWaypointList(), true, waypointNameInput)
+            waypointDropdown:Refresh(getWaypointList())
             Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..waypointNameInput.."' foi salvo!", Duration = 3 })
+            waypointNameInput = "" -- limpa após salvar, evita sobrescrever ao salvar novamente
         end
     end
 })
@@ -2778,7 +2779,7 @@ RunService.RenderStepped:Connect(function(dt)
         flyUpImpulse = flyUpImpulse - dt
     end
 
-    if fly then
+    if flyEnabled then
         if not HRP:FindFirstChild("FlyVel") then
             local bv = Instance.new("BodyVelocity", HRP)
             bv.Name = "FlyVel"
