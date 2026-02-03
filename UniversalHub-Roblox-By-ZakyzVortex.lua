@@ -33,6 +33,55 @@ end
 
 LP.CharacterAdded:Connect(BindCharacter)
 
+-- ================== FUNÇÃO PARA ESCONDER OBJETOS 3D DO JOGO ==================
+-- Esconde TUDO do workspace exceto seu personagem (para reduzir lag visual)
+
+local function resetVisuals()
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    
+    local hiddenCount = 0
+    
+    local function hide(obj)
+        -- NÃO esconder se for parte do seu personagem
+        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
+            return 
+        end
+        
+        -- Esconde partes 3D (mantém colisão)
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
+            
+        -- Esconde decals e texturas
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
+            
+        -- Desabilita efeitos de partículas
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
+            
+        -- Desabilita outros efeitos visuais
+        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
+        end
+    end
+    
+    -- Esconde tudo que já existe
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        hide(obj)
+    end
+    
+    -- Auto-esconde novos objetos que aparecerem
+    workspace.DescendantAdded:Connect(hide)
+    
+    print("✅ " .. hiddenCount .. " objetos 3D escondidos!")
+    print("✅ FPS otimizado para AFK farm!")
+end
+
 -- ================== TEAM DETECTION SYSTEM (CORRIGIDO) ==================
 local function getPlayerTeam(player)
     if not player then return nil end
@@ -111,7 +160,6 @@ local TabUtil = Window:CreateTab("Utility")
 TabMove:CreateSection("Velocidade e Pulo")
 
 -- Estados
-local fly, flySpeed, flyUpImpulse = false, 100, 0
 local infJump, antiFall = false, false
 
 -- Velocidade
@@ -143,33 +191,293 @@ TabMove:CreateSlider({
 
 TabMove:CreateSection("Fly System")
 
--- Fly Speed
+-- ================== FLY SYSTEM INTEGRADO ==================
+local flyEnabled = false
+local flySpeed = 1
+local tpwalking = false
+local ctrl = {f = 0, b = 0, l = 0, r = 0}
+local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+
+-- Função para ativar/desativar fly
+local function toggleFly(enabled)
+    flyEnabled = enabled
+    local speaker = LP
+    local chr = speaker.Character
+    local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+    
+    if not chr or not hum then return end
+    
+    if enabled then
+        -- Desabilita animações e estados
+        chr.Animate.Disabled = true
+        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
+        for i,v in next, AnimController:GetPlayingAnimationTracks() do
+            v:AdjustSpeed(0)
+        end
+        
+        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        hum:ChangeState(Enum.HumanoidStateType.Swimming)
+        
+        -- Inicia teleport walking
+        for i = 1, flySpeed do
+            spawn(function()
+                local hb = game:GetService("RunService").Heartbeat
+                tpwalking = true
+                local chr = LP.Character
+                local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+                while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+                    if hum.MoveDirection.Magnitude > 0 then
+                        chr:TranslateBy(hum.MoveDirection)
+                    end
+                end
+            end)
+        end
+        
+        -- Detecta tipo de rig e aplica BodyGyro/BodyVelocity
+        if hum.RigType == Enum.HumanoidRigType.R6 then
+            local torso = chr.Torso
+            local bg = Instance.new("BodyGyro", torso)
+            bg.P = 9e4
+            bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+            bg.cframe = torso.CFrame
+            local bv = Instance.new("BodyVelocity", torso)
+            bv.velocity = Vector3.new(0, 0.1, 0)
+            bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+            hum.PlatformStand = true
+            
+            spawn(function()
+                local maxspeed = 50
+                local speed = 0
+                while flyEnabled and hum.Health > 0 do
+                    game:GetService("RunService").RenderStepped:Wait()
+                    
+                    if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+                        speed = speed + 0.5 + (speed / maxspeed)
+                        if speed > maxspeed then
+                            speed = maxspeed
+                        end
+                    elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
+                        speed = speed - 1
+                        if speed < 0 then
+                            speed = 0
+                        end
+                    end
+                    
+                    if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f + ctrl.b)) + 
+                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).p) - 
+                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
+                        lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+                    elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
+                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f + lastctrl.b)) + 
+                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l + lastctrl.r, (lastctrl.f + lastctrl.b) * 0.2, 0).p) - 
+                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
+                    else
+                        bv.velocity = Vector3.new(0, 0, 0)
+                    end
+                    
+                    bg.cframe = workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f + ctrl.b) * 50 * speed / maxspeed), 0, 0)
+                end
+                
+                ctrl = {f = 0, b = 0, l = 0, r = 0}
+                lastctrl = {f = 0, b = 0, l = 0, r = 0}
+                speed = 0
+                bg:Destroy()
+                bv:Destroy()
+                hum.PlatformStand = false
+            end)
+        else
+            local UpperTorso = chr.UpperTorso
+            local bg = Instance.new("BodyGyro", UpperTorso)
+            bg.P = 9e4
+            bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+            bg.cframe = UpperTorso.CFrame
+            local bv = Instance.new("BodyVelocity", UpperTorso)
+            bv.velocity = Vector3.new(0, 0.1, 0)
+            bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+            hum.PlatformStand = true
+            
+            spawn(function()
+                local maxspeed = 50
+                local speed = 0
+                while flyEnabled and hum.Health > 0 do
+                    wait()
+                    
+                    if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+                        speed = speed + 0.5 + (speed / maxspeed)
+                        if speed > maxspeed then
+                            speed = maxspeed
+                        end
+                    elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
+                        speed = speed - 1
+                        if speed < 0 then
+                            speed = 0
+                        end
+                    end
+                    
+                    if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f + ctrl.b)) + 
+                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).p) - 
+                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
+                        lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+                    elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
+                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f + lastctrl.b)) + 
+                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l + lastctrl.r, (lastctrl.f + lastctrl.b) * 0.2, 0).p) - 
+                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
+                    else
+                        bv.velocity = Vector3.new(0, 0, 0)
+                    end
+                    
+                    bg.cframe = workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f + ctrl.b) * 50 * speed / maxspeed), 0, 0)
+                end
+                
+                ctrl = {f = 0, b = 0, l = 0, r = 0}
+                lastctrl = {f = 0, b = 0, l = 0, r = 0}
+                speed = 0
+                bg:Destroy()
+                bv:Destroy()
+                hum.PlatformStand = false
+            end)
+        end
+    else
+        -- Desativa fly
+        tpwalking = false
+        flyEnabled = false
+        
+        -- Remove BodyGyro e BodyVelocity que causam flutuação
+        for _, obj in pairs(chr:GetDescendants()) do
+            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then
+                obj:Destroy()
+            end
+        end
+        
+        -- Reativa todos os estados do humanoid
+        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+        
+        -- Reseta estado e animações
+        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+        hum.PlatformStand = false
+        chr.Animate.Disabled = false
+        
+        -- Reativa animações
+        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
+        if AnimController then
+            for i,v in next, AnimController:GetPlayingAnimationTracks() do
+                v:AdjustSpeed(1)
+            end
+        end
+    end
+end
+
+-- Função para atualizar velocidade do fly
+local function updateFlySpeed(newSpeed)
+    flySpeed = newSpeed
+    if flyEnabled then
+        tpwalking = false
+        task.wait(0.1)
+        for i = 1, flySpeed do
+            spawn(function()
+                local hb = game:GetService("RunService").Heartbeat
+                tpwalking = true
+                local chr = LP.Character
+                local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+                while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+                    if hum.MoveDirection.Magnitude > 0 then
+                        chr:TranslateBy(hum.MoveDirection)
+                    end
+                end
+            end)
+        end
+    end
+end
+
+-- Slider de velocidade do fly
 TabMove:CreateSlider({
     Name = "Velocidade de Voo",
-    Range = {50, 500},
-    Increment = 10,
-    CurrentValue = 100,
+    Range = {1, 50},
+    Increment = 1,
+    CurrentValue = 1,
     Callback = function(v)
-        flySpeed = v
+        updateFlySpeed(v)
     end
 })
 
--- Fly Toggle
+-- Toggle do fly
 TabMove:CreateToggle({
     Name = "Ativar Fly",
     CurrentValue = false,
     Callback = function(v)
-        fly = v
-        if not v and HRP then
-            for _, i in pairs({"FlyVel", "FlyGyro"}) do
-                local o = HRP:FindFirstChild(i)
-                if o then
-                    o:Destroy()
-                end
-            end
-        end
+        toggleFly(v)
     end
 })
+
+-- Controles WASD para o fly
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.W then
+            ctrl.f = 1
+        elseif input.KeyCode == Enum.KeyCode.S then
+            ctrl.b = -1
+        elseif input.KeyCode == Enum.KeyCode.A then
+            ctrl.l = -1
+        elseif input.KeyCode == Enum.KeyCode.D then
+            ctrl.r = 1
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.W then
+            ctrl.f = 0
+        elseif input.KeyCode == Enum.KeyCode.S then
+            ctrl.b = 0
+        elseif input.KeyCode == Enum.KeyCode.A then
+            ctrl.l = 0
+        elseif input.KeyCode == Enum.KeyCode.D then
+            ctrl.r = 0
+        end
+    end
+end)
+
+-- Reset ao morrer
+LP.CharacterAdded:Connect(function(char)
+    wait(0.7)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.PlatformStand = false
+    end
+    char.Animate.Disabled = false
+    flyEnabled = false
+end)
 
 TabMove:CreateSection("Outros")
 
@@ -193,9 +501,6 @@ TabMove:CreateToggle({
 
 -- Jump Request Handler
 UserInputService.JumpRequest:Connect(function()
-    if fly then
-        flyUpImpulse = 0.18
-    end
     if infJump and Humanoid then
         Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
@@ -529,7 +834,7 @@ local function refreshESP()
     if ESP_ENABLED then
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LP then
-                task.spawn(createESP, p)
+                createESP(p)
             end
         end
     end
@@ -1547,6 +1852,7 @@ end)
 TabProt:CreateSection("Proteções")
 
 local godMode, lockHP, antiKB, antiVoid, noclip = false, false, false, false, false
+local flyUpImpulse = 0
 
 TabProt:CreateToggle({
     Name = "God Mode",
@@ -1647,28 +1953,16 @@ TabPlayers:CreateButton({
 TabWaypoints:CreateSection("Sistema de Waypoints")
 
 local savedWaypoints = {}
-local waypointToDelete = nil
+local waypointSelected = nil       -- armazena o nome selecionado no dropdown
+local waypointNameInput = ""
 
-local function saveWaypoint(name)
-    if not HRP then return false end
-    
-    savedWaypoints[name] = {
-        Position = HRP.CFrame.Position,
-        Time = os.date("%H:%M:%S")
-    }
-    
-    return true
-end
-
-local function teleportToWaypoint(name)
-    if not savedWaypoints[name] or not HRP then return false end
-    
-    HRP.CFrame = CFrame.new(savedWaypoints[name].Position)
-    return true
-end
-
-local function deleteWaypoint(name)
-    savedWaypoints[name] = nil
+-- ── helpers ──────────────────────────────────────────────────
+local function resolvePosition(pos)
+    if type(pos) == "userdata" then return pos end          -- Vector3 nativo
+    if type(pos) == "table" then                            -- table do JSON
+        return Vector3.new(pos.X or pos[1] or 0, pos.Y or pos[2] or 0, pos.Z or pos[3] or 0)
+    end
+    return nil
 end
 
 local function getWaypointList()
@@ -1676,11 +1970,54 @@ local function getWaypointList()
     for name, _ in pairs(savedWaypoints) do
         table.insert(list, name)
     end
-    return #list > 0 and list or {"Nenhum waypoint salvo"}
+    table.sort(list)
+    
+    if #list == 0 then
+        return {"Nenhum waypoint salvo"}
+    end
+    
+    return list
 end
 
-local waypointNameInput = ""
+local function saveWaypoint(name)
+    if not HRP then return false end
+    if not name or name == "" then return false end
+    local pos = HRP.CFrame.Position
+    -- Garante que cada waypoint é único e armazena corretamente
+    savedWaypoints[name] = {
+        Position = {X = pos.X, Y = pos.Y, Z = pos.Z},
+        Time = os.date("%H:%M:%S")
+    }
+    return true
+end
 
+local function teleportToWaypoint(name)
+    if not name or not savedWaypoints[name] then 
+        return false 
+    end
+    if not HRP then 
+        return false 
+    end
+    
+    local wpData = savedWaypoints[name]
+    local pos = resolvePosition(wpData.Position)
+    
+    if not pos then 
+        return false 
+    end
+    
+    HRP.CFrame = CFrame.new(pos)
+    return true
+end
+
+local function deleteWaypoint(name)
+    if savedWaypoints[name] then
+        savedWaypoints[name] = nil
+    end
+end
+
+-- ── UI ───────────────────────────────────────────────────────
+-- Input de nome
 TabWaypoints:CreateInput({
     Name = "Nome do Waypoint",
     PlaceholderText = "Digite o nome...",
@@ -1690,82 +2027,93 @@ TabWaypoints:CreateInput({
     end
 })
 
-TabWaypoints:CreateButton({
-    Name = "Salvar Posição Atual",
-    Callback = function()
-        if waypointNameInput == "" then
-            Rayfield:Notify({
-                Title = "Erro",
-                Content = "Digite um nome para o waypoint!",
-                Duration = 3
-            })
-            return
-        end
-        
-        if saveWaypoint(waypointNameInput) then
-            Rayfield:Notify({
-                Title = "Waypoint Salvo",
-                Content = "'"..waypointNameInput.."' foi salvo!",
-                Duration = 3
-            })
-        end
-    end
-})
-
+-- Dropdown criado ANTES dos botões que o usam
 local waypointDropdown = TabWaypoints:CreateDropdown({
     Name = "Selecionar Waypoint",
     Options = getWaypointList(),
     CurrentOption = getWaypointList()[1],
     Callback = function(option)
-        waypointToDelete = option
+        -- FIX: Garante que sempre pega a string, não a tabela
+        if type(option) == "table" then
+            waypointSelected = option[1] or tostring(option)
+        else
+            waypointSelected = tostring(option)
+        end
     end
 })
 
+-- Salvar
+TabWaypoints:CreateButton({
+    Name = "Salvar Posição Atual",
+    Callback = function()
+        if waypointNameInput == "" or not waypointNameInput then
+            Rayfield:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
+            return
+        end
+        
+        local wpName = tostring(waypointNameInput)
+        
+        if saveWaypoint(wpName) then
+            waypointSelected = wpName
+            local newList = getWaypointList()
+            waypointDropdown:Refresh(newList)
+            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo!", Duration = 3 })
+        else
+            Rayfield:Notify({ Title = "Erro", Content = "Falha ao salvar waypoint!", Duration = 3 })
+        end
+    end
+})
+
+-- Teleportar
 TabWaypoints:CreateButton({
     Name = "Teleportar para Waypoint",
     Callback = function()
-        if not waypointToDelete or waypointToDelete == "Nenhum waypoint salvo" then
-            Rayfield:Notify({
-                Title = "Erro",
-                Content = "Selecione um waypoint válido!",
-                Duration = 3
-            })
+        -- Converte para string se for tabela
+        local targetName = waypointSelected
+        if type(targetName) == "table" then
+            targetName = targetName[1] or tostring(targetName)
+        else
+            targetName = tostring(targetName)
+        end
+        
+        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
+            Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
             return
         end
         
-        if teleportToWaypoint(waypointToDelete) then
-            Rayfield:Notify({
-                Title = "Teleportado",
-                Content = "Você foi teleportado!",
-                Duration = 2
-            })
+        if teleportToWaypoint(targetName) then
+            Rayfield:Notify({ Title = "Teleportado", Content = "Chegou em '"..targetName.."'!", Duration = 2 })
+        else
+            Rayfield:Notify({ Title = "Erro", Content = "Falha ao teleportar. Waypoint pode estar corrompido.", Duration = 3 })
         end
     end
 })
 
+-- Deletar
 TabWaypoints:CreateButton({
     Name = "Deletar Waypoint",
     Callback = function()
-        if not waypointToDelete or waypointToDelete == "Nenhum waypoint salvo" then
-            Rayfield:Notify({
-                Title = "Erro",
-                Content = "Selecione um waypoint válido!",
-                Duration = 3
-            })
+        -- Converte para string se for tabela
+        local targetName = waypointSelected
+        if type(targetName) == "table" then
+            targetName = targetName[1] or tostring(targetName)
+        else
+            targetName = tostring(targetName)
+        end
+        
+        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
+            Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
             return
         end
         
-        deleteWaypoint(waypointToDelete)
+        deleteWaypoint(targetName)
+        waypointSelected = nil
         waypointDropdown:Refresh(getWaypointList())
-        
-        Rayfield:Notify({
-            Title = "Waypoint Deletado",
-            Content = "Waypoint removido!",
-            Duration = 2
-        })
+        Rayfield:Notify({ Title = "Waypoint Deletado", Content = "Waypoint removido!", Duration = 2 })
     end
 })
 
+-- Atualizar lista manualmente (backup)
 TabWaypoints:CreateButton({
     Name = "Atualizar Lista",
     Callback = function()
@@ -1778,11 +2126,38 @@ TabWaypoints:CreateSection("Teleporte Rápido")
 TabWaypoints:CreateButton({
     Name = "TP para Spawn",
     Callback = function()
-        if HRP then
-            local spawnLocation = workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChildOfClass("SpawnLocation")
-            if spawnLocation then
-                HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+        if not HRP then return end
+
+        -- 1) Tenta encontrar SpawnLocation direta no workspace
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+            or workspace:FindFirstChildOfClass("SpawnLocation")
+
+        -- 2) Alguns mapas chamam de "Spawn" (um BasePart comum)
+        if not spawnLocation then
+            spawnLocation = workspace:FindFirstChild("Spawn")
+        end
+
+        -- 3) Busca recursiva: pega qualquer SpawnLocation em qualquer lugar do workspace
+        if not spawnLocation then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("SpawnLocation") then
+                    spawnLocation = obj
+                    break
+                end
             end
+        end
+
+        if spawnLocation then
+            HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+            Rayfield:Notify({Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2})
+        else
+            -- Fallback: vai para a origem do mapa (0, 5, 0)
+            HRP.CFrame = CFrame.new(Vector3.new(0, 5, 0))
+            Rayfield:Notify({
+                Title = "Spawn não encontrado",
+                Content = "Foi para a origem do mapa (0, 5, 0).",
+                Duration = 3
+            })
         end
     end
 })
@@ -2156,9 +2531,11 @@ local function setupAdvancedAntiLag()
     end)
 end
 
+-- ✅ FUNÇÃO CORRIGIDA: Usa LP em vez de LocalPlayer
 local function hide3D(obj)
     pcall(function()
-        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
+        -- ✅ CORRIGIDO: Usa "LP" em vez de "LocalPlayer"
+        if LP.Character and obj:IsDescendantOf(LP.Character) then 
             return 
         end
         
@@ -2167,6 +2544,8 @@ local function hide3D(obj)
         elseif obj:IsA("Decal") then
             obj.Transparency = 1
         elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
             obj.Enabled = false
         end
     end)
@@ -2188,6 +2567,11 @@ TabFPS:CreateToggle({
     Callback = function(v)
         if v then
             setupAdvancedAntiLag()
+            Rayfield:Notify({
+                Title = "Anti-Lag Ativado",
+                Content = "Sistema avançado de otimização ativado!",
+                Duration = 2
+            })
         end
     end
 })
@@ -2204,12 +2588,24 @@ TabFPS:CreateToggle({
                 descendantAddedConnection:Disconnect()
             end
             descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
+            
+            Rayfield:Notify({
+                Title = "3D Delete Ativado",
+                Content = "Mundo escondido! FPS otimizado.",
+                Duration = 2
+            })
         else
             -- Disconnect listener when disabled
             if descendantAddedConnection then
                 descendantAddedConnection:Disconnect()
                 descendantAddedConnection = nil
             end
+            
+            Rayfield:Notify({
+                Title = "3D Delete Desativado",
+                Content = "Recarregue o jogo para ver o mundo novamente.",
+                Duration = 3
+            })
         end
     end
 })
@@ -2334,6 +2730,7 @@ TabConfig:CreateButton({
             end
             if config.savedWaypoints then
                 savedWaypoints = config.savedWaypoints
+                waypointDropdown:Refresh(getWaypointList())
             end
             Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
         else
@@ -2451,7 +2848,7 @@ RunService.RenderStepped:Connect(function(dt)
         flyUpImpulse = flyUpImpulse - dt
     end
 
-    if fly then
+    if flyEnabled then
         if not HRP:FindFirstChild("FlyVel") then
             local bv = Instance.new("BodyVelocity", HRP)
             bv.Name = "FlyVel"
