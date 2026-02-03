@@ -33,80 +33,53 @@ end
 
 LP.CharacterAdded:Connect(BindCharacter)
 
--- ================== FUNÇÃO PARA LIMPAR OBJETOS 3D DO JOGO ==================
--- Deleta TUDO do workspace exceto personagens (para reduzir lag)
+-- ================== FUNÇÃO PARA ESCONDER OBJETOS 3D DO JOGO ==================
+-- Esconde TUDO do workspace exceto seu personagem (para reduzir lag visual)
 
 local function resetVisuals()
     local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
     
-    -- Conta quantos objetos foram deletados
-    local deletedCount = 0
+    local hiddenCount = 0
     
-    -- Percorre TUDO no Workspace
-    for _, obj in pairs(workspace:GetDescendants()) do
-        -- Verifica se é um objeto 3D
-        if obj:IsA("BasePart") or obj:IsA("MeshPart") or obj:IsA("UnionOperation") or 
-           obj:IsA("Decal") or obj:IsA("Texture") or obj:IsA("SurfaceGui") or
-           obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or
-           obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-            
-            -- NÃO deletar se for parte de um personagem de jogador
-            local isPlayerCharacter = false
-            local parent = obj.Parent
-            
-            -- Sobe na hierarquia para verificar se pertence a um Character
-            while parent do
-                if parent:IsA("Model") then
-                    -- Verifica se é o character de algum jogador
-                    for _, player in pairs(Players:GetPlayers()) do
-                        if player.Character == parent then
-                            isPlayerCharacter = true
-                            break
-                        end
-                    end
-                end
-                if isPlayerCharacter then break end
-                parent = parent.Parent
-            end
-            
-            -- Se NÃO for parte de personagem, DELETA!
-            if not isPlayerCharacter then
-                pcall(function()
-                    obj:Destroy()
-                    deletedCount = deletedCount + 1
-                end)
-            end
+    local function hide(obj)
+        -- NÃO esconder se for parte do seu personagem
+        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
+            return 
         end
         
-        -- Remove modelos decorativos (árvores, prédios, etc)
-        if obj:IsA("Model") and obj.Parent == workspace then
-            local isPlayerCharacter = false
+        -- Esconde partes 3D (mantém colisão)
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
             
-            -- Verifica se é character de algum jogador
-            for _, player in pairs(Players:GetPlayers()) do
-                if player.Character == obj then
-                    isPlayerCharacter = true
-                    break
-                end
-            end
+        -- Esconde decals e texturas
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
             
-            -- Se NÃO for character, DELETA!
-            if not isPlayerCharacter then
-                pcall(function()
-                    obj:Destroy()
-                    deletedCount = deletedCount + 1
-                end)
-            end
+        -- Desabilita efeitos de partículas
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
+            
+        -- Desabilita outros efeitos visuais
+        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
         end
     end
     
-    -- Remove Terrain (opcional, pode causar problemas em alguns jogos)
-    pcall(function()
-        workspace.Terrain:Clear()
-    end)
+    -- Esconde tudo que já existe
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        hide(obj)
+    end
     
-    print("✅ Deletados " .. deletedCount .. " objetos 3D!")
-    print("✅ Somente personagens restantes - FPS otimizado!")
+    -- Auto-esconde novos objetos que aparecerem
+    workspace.DescendantAdded:Connect(hide)
+    
+    print("✅ " .. hiddenCount .. " objetos 3D escondidos!")
+    print("✅ FPS otimizado para AFK farm!")
 end
 
 -- ================== TEAM DETECTION SYSTEM (CORRIGIDO) ==================
