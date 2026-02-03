@@ -4,7 +4,6 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 -- ================== SERVICES ==================
-local ProximityPromptService = game:GetService("ProximityPromptService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
@@ -12,7 +11,6 @@ local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -196,7 +194,6 @@ TabMove:CreateSection("Fly System")
 -- ================== FLY SYSTEM INTEGRADO ==================
 local flyEnabled = false
 local flySpeed = 1
-local flyUpImpulse = 0
 local tpwalking = false
 local ctrl = {f = 0, b = 0, l = 0, r = 0}
 local lastctrl = {f = 0, b = 0, l = 0, r = 0}
@@ -489,8 +486,18 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- ==================================================================================
--- ============================== AUTO FARM TAB =====================================
+-- ================================ COMBAT TAB ======================================
 -- ==================================================================================
+
+-- SERVIÇOS
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
 
 -- ==================================================================================
 -- AUTO CLICKER
@@ -668,137 +675,7 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
--- AUTO WALK (MOBILE COMPATIBLE)
--- ==================================================================================
-
-TabCombat:CreateSection("Auto Walk")
-
-local autoWalkEnabled = false
-local autoWalkConnection = nil
-local autoWalkSpeed = 16 -- velocidade padrão do Roblox
-local autoWalkOriginalSpeed = 16 -- guarda a velocidade original
-
-local function startAutoWalk()
-    if autoWalkConnection then
-        autoWalkConnection:Disconnect()
-        autoWalkConnection = nil
-    end
-
-    autoWalkEnabled = true
-
-    -- Salva a velocidade original e aplica a nova
-    local char = LP.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            autoWalkOriginalSpeed = hum.WalkSpeed
-            hum.WalkSpeed = autoWalkSpeed
-        end
-    end
-
-    -- Simula segurar W via VirtualInputManager
-    VirtualInputManager:SendKeyDownEvent(Enum.KeyCode.W)
-
-    -- Loop para manter o personagem movendo na direção da câmera
-    autoWalkConnection = RunService.Heartbeat:Connect(function()
-        if not autoWalkEnabled then return end
-
-        local c = LP.Character
-        if not c then return end
-
-        local hum = c:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
-
-        -- Garante que a velocidade está aplicada
-        if hum.WalkSpeed ~= autoWalkSpeed then
-            hum.WalkSpeed = autoWalkSpeed
-        end
-
-        -- Pega direção da câmera (sem componente Y)
-        local cam = workspace.CurrentCamera
-        if not cam then return end
-
-        local look = cam.CFrame.LookVector
-        local moveDir = Vector3.new(look.X, 0, look.Z)
-
-        -- Evita NaN se o vector for zero (câmera olhando para cima/baixo)
-        if moveDir.Magnitude > 0.001 then
-            moveDir = moveDir.Unit
-            hum:Move(moveDir, false)
-        end
-    end)
-end
-
-local function stopAutoWalk()
-    autoWalkEnabled = false
-
-    -- Solta a tecla W
-    VirtualInputManager:SendKeyUpEvent(Enum.KeyCode.W)
-
-    if autoWalkConnection then
-        autoWalkConnection:Disconnect()
-        autoWalkConnection = nil
-    end
-
-    -- Restaura velocidade original e para o movimento
-    local char = LP.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = autoWalkOriginalSpeed
-            hum:Move(Vector3.new(0, 0, 0), false)
-        end
-    end
-end
-
-TabCombat:CreateToggle({
-    Name = "Auto Walk (Segurar W)",
-    CurrentValue = false,
-    Flag = "AutoWalk",
-    Callback = function(enabled)
-        if enabled then
-            startAutoWalk()
-            Rayfield:Notify({
-                Title = "Auto Walk Ativado",
-                Content = "Seu personagem andará para frente automaticamente!",
-                Duration = 3
-            })
-        else
-            stopAutoWalk()
-            Rayfield:Notify({
-                Title = "Auto Walk Desativado",
-                Content = "Movimento automático parado",
-                Duration = 2
-            })
-        end
-    end
-})
-
-TabCombat:CreateSlider({
-    Name = "Velocidade do Auto Walk",
-    Range = {16, 300},
-    Increment = 5,
-    CurrentValue = 16,
-    Callback = function(v)
-        autoWalkSpeed = v
-        -- Aplica imediatamente se o auto walk estiver ativo
-        if autoWalkEnabled then
-            local char = LP.Character
-            if char then
-                local hum = char:FindFirstChildOfClass("Humanoid")
-                if hum then hum.WalkSpeed = v end
-            end
-        end
-    end
-})
-
-TabCombat:CreateParagraph({
-    Title = "📱 Compatível com Mobile",
-    Content = "Este Auto Walk funciona tanto em Mobile quanto PC. Seu personagem andará automaticamente na direção da câmera (como se estivesse segurando W)."
-})
-
--- ==================================================================================
--- FIM DO AUTO FARM TAB
+-- FIM DO COMBAT TAB
 -- ==================================================================================
 
 -- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
@@ -2059,18 +1936,32 @@ local waypointToDelete = nil
 local function saveWaypoint(name)
     if not HRP then return false end
     
+    local pos = HRP.CFrame.Position
     savedWaypoints[name] = {
-        Position = HRP.CFrame.Position,
+        Position = {X = pos.X, Y = pos.Y, Z = pos.Z},
         Time = os.date("%H:%M:%S")
     }
     
     return true
 end
 
+local function resolvePosition(pos)
+    -- Se já for um Vector3 nativo, retorna diretamente
+    if type(pos) == "userdata" then return pos end
+    -- Se for uma table vinda do JSON {X=..., Y=..., Z=...}, reconstrói o Vector3
+    if type(pos) == "table" then
+        return Vector3.new(pos.X or pos[1] or 0, pos.Y or pos[2] or 0, pos.Z or pos[3] or 0)
+    end
+    return nil
+end
+
 local function teleportToWaypoint(name)
     if not savedWaypoints[name] or not HRP then return false end
     
-    HRP.CFrame = CFrame.new(savedWaypoints[name].Position)
+    local pos = resolvePosition(savedWaypoints[name].Position)
+    if not pos then return false end
+    
+    HRP.CFrame = CFrame.new(pos)
     return true
 end
 
@@ -2110,6 +2001,7 @@ TabWaypoints:CreateButton({
         end
         
         if saveWaypoint(waypointNameInput) then
+            waypointDropdown:Refresh(getWaypointList())
             Rayfield:Notify({
                 Title = "Waypoint Salvo",
                 Content = "'"..waypointNameInput.."' foi salvo!",
@@ -2185,11 +2077,38 @@ TabWaypoints:CreateSection("Teleporte Rápido")
 TabWaypoints:CreateButton({
     Name = "TP para Spawn",
     Callback = function()
-        if HRP then
-            local spawnLocation = workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChildOfClass("SpawnLocation")
-            if spawnLocation then
-                HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+        if not HRP then return end
+
+        -- 1) Tenta encontrar SpawnLocation direta no workspace
+        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
+            or workspace:FindFirstChildOfClass("SpawnLocation")
+
+        -- 2) Alguns mapas chamam de "Spawn" (um BasePart comum)
+        if not spawnLocation then
+            spawnLocation = workspace:FindFirstChild("Spawn")
+        end
+
+        -- 3) Busca recursiva: pega qualquer SpawnLocation em qualquer lugar do workspace
+        if not spawnLocation then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("SpawnLocation") then
+                    spawnLocation = obj
+                    break
+                end
             end
+        end
+
+        if spawnLocation then
+            HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+            Rayfield:Notify({Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2})
+        else
+            -- Fallback: vai para a origem do mapa (0, 5, 0)
+            HRP.CFrame = CFrame.new(Vector3.new(0, 5, 0))
+            Rayfield:Notify({
+                Title = "Spawn não encontrado",
+                Content = "Foi para a origem do mapa (0, 5, 0).",
+                Duration = 3
+            })
         end
     end
 })
@@ -2762,6 +2681,7 @@ TabConfig:CreateButton({
             end
             if config.savedWaypoints then
                 savedWaypoints = config.savedWaypoints
+                waypointDropdown:Refresh(getWaypointList())
             end
             Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
         else
