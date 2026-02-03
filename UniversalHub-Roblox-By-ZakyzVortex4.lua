@@ -1955,11 +1955,6 @@ local function getWaypointList()
         return {"Nenhum waypoint salvo"}
     end
     
-    print("📍 Waypoints disponíveis:", #list)
-    for i, name in ipairs(list) do
-        print("  "..i..". "..name)
-    end
-    
     return list
 end
 
@@ -1977,11 +1972,9 @@ end
 
 local function teleportToWaypoint(name)
     if not name or not savedWaypoints[name] then 
-        print("❌ Waypoint '"..tostring(name).."' não encontrado!")
         return false 
     end
     if not HRP then 
-        print("❌ HumanoidRootPart não encontrado!")
         return false 
     end
     
@@ -1989,11 +1982,9 @@ local function teleportToWaypoint(name)
     local pos = resolvePosition(wpData.Position)
     
     if not pos then 
-        print("❌ Posição inválida para waypoint '"..name.."'")
         return false 
     end
     
-    print("✅ Teleportando para '"..name.."' em", pos)
     HRP.CFrame = CFrame.new(pos)
     return true
 end
@@ -2001,9 +1992,6 @@ end
 local function deleteWaypoint(name)
     if savedWaypoints[name] then
         savedWaypoints[name] = nil
-        print("🗑️ Waypoint '"..name.."' deletado. Restam:", #getWaypointList())
-    else
-        print("❌ Tentativa de deletar waypoint inexistente:", name)
     end
 end
 
@@ -2027,10 +2015,8 @@ local waypointDropdown = TabWaypoints:CreateDropdown({
         -- FIX: Garante que sempre pega a string, não a tabela
         if type(option) == "table" then
             waypointSelected = option[1] or tostring(option)
-            print("🔧 Dropdown retornou tabela, convertido para:", waypointSelected)
         else
             waypointSelected = tostring(option)
-            print("✅ Waypoint selecionado:", waypointSelected)
         end
     end
 })
@@ -2044,20 +2030,13 @@ TabWaypoints:CreateButton({
             return
         end
         
-        local wpName = tostring(waypointNameInput) -- garante que é string
-        print("💾 Salvando waypoint com nome:", wpName)
+        local wpName = tostring(waypointNameInput)
         
         if saveWaypoint(wpName) then
             waypointSelected = wpName
             local newList = getWaypointList()
-            print("📋 Lista atualizada:", table.concat(newList, ", "))
             waypointDropdown:Refresh(newList)
-            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo! Total: "..#newList, Duration = 3 })
-            -- Debug: mostra quantos waypoints existem
-            print("✅ Waypoint '"..wpName.."' salvo. Total de waypoints:", #newList)
-            for name, data in pairs(savedWaypoints) do
-                print("  - "..name, data.Position)
-            end
+            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo!", Duration = 3 })
         else
             Rayfield:Notify({ Title = "Erro", Content = "Falha ao salvar waypoint!", Duration = 3 })
         end
@@ -2068,13 +2047,10 @@ TabWaypoints:CreateButton({
 TabWaypoints:CreateButton({
     Name = "Teleportar para Waypoint",
     Callback = function()
-        print("🎯 Tentando teleportar para:", waypointSelected, "tipo:", type(waypointSelected))
-        
         -- Converte para string se for tabela
         local targetName = waypointSelected
         if type(targetName) == "table" then
             targetName = targetName[1] or tostring(targetName)
-            print("🔧 Convertido de tabela para string:", targetName)
         else
             targetName = tostring(targetName)
         end
@@ -2096,13 +2072,10 @@ TabWaypoints:CreateButton({
 TabWaypoints:CreateButton({
     Name = "Deletar Waypoint",
     Callback = function()
-        print("🗑️ Tentando deletar:", waypointSelected, "tipo:", type(waypointSelected))
-        
         -- Converte para string se for tabela
         local targetName = waypointSelected
         if type(targetName) == "table" then
             targetName = targetName[1] or tostring(targetName)
-            print("🔧 Convertido de tabela para string:", targetName)
         else
             targetName = tostring(targetName)
         end
