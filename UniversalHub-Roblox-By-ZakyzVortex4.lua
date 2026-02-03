@@ -4,6 +4,7 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
 -- ================== SERVICES ==================
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
@@ -11,7 +12,6 @@ local TeleportService = game:GetService("TeleportService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
-local ProximityPromptService = game:GetService("ProximityPromptService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local LP = Players.LocalPlayer
@@ -674,6 +674,7 @@ TabCombat:CreateSection("Auto Walk")
 
 local autoWalkEnabled = false
 local autoWalkConnection = nil
+local autoWalkSpeed = 1
 
 local function startAutoWalk()
     if autoWalkConnection then
@@ -682,19 +683,34 @@ local function startAutoWalk()
     
     autoWalkEnabled = true
     
-    -- Sistema compatível com mobile e PC
-    -- Simula segurar a tecla W continuamente
+    -- Sistema compatível com mobile e PC (MELHORADO)
     autoWalkConnection = RunService.Heartbeat:Connect(function()
         if not autoWalkEnabled then return end
-        if not Character or not Humanoid or not HRP then return end
         
-        -- Faz o personagem andar para frente automaticamente
-        -- Usa a direção da câmera para determinar "frente"
-        local cameraCFrame = Camera.CFrame
-        local moveDirection = cameraCFrame.LookVector
+        -- Atualiza referências do personagem
+        local char = LP.Character
+        if not char then return end
         
-        -- Move o personagem na direção da câmera (simula pressionar W)
-        Humanoid:Move(Vector3.new(moveDirection.X, 0, moveDirection.Z), false)
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        
+        if not hum or not root or hum.Health <= 0 then return end
+        
+        -- Pega a direção da câmera
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        
+        local lookVector = cam.CFrame.LookVector
+        local moveVector = Vector3.new(lookVector.X, 0, lookVector.Z).Unit
+        
+        -- Método 1: Humanoid:Move (funciona na maioria dos jogos)
+        hum:Move(moveVector, false)
+        
+        -- Método 2: Definir MoveDirection diretamente (backup)
+        if hum.MoveDirection.Magnitude < 0.1 then
+            -- Se Move não funcionou, tenta mover fisicamente
+            root.CFrame = root.CFrame + (moveVector * autoWalkSpeed * 0.1)
+        end
     end)
 end
 
@@ -706,8 +722,12 @@ local function stopAutoWalk()
     end
     
     -- Para o movimento do personagem
-    if Humanoid then
-        Humanoid:Move(Vector3.new(0, 0, 0), false)
+    local char = LP.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:Move(Vector3.new(0, 0, 0), false)
+        end
     end
 end
 
@@ -731,6 +751,16 @@ TabCombat:CreateToggle({
                 Duration = 2
             })
         end
+    end
+})
+
+TabCombat:CreateSlider({
+    Name = "Velocidade do Auto Walk",
+    Range = {1, 10},
+    Increment = 1,
+    CurrentValue = 1,
+    Callback = function(v)
+        autoWalkSpeed = v
     end
 })
 
