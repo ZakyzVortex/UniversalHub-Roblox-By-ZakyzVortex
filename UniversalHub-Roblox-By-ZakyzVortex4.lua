@@ -1950,12 +1950,24 @@ local function getWaypointList()
         table.insert(list, name)
     end
     table.sort(list)
-    return #list > 0 and list or {"Nenhum waypoint salvo"}
+    
+    if #list == 0 then
+        return {"Nenhum waypoint salvo"}
+    end
+    
+    print("📍 Waypoints disponíveis:", #list)
+    for i, name in ipairs(list) do
+        print("  "..i..". "..name)
+    end
+    
+    return list
 end
 
 local function saveWaypoint(name)
     if not HRP then return false end
+    if not name or name == "" then return false end
     local pos = HRP.CFrame.Position
+    -- Garante que cada waypoint é único e armazena corretamente
     savedWaypoints[name] = {
         Position = {X = pos.X, Y = pos.Y, Z = pos.Z},
         Time = os.date("%H:%M:%S")
@@ -1964,15 +1976,35 @@ local function saveWaypoint(name)
 end
 
 local function teleportToWaypoint(name)
-    if not savedWaypoints[name] or not HRP then return false end
-    local pos = resolvePosition(savedWaypoints[name].Position)
-    if not pos then return false end
+    if not name or not savedWaypoints[name] then 
+        print("❌ Waypoint '"..tostring(name).."' não encontrado!")
+        return false 
+    end
+    if not HRP then 
+        print("❌ HumanoidRootPart não encontrado!")
+        return false 
+    end
+    
+    local wpData = savedWaypoints[name]
+    local pos = resolvePosition(wpData.Position)
+    
+    if not pos then 
+        print("❌ Posição inválida para waypoint '"..name.."'")
+        return false 
+    end
+    
+    print("✅ Teleportando para '"..name.."' em", pos)
     HRP.CFrame = CFrame.new(pos)
     return true
 end
 
 local function deleteWaypoint(name)
-    savedWaypoints[name] = nil
+    if savedWaypoints[name] then
+        savedWaypoints[name] = nil
+        print("🗑️ Waypoint '"..name.."' deletado. Restam:", #getWaypointList())
+    else
+        print("❌ Tentativa de deletar waypoint inexistente:", name)
+    end
 end
 
 -- ── UI ───────────────────────────────────────────────────────
@@ -2000,15 +2032,23 @@ local waypointDropdown = TabWaypoints:CreateDropdown({
 TabWaypoints:CreateButton({
     Name = "Salvar Posição Atual",
     Callback = function()
-        if waypointNameInput == "" then
+        if waypointNameInput == "" or not waypointNameInput then
             Rayfield:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
             return
         end
-        if saveWaypoint(waypointNameInput) then
-            waypointSelected = waypointNameInput
+        
+        local wpName = tostring(waypointNameInput) -- garante que é string
+        if saveWaypoint(wpName) then
+            waypointSelected = wpName
             waypointDropdown:Refresh(getWaypointList())
-            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..waypointNameInput.."' foi salvo!", Duration = 3 })
-            waypointNameInput = "" -- limpa após salvar, evita sobrescrever ao salvar novamente
+            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo! Total: "..#getWaypointList(), Duration = 3 })
+            -- Debug: mostra quantos waypoints existem
+            print("✅ Waypoint '"..wpName.."' salvo. Total de waypoints:", #getWaypointList())
+            for name, data in pairs(savedWaypoints) do
+                print("  - "..name, data.Position)
+            end
+        else
+            Rayfield:Notify({ Title = "Erro", Content = "Falha ao salvar waypoint!", Duration = 3 })
         end
     end
 })
