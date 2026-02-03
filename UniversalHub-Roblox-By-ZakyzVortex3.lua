@@ -486,18 +486,8 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- ==================================================================================
--- ================================ COMBAT TAB ======================================
+-- ============================== AUTO FARM TAB =====================================
 -- ==================================================================================
-
--- SERVIÇOS
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local ProximityPromptService = game:GetService("ProximityPromptService")
-
-local LP = Players.LocalPlayer
-local Mouse = LP:GetMouse()
 
 -- ==================================================================================
 -- AUTO CLICKER
@@ -675,7 +665,80 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
--- FIM DO COMBAT TAB
+-- AUTO WALK (MOBILE COMPATIBLE)
+-- ==================================================================================
+
+TabCombat:CreateSection("Auto Walk")
+
+local autoWalkEnabled = false
+local autoWalkConnection = nil
+
+local function startAutoWalk()
+    if autoWalkConnection then
+        autoWalkConnection:Disconnect()
+    end
+    
+    autoWalkEnabled = true
+    
+    -- Sistema compatível com mobile e PC
+    -- Simula segurar a tecla W continuamente
+    autoWalkConnection = RunService.Heartbeat:Connect(function()
+        if not autoWalkEnabled then return end
+        if not Character or not Humanoid or not HRP then return end
+        
+        -- Faz o personagem andar para frente automaticamente
+        -- Usa a direção da câmera para determinar "frente"
+        local cameraCFrame = Camera.CFrame
+        local moveDirection = cameraCFrame.LookVector
+        
+        -- Move o personagem na direção da câmera (simula pressionar W)
+        Humanoid:Move(Vector3.new(moveDirection.X, 0, moveDirection.Z), false)
+    end)
+end
+
+local function stopAutoWalk()
+    autoWalkEnabled = false
+    if autoWalkConnection then
+        autoWalkConnection:Disconnect()
+        autoWalkConnection = nil
+    end
+    
+    -- Para o movimento do personagem
+    if Humanoid then
+        Humanoid:Move(Vector3.new(0, 0, 0), false)
+    end
+end
+
+TabCombat:CreateToggle({
+    Name = "Auto Walk (Segurar W)",
+    CurrentValue = false,
+    Flag = "AutoWalk",
+    Callback = function(enabled)
+        if enabled then
+            startAutoWalk()
+            Rayfield:Notify({
+                Title = "Auto Walk Ativado",
+                Content = "Seu personagem andará para frente automaticamente!",
+                Duration = 3
+            })
+        else
+            stopAutoWalk()
+            Rayfield:Notify({
+                Title = "Auto Walk Desativado",
+                Content = "Movimento automático parado",
+                Duration = 2
+            })
+        end
+    end
+})
+
+TabCombat:CreateParagraph({
+    Title = "📱 Compatível com Mobile",
+    Content = "Este Auto Walk funciona tanto em Mobile quanto PC. Seu personagem andará automaticamente na direção da câmera (como se estivesse segurando W)."
+})
+
+-- ==================================================================================
+-- FIM DO AUTO FARM TAB
 -- ==================================================================================
 
 -- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
