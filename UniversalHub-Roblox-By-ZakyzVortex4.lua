@@ -356,6 +356,16 @@ local function toggleFly(enabled)
     else
         -- Desativa fly
         tpwalking = false
+        flyEnabled = false
+        
+        -- Remove BodyGyro e BodyVelocity que causam flutuação
+        for _, obj in pairs(chr:GetDescendants()) do
+            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then
+                obj:Destroy()
+            end
+        end
+        
+        -- Reativa todos os estados do humanoid
         hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
@@ -371,8 +381,19 @@ local function toggleFly(enabled)
         hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-        hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+        
+        -- Reseta estado e animações
+        hum:ChangeState(Enum.HumanoidStateType.Freefall)
+        hum.PlatformStand = false
         chr.Animate.Disabled = false
+        
+        -- Reativa animações
+        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
+        if AnimController then
+            for i,v in next, AnimController:GetPlayingAnimationTracks() do
+                v:AdjustSpeed(1)
+            end
+        end
     end
 end
 
