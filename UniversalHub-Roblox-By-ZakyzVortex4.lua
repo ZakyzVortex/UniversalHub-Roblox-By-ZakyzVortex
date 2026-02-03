@@ -2024,7 +2024,14 @@ local waypointDropdown = TabWaypoints:CreateDropdown({
     Options = getWaypointList(),
     CurrentOption = getWaypointList()[1],
     Callback = function(option)
-        waypointSelected = option
+        -- FIX: Garante que sempre pega a string, não a tabela
+        if type(option) == "table" then
+            waypointSelected = option[1] or tostring(option)
+            print("🔧 Dropdown retornou tabela, convertido para:", waypointSelected)
+        else
+            waypointSelected = tostring(option)
+            print("✅ Waypoint selecionado:", waypointSelected)
+        end
     end
 })
 
@@ -2038,12 +2045,16 @@ TabWaypoints:CreateButton({
         end
         
         local wpName = tostring(waypointNameInput) -- garante que é string
+        print("💾 Salvando waypoint com nome:", wpName)
+        
         if saveWaypoint(wpName) then
             waypointSelected = wpName
-            waypointDropdown:Refresh(getWaypointList())
-            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo! Total: "..#getWaypointList(), Duration = 3 })
+            local newList = getWaypointList()
+            print("📋 Lista atualizada:", table.concat(newList, ", "))
+            waypointDropdown:Refresh(newList)
+            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo! Total: "..#newList, Duration = 3 })
             -- Debug: mostra quantos waypoints existem
-            print("✅ Waypoint '"..wpName.."' salvo. Total de waypoints:", #getWaypointList())
+            print("✅ Waypoint '"..wpName.."' salvo. Total de waypoints:", #newList)
             for name, data in pairs(savedWaypoints) do
                 print("  - "..name, data.Position)
             end
@@ -2057,12 +2068,24 @@ TabWaypoints:CreateButton({
 TabWaypoints:CreateButton({
     Name = "Teleportar para Waypoint",
     Callback = function()
-        if not waypointSelected or waypointSelected == "Nenhum waypoint salvo" then
+        print("🎯 Tentando teleportar para:", waypointSelected, "tipo:", type(waypointSelected))
+        
+        -- Converte para string se for tabela
+        local targetName = waypointSelected
+        if type(targetName) == "table" then
+            targetName = targetName[1] or tostring(targetName)
+            print("🔧 Convertido de tabela para string:", targetName)
+        else
+            targetName = tostring(targetName)
+        end
+        
+        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
             Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
             return
         end
-        if teleportToWaypoint(waypointSelected) then
-            Rayfield:Notify({ Title = "Teleportado", Content = "Chegou em '"..waypointSelected.."'!", Duration = 2 })
+        
+        if teleportToWaypoint(targetName) then
+            Rayfield:Notify({ Title = "Teleportado", Content = "Chegou em '"..targetName.."'!", Duration = 2 })
         else
             Rayfield:Notify({ Title = "Erro", Content = "Falha ao teleportar. Waypoint pode estar corrompido.", Duration = 3 })
         end
@@ -2073,11 +2096,23 @@ TabWaypoints:CreateButton({
 TabWaypoints:CreateButton({
     Name = "Deletar Waypoint",
     Callback = function()
-        if not waypointSelected or waypointSelected == "Nenhum waypoint salvo" then
+        print("🗑️ Tentando deletar:", waypointSelected, "tipo:", type(waypointSelected))
+        
+        -- Converte para string se for tabela
+        local targetName = waypointSelected
+        if type(targetName) == "table" then
+            targetName = targetName[1] or tostring(targetName)
+            print("🔧 Convertido de tabela para string:", targetName)
+        else
+            targetName = tostring(targetName)
+        end
+        
+        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
             Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
             return
         end
-        deleteWaypoint(waypointSelected)
+        
+        deleteWaypoint(targetName)
         waypointSelected = nil
         waypointDropdown:Refresh(getWaypointList())
         Rayfield:Notify({ Title = "Waypoint Deletado", Content = "Waypoint removido!", Duration = 2 })
