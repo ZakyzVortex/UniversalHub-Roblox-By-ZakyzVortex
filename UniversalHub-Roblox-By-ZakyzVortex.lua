@@ -2810,6 +2810,23 @@ TabUtil:CreateToggle({
     end
 })
 
+TabUtil:CreateToggle({
+    Name = "Insta Interact",
+    CurrentValue = false,
+    Callback = function(v)
+        _G.InstaInteract = v
+        if _G.InstaInteract then
+            _G.InstaInteractConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
+                fireproximityprompt(prompt)
+            end)
+        else
+            if _G.InstaInteractConnection then
+                _G.InstaInteractConnection:Disconnect()
+            end
+        end
+    end
+})
+
 TabUtil:CreateSection("Server")
 
 TabUtil:CreateButton({
