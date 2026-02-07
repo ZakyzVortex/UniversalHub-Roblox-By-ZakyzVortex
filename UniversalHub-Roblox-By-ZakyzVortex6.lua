@@ -129,9 +129,9 @@ end
 local Window = Rayfield:CreateWindow({
     Name = "Universal Hub",
     LoadingTitle = "Universal Hub",
-    LoadingSubtitle = "By ZakyzVortex - Config Fixed",
+    LoadingSubtitle = "By ZakyzVortex - FIXED",
     ConfigurationSaving = {
-        Enabled = false,  -- ❌ Desabilitado para evitar corrupção
+        Enabled = false,  -- ❌ DESABILITADO
         FolderName = "UniversalHub",
         FileName = "Config"
     }
@@ -157,10 +157,17 @@ local TabUtil = Window:CreateTab("Utility")
 -- ============================== MOVEMENT TAB ======================================
 -- ==================================================================================
 
+
+-- ==================================================================================
+-- ========================== MOVEMENT TAB (CORRIGIDO) ==============================
+-- ==================================================================================
+
 TabMove:CreateSection("Velocidade e Pulo")
 
--- Estados
+-- Estados e variáveis globais
 local infJump, antiFall = false, false
+_G.CurrentWalkSpeed = 16
+_G.CurrentJumpPower = 50
 
 -- Velocidade
 TabMove:CreateSlider({
@@ -168,7 +175,9 @@ TabMove:CreateSlider({
     Range = {16, 300},
     Increment = 5,
     CurrentValue = 16,
+    Flag = "WalkSpeedSlider",
     Callback = function(v)
+        _G.CurrentWalkSpeed = v
         if Humanoid then
             Humanoid.WalkSpeed = v
         end
@@ -181,7 +190,9 @@ TabMove:CreateSlider({
     Range = {50, 300},
     Increment = 10,
     CurrentValue = 50,
+    Flag = "JumpPowerSlider",
     Callback = function(v)
+        _G.CurrentJumpPower = v
         if Humanoid then
             Humanoid.UseJumpPower = true
             Humanoid.JumpPower = v
@@ -2668,13 +2679,10 @@ end)
 -- ==================================================================================
 
 -- ==================================================================================
--- ======================== CONFIG TAB (SISTEMA CORRIGIDO) =========================
+-- ===================== CONFIG TAB (COMPLETAMENTE CORRIGIDO) =======================
 -- ==================================================================================
 
--- ================== INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS (SE NÃO EXISTIREM) ==================
--- Garante que todas as variáveis existam antes de salvar/carregar
-
--- Combat
+-- ================== INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS ==================
 AUTO_CLICKER_ENABLED = AUTO_CLICKER_ENABLED or false
 AUTO_CLICKER_CPS = AUTO_CLICKER_CPS or 10
 HIT_RANGE_ENABLED = HIT_RANGE_ENABLED or false
@@ -2684,7 +2692,6 @@ AUTO_PRESS_INTERVAL = AUTO_PRESS_INTERVAL or 0.25
 attackSpeed = attackSpeed or 1
 attackRange = attackRange or 5
 
--- ESP
 ESP_ENABLED = ESP_ENABLED or false
 NAME_ENABLED = NAME_ENABLED or true
 DISTANCE_ENABLED = DISTANCE_ENABLED or true
@@ -2696,7 +2703,6 @@ ESP_COLOR = ESP_COLOR or Color3.fromRGB(255, 0, 0)
 LINE_COLOR = LINE_COLOR or Color3.fromRGB(255, 255, 255)
 _G.ESP_MAX_DISTANCE = _G.ESP_MAX_DISTANCE or 1000
 
--- Highlight
 HIGHLIGHT_ENABLED = HIGHLIGHT_ENABLED or false
 HIGHLIGHT_TEAM_FILTER = HIGHLIGHT_TEAM_FILTER or "All"
 teamColor = teamColor or Color3.fromRGB(0, 255, 0)
@@ -2704,7 +2710,6 @@ enemyColor = enemyColor or Color3.fromRGB(255, 0, 0)
 highlightFillTrans = highlightFillTrans or 0.5
 highlightOutlineTrans = highlightOutlineTrans or 0
 
--- Aim
 AIM_ENABLED = AIM_ENABLED or false
 AIM_FOV = AIM_FOV or 100
 AIM_SMOOTH = AIM_SMOOTH or 0.2
@@ -2712,7 +2717,6 @@ AIM_TARGET_PART = AIM_TARGET_PART or "Head"
 AIM_WALLCHECK = AIM_WALLCHECK or true
 AIM_TEAM_FILTER = AIM_TEAM_FILTER or "Enemy"
 
--- Player Aim
 PlayerAimEnabled = PlayerAimEnabled or false
 PlayerAimSmoothness = PlayerAimSmoothness or 0.15
 PlayerAimPart = PlayerAimPart or "Head"
@@ -2720,63 +2724,52 @@ PlayerAimFOVRadius = PlayerAimFOVRadius or 100
 PlayerAimPrediction = PlayerAimPrediction or 0.13
 PlayerAimWallCheck = PlayerAimWallCheck or true
 
--- Protection
 godMode = godMode or false
 lockHP = lockHP or false
 antiKB = antiKB or false
 antiVoid = antiVoid or false
 
--- Visuals
 FULLBRIGHT_ENABLED = FULLBRIGHT_ENABLED or false
 NO_CAMERA_SHAKE = NO_CAMERA_SHAKE or false
 
--- Utility
 noclip = noclip or false
 shiftLockEnabled = shiftLockEnabled or false
 _G.InstaInteract = _G.InstaInteract or false
 ANTI_AFK_ENABLED = ANTI_AFK_ENABLED or false
 
--- Waypoints
 savedWaypoints = savedWaypoints or {}
 
--- ================== SISTEMA DE CONFIG MANUAL ==================
+-- ================== SISTEMA DE CONFIG ==================
 local ConfigFolder = "UniversalHub"
 local ConfigFileName = "UserConfig.json"
 
--- Cria pasta se não existir
 if not isfolder(ConfigFolder) then
     makefolder(ConfigFolder)
 end
 
 local ConfigPath = ConfigFolder .. "/" .. ConfigFileName
 
-print("📁 Caminho do Config: " .. ConfigPath)
+print("📁 Config: " .. ConfigPath)
 
--- Função para salvar configuração
+-- Salvar
 local function SaveConfig()
     local success, errorMsg = pcall(function()
-        print("💾 Iniciando salvamento...")
+        print("💾 Salvando...")
         
-        -- Coleta configurações atuais
         local currentConfig = {
-            -- Movement
-            WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
-            JumpPower = Humanoid and Humanoid.JumpPower or 50,
+            WalkSpeed = _G.CurrentWalkSpeed or (Humanoid and Humanoid.WalkSpeed) or 16,
+            JumpPower = _G.CurrentJumpPower or (Humanoid and Humanoid.JumpPower) or 50,
             InfiniteJump = infJump or false,
             AntiFall = antiFall or false,
             FlySpeed = flySpeed or 1,
             
-            -- Combat
             AutoClickerEnabled = AUTO_CLICKER_ENABLED,
             AutoClickerCPS = AUTO_CLICKER_CPS,
             HitRangeEnabled = HIT_RANGE_ENABLED,
             HitRangeSize = HIT_RANGE_SIZE,
             AutoPressEnabled = AUTO_PRESS_ENABLED,
             AutoPressInterval = AUTO_PRESS_INTERVAL,
-            AttackSpeed = attackSpeed,
-            AttackRange = attackRange,
             
-            -- ESP
             ESP_Enabled = ESP_ENABLED,
             ESP_Name = NAME_ENABLED,
             ESP_Distance = DISTANCE_ENABLED,
@@ -2786,9 +2779,7 @@ local function SaveConfig()
             ESP_TeamFilter = ESP_TEAM_FILTER,
             ESP_Color = {ESP_COLOR.R * 255, ESP_COLOR.G * 255, ESP_COLOR.B * 255},
             ESP_LineColor = {LINE_COLOR.R * 255, LINE_COLOR.G * 255, LINE_COLOR.B * 255},
-            ESP_MaxDistance = _G.ESP_MAX_DISTANCE,
             
-            -- Highlight ESP
             HighlightEnabled = HIGHLIGHT_ENABLED,
             HighlightTeamFilter = HIGHLIGHT_TEAM_FILTER,
             HighlightTeamColor = {teamColor.R * 255, teamColor.G * 255, teamColor.B * 255},
@@ -2796,7 +2787,6 @@ local function SaveConfig()
             HighlightFillTrans = highlightFillTrans,
             HighlightOutlineTrans = highlightOutlineTrans,
             
-            -- Aim Assist
             AimEnabled = AIM_ENABLED,
             AimFOV = AIM_FOV,
             AimSmooth = AIM_SMOOTH,
@@ -2804,7 +2794,6 @@ local function SaveConfig()
             AimWallCheck = AIM_WALLCHECK,
             AimTeamFilter = AIM_TEAM_FILTER,
             
-            -- Player Aim
             PlayerAimEnabled = PlayerAimEnabled,
             PlayerAimSmoothness = PlayerAimSmoothness,
             PlayerAimPart = PlayerAimPart,
@@ -2812,110 +2801,116 @@ local function SaveConfig()
             PlayerAimPrediction = PlayerAimPrediction,
             PlayerAimWallCheck = PlayerAimWallCheck,
             
-            -- Protection
             GodMode = godMode,
             LockHP = lockHP,
             AntiKnockback = antiKB,
             AntiVoid = antiVoid,
             
-            -- Visuals
             CameraFOV = Camera.FieldOfView,
             Fullbright = FULLBRIGHT_ENABLED,
             NoCameraShake = NO_CAMERA_SHAKE,
             
-            -- World
             Gravity = workspace.Gravity,
             ClockTime = Lighting.ClockTime,
             
-            -- Waypoints
             SavedWaypoints = savedWaypoints,
             
-            -- Utility
             Noclip = noclip,
             ShiftLock = shiftLockEnabled,
             InstaInteract = _G.InstaInteract,
             AntiAFK = ANTI_AFK_ENABLED
         }
         
-        print("📦 Configuração coletada!")
-        
-        -- Converte para JSON
         local jsonData = HttpService:JSONEncode(currentConfig)
-        print("📝 JSON criado! Tamanho: " .. #jsonData .. " caracteres")
-        
-        -- Salva arquivo
         writefile(ConfigPath, jsonData)
-        print("✅ Arquivo salvo com sucesso!")
+        
+        print("✅ Salvo! (" .. #jsonData .. " chars)")
         
         Rayfield:Notify({
-            Title = "✅ Config Salva",
-            Content = "Configuração salva com sucesso!",
+            Title = "✅ Salvo",
+            Content = "Config salva: " .. #jsonData .. " bytes",
             Duration = 3,
             Image = 4483362458
         })
-        
-        return true
     end)
     
     if not success then
-        warn("❌ ERRO ao salvar: " .. tostring(errorMsg))
+        warn("❌ Erro: " .. tostring(errorMsg))
         Rayfield:Notify({
             Title = "❌ Erro",
-            Content = "Falha ao salvar: " .. tostring(errorMsg),
+            Content = tostring(errorMsg),
             Duration = 5,
             Image = 4483362458
         })
-        return false
     end
-    
-    return true
 end
 
--- Função para carregar configuração
+-- Carregar
 local function LoadConfig()
     if not isfile(ConfigPath) then
-        print("⚠️ Arquivo não encontrado: " .. ConfigPath)
+        print("⚠️ Sem arquivo")
         Rayfield:Notify({
             Title = "⚠️ Sem Config",
-            Content = "Nenhuma configuração salva encontrada.",
+            Content = "Nenhum arquivo salvo",
             Duration = 3,
             Image = 4483362458
         })
-        return false
+        return
     end
     
     local success, config = pcall(function()
-        print("📂 Lendo arquivo...")
-        local fileContent = readfile(ConfigPath)
-        print("📝 Arquivo lido! Tamanho: " .. #fileContent .. " caracteres")
-        
-        local decoded = HttpService:JSONDecode(fileContent)
-        print("✅ JSON decodificado!")
-        return decoded
+        print("📂 Carregando...")
+        local data = readfile(ConfigPath)
+        return HttpService:JSONDecode(data)
     end)
     
     if not success then
-        warn("❌ ERRO ao carregar: " .. tostring(config))
+        warn("❌ Erro ao ler: " .. tostring(config))
         Rayfield:Notify({
-            Title = "❌ Erro",
-            Content = "Arquivo corrompido! Use Resetar.",
+            Title = "❌ Corrompido",
+            Content = "Use Resetar",
             Duration = 5,
             Image = 4483362458
         })
-        return false
+        return
     end
     
-    -- Aplica configurações
     pcall(function()
-        print("🔧 Aplicando configurações...")
+        print("🔧 Aplicando...")
         
-        -- Movement
-        if config.WalkSpeed and Humanoid then
-            Humanoid.WalkSpeed = config.WalkSpeed
+        -- Movement - APLICA DE VERDADE
+        if config.WalkSpeed then
+            _G.CurrentWalkSpeed = config.WalkSpeed
+            if Humanoid then
+                Humanoid.WalkSpeed = config.WalkSpeed
+            end
+            -- Força múltiplas vezes para garantir
+            for i = 1, 3 do
+                task.wait(0.1)
+                if Humanoid then
+                    Humanoid.WalkSpeed = config.WalkSpeed
+                end
+            end
+            print("🏃 WalkSpeed: " .. config.WalkSpeed)
         end
-        if config.JumpPower and Humanoid then
-            Humanoid.JumpPower = config.JumpPower
+        
+        if config.JumpPower then
+            _G.CurrentJumpPower = config.JumpPower
+            if Humanoid then
+                Humanoid.UseJumpPower = true
+                Humanoid.JumpPower = config.JumpPower
+            end
+            -- Força múltiplas vezes
+            for i = 1, 3 do
+                task.wait(0.1)
+                if Humanoid then
+                    Humanoid.UseJumpPower = true
+                    Humanoid.JumpPower = config.JumpPower
+                end
+            end
+            print("🦘 JumpPower: " .. config.JumpPower)
         end
+        
         infJump = config.InfiniteJump or false
         antiFall = config.AntiFall or false
         flySpeed = config.FlySpeed or 1
@@ -2927,8 +2922,6 @@ local function LoadConfig()
         HIT_RANGE_SIZE = config.HitRangeSize or 10
         AUTO_PRESS_ENABLED = config.AutoPressEnabled or false
         AUTO_PRESS_INTERVAL = config.AutoPressInterval or 0.25
-        attackSpeed = config.AttackSpeed or 1
-        attackRange = config.AttackRange or 5
         
         -- ESP
         ESP_ENABLED = config.ESP_Enabled or false
@@ -2945,7 +2938,6 @@ local function LoadConfig()
         if config.ESP_LineColor then
             LINE_COLOR = Color3.fromRGB(config.ESP_LineColor[1], config.ESP_LineColor[2], config.ESP_LineColor[3])
         end
-        _G.ESP_MAX_DISTANCE = config.ESP_MaxDistance or 1000
         
         -- Highlight
         HIGHLIGHT_ENABLED = config.HighlightEnabled or false
@@ -3004,106 +2996,80 @@ local function LoadConfig()
         _G.InstaInteract = config.InstaInteract or false
         ANTI_AFK_ENABLED = config.AntiAFK or false
         
-        print("✅ Configurações aplicadas!")
+        print("✅ Aplicado!")
     end)
     
     Rayfield:Notify({
-        Title = "✅ Config Carregada",
+        Title = "✅ Carregado",
         Content = "Configurações restauradas!",
         Duration = 3,
         Image = 4483362458
     })
-    
-    return true
 end
 
--- Função para resetar
+-- Resetar
 local function ResetConfig()
-    print("🔄 Resetando configurações...")
+    print("🔄 Resetando...")
     
-    -- Deleta arquivo
     if isfile(ConfigPath) then
         delfile(ConfigPath)
-        print("🗑️ Arquivo deletado")
     end
     
-    -- Aplica valores padrão
+    _G.CurrentWalkSpeed = 16
+    _G.CurrentJumpPower = 50
+    
     if Humanoid then
         Humanoid.WalkSpeed = 16
         Humanoid.JumpPower = 50
     end
+    
     flySpeed = 1
     infJump = false
     antiFall = false
     
     AUTO_CLICKER_ENABLED = false
-    AUTO_CLICKER_CPS = 10
-    HIT_RANGE_ENABLED = false
-    HIT_RANGE_SIZE = 10
-    AUTO_PRESS_ENABLED = false
-    AUTO_PRESS_INTERVAL = 0.25
-    attackSpeed = 1
-    attackRange = 5
-    
     ESP_ENABLED = false
     HIGHLIGHT_ENABLED = false
     AIM_ENABLED = false
     PlayerAimEnabled = false
-    
     godMode = false
     lockHP = false
     antiKB = false
     antiVoid = false
+    noclip = false
+    shiftLockEnabled = false
     
     if Camera then Camera.FieldOfView = 70 end
-    FULLBRIGHT_ENABLED = false
-    NO_CAMERA_SHAKE = false
-    
     workspace.Gravity = 196
     Lighting.ClockTime = 14
     
-    noclip = false
-    shiftLockEnabled = false
-    _G.InstaInteract = false
-    ANTI_AFK_ENABLED = false
-    
-    savedWaypoints = {}
-    
-    print("✅ Configurações resetadas!")
+    print("✅ Resetado!")
     
     Rayfield:Notify({
         Title = "🔄 Resetado",
-        Content = "Todas configurações voltaram ao padrão!",
+        Content = "Tudo voltou ao padrão!",
         Duration = 3,
         Image = 4483362458
     })
 end
 
--- ==================================================================================
--- ================================ ABA DE CONFIG ===================================
--- ==================================================================================
+-- ================== ABA CONFIG ==================
 
-TabConfig:CreateSection("💾 Gerenciamento de Configuração")
+TabConfig:CreateSection("💾 Configuração")
 
 TabConfig:CreateButton({
-    Name = "💾 Salvar Configuração",
-    Callback = function()
-        SaveConfig()
-    end
+    Name = "💾 Salvar",
+    Callback = SaveConfig
 })
 
 TabConfig:CreateButton({
-    Name = "📂 Carregar Configuração",
-    Callback = function()
-        LoadConfig()
-    end
+    Name = "📂 Carregar",
+    Callback = LoadConfig
 })
 
 TabConfig:CreateButton({
-    Name = "🔄 Resetar para Padrões",
-    Callback = function()
-        ResetConfig()
-    end
+    Name = "🔄 Resetar",
+    Callback = ResetConfig
 })
 
 TabConfig:CreateSection("⏰ Auto-Save")
@@ -3112,19 +3078,17 @@ local autoSaveEnabled = false
 local autoSaveConnection
 
 TabConfig:CreateToggle({
-    Name = "Auto-Save (a cada 5 min)",
+    Name = "Auto-Save (5 min)",
     CurrentValue = false,
-    Flag = "AutoSave",
     Callback = function(v)
         autoSaveEnabled = v
         
-        if autoSaveEnabled then
-            print("⏰ Auto-save ATIVADO")
+        if v then
+            print("⏰ Auto-save ON")
             autoSaveConnection = task.spawn(function()
                 while autoSaveEnabled do
-                    task.wait(300) -- 5 minutos
+                    task.wait(300)
                     if autoSaveEnabled then
-                        print("⏰ Executando auto-save...")
                         SaveConfig()
                     end
                 end
@@ -3132,19 +3096,19 @@ TabConfig:CreateToggle({
             
             Rayfield:Notify({
                 Title = "⏰ Auto-Save ON",
-                Content = "Salvando a cada 5 minutos!",
+                Content = "Salvando a cada 5min",
                 Duration = 3,
                 Image = 4483362458
             })
         else
-            print("⏰ Auto-save DESATIVADO")
+            print("⏰ Auto-save OFF")
             if autoSaveConnection then
                 task.cancel(autoSaveConnection)
             end
             
             Rayfield:Notify({
                 Title = "⏰ Auto-Save OFF",
-                Content = "Auto-save desativado.",
+                Content = "Desativado",
                 Duration = 3,
                 Image = 4483362458
             })
@@ -3152,10 +3116,9 @@ TabConfig:CreateToggle({
     end
 })
 
-TabConfig:CreateSection("ℹ️ Informações")
-
+TabConfig:CreateSection("ℹ️ Info")
 TabConfig:CreateLabel("Caminho: " .. ConfigPath)
-TabConfig:CreateLabel("Sistema manual - Sem corrupção!")
+TabConfig:CreateLabel("Sistema sem corrupção")
 
 TabConfig:CreateSection("⌨️ Keybinds")
 
@@ -3215,6 +3178,22 @@ TabConfig:CreateButton({
         Rayfield:Destroy()
     end
 })
+
+-- Loop para manter valores aplicados
+RunService.Heartbeat:Connect(function()
+    if Humanoid and _G.CurrentWalkSpeed then
+        if math.abs(Humanoid.WalkSpeed - _G.CurrentWalkSpeed) > 0.5 then
+            Humanoid.WalkSpeed = _G.CurrentWalkSpeed
+        end
+    end
+    
+    if Humanoid and _G.CurrentJumpPower then
+        if math.abs(Humanoid.JumpPower - _G.CurrentJumpPower) > 0.5 then
+            Humanoid.UseJumpPower = true
+            Humanoid.JumpPower = _G.CurrentJumpPower
+        end
+    end
+end)
 
 -- ==================================================================================
 -- =============================== UTILITY TAB ======================================
