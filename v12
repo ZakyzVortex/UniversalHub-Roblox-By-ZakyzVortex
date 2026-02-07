@@ -2892,7 +2892,7 @@ Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
 end)
 
 TabUtil:CreateToggle({
-    Name = "Shift Lock (Jogos sem suporte)",
+    Name = "Shift Lock",
     CurrentValue = false,
     Callback = function(v)
         applyShiftLock(v)
