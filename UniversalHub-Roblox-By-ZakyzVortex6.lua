@@ -2677,12 +2677,27 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
-
+-- ============= SISTEMA DE CONFIG DEFINITIVO (APLICAÇÃO FORÇADA) ==================
 -- ==================================================================================
--- ===================== CONFIG TAB (COMPLETAMENTE CORRIGIDO) =======================
--- ==================================================================================
+-- SUBSTITUA TODA A SEÇÃO DE CONFIG TAB com este código
 
--- ================== INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS ==================
+-- ================== VARIÁVEIS GLOBAIS (INICIALIZAÇÃO) ==================
+_G.ConfigValues = _G.ConfigValues or {
+    WalkSpeed = 16,
+    JumpPower = 50,
+    InfiniteJump = false,
+    AntiFall = false,
+    FlySpeed = 1
+}
+
+-- Força aplicação inicial
+if Humanoid then
+    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+    Humanoid.JumpPower = _G.ConfigValues.JumpPower
+    Humanoid.UseJumpPower = true
+end
+
+-- Inicializa todas as outras variáveis
 AUTO_CLICKER_ENABLED = AUTO_CLICKER_ENABLED or false
 AUTO_CLICKER_CPS = AUTO_CLICKER_CPS or 10
 HIT_RANGE_ENABLED = HIT_RANGE_ENABLED or false
@@ -2739,6 +2754,52 @@ ANTI_AFK_ENABLED = ANTI_AFK_ENABLED or false
 
 savedWaypoints = savedWaypoints or {}
 
+-- ================== LOOP DE APLICAÇÃO FORÇADA ==================
+-- Este loop GARANTE que os valores sejam aplicados constantemente
+
+local lastWalkSpeed = _G.ConfigValues.WalkSpeed
+local lastJumpPower = _G.ConfigValues.JumpPower
+
+RunService.Heartbeat:Connect(function()
+    if not Humanoid then return end
+    
+    -- Força WalkSpeed
+    if Humanoid.WalkSpeed ~= _G.ConfigValues.WalkSpeed then
+        Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+        if lastWalkSpeed ~= _G.ConfigValues.WalkSpeed then
+            print("🔄 WalkSpeed forçado: " .. _G.ConfigValues.WalkSpeed)
+            lastWalkSpeed = _G.ConfigValues.WalkSpeed
+        end
+    end
+    
+    -- Força JumpPower
+    if Humanoid.JumpPower ~= _G.ConfigValues.JumpPower then
+        Humanoid.UseJumpPower = true
+        Humanoid.JumpPower = _G.ConfigValues.JumpPower
+        if lastJumpPower ~= _G.ConfigValues.JumpPower then
+            print("🔄 JumpPower forçado: " .. _G.ConfigValues.JumpPower)
+            lastJumpPower = _G.ConfigValues.JumpPower
+        end
+    end
+end)
+
+-- Reaplica quando o personagem respawna
+LP.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    Character = char
+    Humanoid = char:WaitForChild("Humanoid")
+    HRP = char:WaitForChild("HumanoidRootPart")
+    
+    -- FORÇA aplicação imediata
+    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+    Humanoid.UseJumpPower = true
+    Humanoid.JumpPower = _G.ConfigValues.JumpPower
+    
+    print("🔄 Valores reaplicados após respawn!")
+    print("   WalkSpeed: " .. _G.ConfigValues.WalkSpeed)
+    print("   JumpPower: " .. _G.ConfigValues.JumpPower)
+end)
+
 -- ================== SISTEMA DE CONFIG ==================
 local ConfigFolder = "UniversalHub"
 local ConfigFileName = "UserConfig.json"
@@ -2749,20 +2810,50 @@ end
 
 local ConfigPath = ConfigFolder .. "/" .. ConfigFileName
 
-print("📁 Config: " .. ConfigPath)
+print("📁 Config Path: " .. ConfigPath)
 
--- Salvar
+-- Função auxiliar para aplicar valores de movimento
+local function ApplyMovementValues(walkSpeed, jumpPower)
+    _G.ConfigValues.WalkSpeed = walkSpeed or 16
+    _G.ConfigValues.JumpPower = jumpPower or 50
+    
+    if Humanoid then
+        Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+        Humanoid.UseJumpPower = true
+        Humanoid.JumpPower = _G.ConfigValues.JumpPower
+        
+        -- Aguarda e reaplica para garantir
+        task.spawn(function()
+            for i = 1, 5 do
+                task.wait(0.1)
+                if Humanoid then
+                    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+                    Humanoid.UseJumpPower = true
+                    Humanoid.JumpPower = _G.ConfigValues.JumpPower
+                end
+            end
+        end)
+    end
+    
+    print("✅ Valores de movimento aplicados:")
+    print("   WalkSpeed: " .. _G.ConfigValues.WalkSpeed)
+    print("   JumpPower: " .. _G.ConfigValues.JumpPower)
+end
+
+-- SALVAR
 local function SaveConfig()
     local success, errorMsg = pcall(function()
-        print("💾 Salvando...")
+        print("💾 Salvando configuração...")
         
         local currentConfig = {
-            WalkSpeed = _G.CurrentWalkSpeed or (Humanoid and Humanoid.WalkSpeed) or 16,
-            JumpPower = _G.CurrentJumpPower or (Humanoid and Humanoid.JumpPower) or 50,
+            -- Movement
+            WalkSpeed = _G.ConfigValues.WalkSpeed,
+            JumpPower = _G.ConfigValues.JumpPower,
             InfiniteJump = infJump or false,
             AntiFall = antiFall or false,
             FlySpeed = flySpeed or 1,
             
+            -- Combat
             AutoClickerEnabled = AUTO_CLICKER_ENABLED,
             AutoClickerCPS = AUTO_CLICKER_CPS,
             HitRangeEnabled = HIT_RANGE_ENABLED,
@@ -2770,6 +2861,7 @@ local function SaveConfig()
             AutoPressEnabled = AUTO_PRESS_ENABLED,
             AutoPressInterval = AUTO_PRESS_INTERVAL,
             
+            -- ESP
             ESP_Enabled = ESP_ENABLED,
             ESP_Name = NAME_ENABLED,
             ESP_Distance = DISTANCE_ENABLED,
@@ -2780,6 +2872,7 @@ local function SaveConfig()
             ESP_Color = {ESP_COLOR.R * 255, ESP_COLOR.G * 255, ESP_COLOR.B * 255},
             ESP_LineColor = {LINE_COLOR.R * 255, LINE_COLOR.G * 255, LINE_COLOR.B * 255},
             
+            -- Highlight
             HighlightEnabled = HIGHLIGHT_ENABLED,
             HighlightTeamFilter = HIGHLIGHT_TEAM_FILTER,
             HighlightTeamColor = {teamColor.R * 255, teamColor.G * 255, teamColor.B * 255},
@@ -2787,6 +2880,7 @@ local function SaveConfig()
             HighlightFillTrans = highlightFillTrans,
             HighlightOutlineTrans = highlightOutlineTrans,
             
+            -- Aim
             AimEnabled = AIM_ENABLED,
             AimFOV = AIM_FOV,
             AimSmooth = AIM_SMOOTH,
@@ -2794,6 +2888,7 @@ local function SaveConfig()
             AimWallCheck = AIM_WALLCHECK,
             AimTeamFilter = AIM_TEAM_FILTER,
             
+            -- Player Aim
             PlayerAimEnabled = PlayerAimEnabled,
             PlayerAimSmoothness = PlayerAimSmoothness,
             PlayerAimPart = PlayerAimPart,
@@ -2801,20 +2896,25 @@ local function SaveConfig()
             PlayerAimPrediction = PlayerAimPrediction,
             PlayerAimWallCheck = PlayerAimWallCheck,
             
+            -- Protection
             GodMode = godMode,
             LockHP = lockHP,
             AntiKnockback = antiKB,
             AntiVoid = antiVoid,
             
+            -- Visuals
             CameraFOV = Camera.FieldOfView,
             Fullbright = FULLBRIGHT_ENABLED,
             NoCameraShake = NO_CAMERA_SHAKE,
             
+            -- World
             Gravity = workspace.Gravity,
             ClockTime = Lighting.ClockTime,
             
+            -- Waypoints
             SavedWaypoints = savedWaypoints,
             
+            -- Utility
             Noclip = noclip,
             ShiftLock = shiftLockEnabled,
             InstaInteract = _G.InstaInteract,
@@ -2824,20 +2924,22 @@ local function SaveConfig()
         local jsonData = HttpService:JSONEncode(currentConfig)
         writefile(ConfigPath, jsonData)
         
-        print("✅ Salvo! (" .. #jsonData .. " chars)")
+        print("✅ Salvo com sucesso! (" .. #jsonData .. " bytes)")
+        print("   WalkSpeed salvo: " .. currentConfig.WalkSpeed)
+        print("   JumpPower salvo: " .. currentConfig.JumpPower)
         
         Rayfield:Notify({
-            Title = "✅ Salvo",
-            Content = "Config salva: " .. #jsonData .. " bytes",
-            Duration = 3,
+            Title = "✅ Configuração Salva",
+            Content = "WalkSpeed: " .. currentConfig.WalkSpeed .. " | JumpPower: " .. currentConfig.JumpPower,
+            Duration = 4,
             Image = 4483362458
         })
     end)
     
     if not success then
-        warn("❌ Erro: " .. tostring(errorMsg))
+        warn("❌ ERRO ao salvar: " .. tostring(errorMsg))
         Rayfield:Notify({
-            Title = "❌ Erro",
+            Title = "❌ Erro ao Salvar",
             Content = tostring(errorMsg),
             Duration = 5,
             Image = 4483362458
@@ -2845,13 +2947,13 @@ local function SaveConfig()
     end
 end
 
--- Carregar
+-- CARREGAR
 local function LoadConfig()
     if not isfile(ConfigPath) then
-        print("⚠️ Sem arquivo")
+        print("⚠️ Arquivo não encontrado")
         Rayfield:Notify({
-            Title = "⚠️ Sem Config",
-            Content = "Nenhum arquivo salvo",
+            Title = "⚠️ Sem Configuração",
+            Content = "Nenhum arquivo salvo encontrado",
             Duration = 3,
             Image = 4483362458
         })
@@ -2859,56 +2961,29 @@ local function LoadConfig()
     end
     
     local success, config = pcall(function()
-        print("📂 Carregando...")
+        print("📂 Carregando arquivo...")
         local data = readfile(ConfigPath)
+        print("📝 Arquivo lido: " .. #data .. " bytes")
         return HttpService:JSONDecode(data)
     end)
     
     if not success then
-        warn("❌ Erro ao ler: " .. tostring(config))
+        warn("❌ Erro ao carregar: " .. tostring(config))
         Rayfield:Notify({
-            Title = "❌ Corrompido",
-            Content = "Use Resetar",
+            Title = "❌ Erro ao Carregar",
+            Content = "Arquivo corrompido. Use Resetar.",
             Duration = 5,
             Image = 4483362458
         })
         return
     end
     
+    print("🔧 Aplicando configurações...")
+    
     pcall(function()
-        print("🔧 Aplicando...")
-        
-        -- Movement - APLICA DE VERDADE
-        if config.WalkSpeed then
-            _G.CurrentWalkSpeed = config.WalkSpeed
-            if Humanoid then
-                Humanoid.WalkSpeed = config.WalkSpeed
-            end
-            -- Força múltiplas vezes para garantir
-            for i = 1, 3 do
-                task.wait(0.1)
-                if Humanoid then
-                    Humanoid.WalkSpeed = config.WalkSpeed
-                end
-            end
-            print("🏃 WalkSpeed: " .. config.WalkSpeed)
-        end
-        
-        if config.JumpPower then
-            _G.CurrentJumpPower = config.JumpPower
-            if Humanoid then
-                Humanoid.UseJumpPower = true
-                Humanoid.JumpPower = config.JumpPower
-            end
-            -- Força múltiplas vezes
-            for i = 1, 3 do
-                task.wait(0.1)
-                if Humanoid then
-                    Humanoid.UseJumpPower = true
-                    Humanoid.JumpPower = config.JumpPower
-                end
-            end
-            print("🦘 JumpPower: " .. config.JumpPower)
+        -- Movement - APLICA USANDO A FUNÇÃO AUXILIAR
+        if config.WalkSpeed or config.JumpPower then
+            ApplyMovementValues(config.WalkSpeed, config.JumpPower)
         end
         
         infJump = config.InfiniteJump or false
@@ -2996,32 +3071,28 @@ local function LoadConfig()
         _G.InstaInteract = config.InstaInteract or false
         ANTI_AFK_ENABLED = config.AntiAFK or false
         
-        print("✅ Aplicado!")
+        print("✅ Todas configurações aplicadas!")
     end)
     
     Rayfield:Notify({
-        Title = "✅ Carregado",
-        Content = "Configurações restauradas!",
-        Duration = 3,
+        Title = "✅ Configuração Carregada",
+        Content = "WalkSpeed: " .. (_G.ConfigValues.WalkSpeed or 16) .. " | JumpPower: " .. (_G.ConfigValues.JumpPower or 50),
+        Duration = 4,
         Image = 4483362458
     })
 end
 
--- Resetar
+-- RESETAR
 local function ResetConfig()
-    print("🔄 Resetando...")
+    print("🔄 Resetando configurações...")
     
     if isfile(ConfigPath) then
         delfile(ConfigPath)
+        print("🗑️ Arquivo deletado")
     end
     
-    _G.CurrentWalkSpeed = 16
-    _G.CurrentJumpPower = 50
-    
-    if Humanoid then
-        Humanoid.WalkSpeed = 16
-        Humanoid.JumpPower = 50
-    end
+    -- Reseta valores de movimento
+    ApplyMovementValues(16, 50)
     
     flySpeed = 1
     infJump = false
@@ -3043,11 +3114,11 @@ local function ResetConfig()
     workspace.Gravity = 196
     Lighting.ClockTime = 14
     
-    print("✅ Resetado!")
+    print("✅ Configurações resetadas!")
     
     Rayfield:Notify({
         Title = "🔄 Resetado",
-        Content = "Tudo voltou ao padrão!",
+        Content = "WalkSpeed: 16 | JumpPower: 50",
         Duration = 3,
         Image = 4483362458
     })
@@ -3055,22 +3126,66 @@ end
 
 -- ================== ABA CONFIG ==================
 
-TabConfig:CreateSection("💾 Configuração")
+TabConfig:CreateSection("💾 Gerenciamento de Configuração")
 
 TabConfig:CreateButton({
-    Name = "💾 Salvar",
+    Name = "💾 Salvar Configuração",
     Callback = SaveConfig
 })
 
 TabConfig:CreateButton({
-    Name = "📂 Carregar",
+    Name = "📂 Carregar Configuração",
     Callback = LoadConfig
 })
 
 TabConfig:CreateButton({
-    Name = "🔄 Resetar",
+    Name = "🔄 Resetar para Padrões",
     Callback = ResetConfig
 })
+
+TabConfig:CreateSection("🧪 Teste Rápido")
+
+TabConfig:CreateButton({
+    Name = "🏃 Testar WalkSpeed 100",
+    Callback = function()
+        ApplyMovementValues(100, _G.ConfigValues.JumpPower)
+        Rayfield:Notify({
+            Title = "🧪 Teste",
+            Content = "WalkSpeed definido para 100!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "🏃 Testar WalkSpeed 200",
+    Callback = function()
+        ApplyMovementValues(200, _G.ConfigValues.JumpPower)
+        Rayfield:Notify({
+            Title = "🧪 Teste",
+            Content = "WalkSpeed definido para 200!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end
+})
+
+TabConfig:CreateSection("ℹ️ Status Atual")
+
+TabConfig:CreateLabel("WalkSpeed: Use os botões de teste acima")
+TabConfig:CreateLabel("Sistema com loop forçado ativo")
+TabConfig:CreateLabel("Caminho: " .. ConfigPath)
+
+-- Atualiza label a cada 2 segundos
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if Humanoid then
+            print("📊 Status: WalkSpeed=" .. Humanoid.WalkSpeed .. " | JumpPower=" .. Humanoid.JumpPower)
+        end
+    end
+end)
 
 TabConfig:CreateSection("⏰ Auto-Save")
 
@@ -3078,13 +3193,13 @@ local autoSaveEnabled = false
 local autoSaveConnection
 
 TabConfig:CreateToggle({
-    Name = "Auto-Save (5 min)",
+    Name = "Auto-Save (5 minutos)",
     CurrentValue = false,
     Callback = function(v)
         autoSaveEnabled = v
         
         if v then
-            print("⏰ Auto-save ON")
+            print("⏰ Auto-save ATIVADO")
             autoSaveConnection = task.spawn(function()
                 while autoSaveEnabled do
                     task.wait(300)
@@ -3096,29 +3211,25 @@ TabConfig:CreateToggle({
             
             Rayfield:Notify({
                 Title = "⏰ Auto-Save ON",
-                Content = "Salvando a cada 5min",
+                Content = "Salvando a cada 5 minutos",
                 Duration = 3,
                 Image = 4483362458
             })
         else
-            print("⏰ Auto-save OFF")
+            print("⏰ Auto-save DESATIVADO")
             if autoSaveConnection then
                 task.cancel(autoSaveConnection)
             end
             
             Rayfield:Notify({
                 Title = "⏰ Auto-Save OFF",
-                Content = "Desativado",
+                Content = "Auto-save desativado",
                 Duration = 3,
                 Image = 4483362458
             })
         end
     end
 })
-
-TabConfig:CreateSection("ℹ️ Info")
-TabConfig:CreateLabel("Caminho: " .. ConfigPath)
-TabConfig:CreateLabel("Sistema sem corrupção")
 
 TabConfig:CreateSection("⌨️ Keybinds")
 
@@ -3179,21 +3290,9 @@ TabConfig:CreateButton({
     end
 })
 
--- Loop para manter valores aplicados
-RunService.Heartbeat:Connect(function()
-    if Humanoid and _G.CurrentWalkSpeed then
-        if math.abs(Humanoid.WalkSpeed - _G.CurrentWalkSpeed) > 0.5 then
-            Humanoid.WalkSpeed = _G.CurrentWalkSpeed
-        end
-    end
-    
-    if Humanoid and _G.CurrentJumpPower then
-        if math.abs(Humanoid.JumpPower - _G.CurrentJumpPower) > 0.5 then
-            Humanoid.UseJumpPower = true
-            Humanoid.JumpPower = _G.CurrentJumpPower
-        end
-    end
-end)
+print("✅ Sistema de Config com Loop Forçado iniciado!")
+print("🔄 WalkSpeed será mantido em: " .. _G.ConfigValues.WalkSpeed)
+print("🔄 JumpPower será mantido em: " .. _G.ConfigValues.JumpPower)
 
 -- ==================================================================================
 -- =============================== UTILITY TAB ======================================
