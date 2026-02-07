@@ -125,13 +125,13 @@ local function shouldShowPlayer(player, filterMode)
     return true
 end
 
--- ================== WINDOW (CONFIG AUTO-SAVE DESABILITADO) ==================
+-- ================== WINDOW ==================
 local Window = Rayfield:CreateWindow({
     Name = "Universal Hub",
     LoadingTitle = "Universal Hub",
     LoadingSubtitle = "By ZakyzVortex - Config Fixed",
     ConfigurationSaving = {
-        Enabled = false,  -- ❌ DESABILITADO para evitar corrupção de arquivos
+        Enabled = false,  -- ❌ Desabilitado para evitar corrupção
         FolderName = "UniversalHub",
         FileName = "Config"
     }
@@ -2671,7 +2671,75 @@ end)
 -- ======================== CONFIG TAB (SISTEMA CORRIGIDO) =========================
 -- ==================================================================================
 
--- ================== SISTEMA DE CONFIG MANUAL (SEM CORRUPÇÃO) ==================
+-- ================== INICIALIZAÇÃO DE VARIÁVEIS GLOBAIS (SE NÃO EXISTIREM) ==================
+-- Garante que todas as variáveis existam antes de salvar/carregar
+
+-- Combat
+AUTO_CLICKER_ENABLED = AUTO_CLICKER_ENABLED or false
+AUTO_CLICKER_CPS = AUTO_CLICKER_CPS or 10
+HIT_RANGE_ENABLED = HIT_RANGE_ENABLED or false
+HIT_RANGE_SIZE = HIT_RANGE_SIZE or 10
+AUTO_PRESS_ENABLED = AUTO_PRESS_ENABLED or false
+AUTO_PRESS_INTERVAL = AUTO_PRESS_INTERVAL or 0.25
+attackSpeed = attackSpeed or 1
+attackRange = attackRange or 5
+
+-- ESP
+ESP_ENABLED = ESP_ENABLED or false
+NAME_ENABLED = NAME_ENABLED or true
+DISTANCE_ENABLED = DISTANCE_ENABLED or true
+HEALTH_ENABLED = HEALTH_ENABLED or true
+LINE_ENABLED = LINE_ENABLED or true
+OUTLINE_ENABLED = OUTLINE_ENABLED or true
+ESP_TEAM_FILTER = ESP_TEAM_FILTER or "All"
+ESP_COLOR = ESP_COLOR or Color3.fromRGB(255, 0, 0)
+LINE_COLOR = LINE_COLOR or Color3.fromRGB(255, 255, 255)
+_G.ESP_MAX_DISTANCE = _G.ESP_MAX_DISTANCE or 1000
+
+-- Highlight
+HIGHLIGHT_ENABLED = HIGHLIGHT_ENABLED or false
+HIGHLIGHT_TEAM_FILTER = HIGHLIGHT_TEAM_FILTER or "All"
+teamColor = teamColor or Color3.fromRGB(0, 255, 0)
+enemyColor = enemyColor or Color3.fromRGB(255, 0, 0)
+highlightFillTrans = highlightFillTrans or 0.5
+highlightOutlineTrans = highlightOutlineTrans or 0
+
+-- Aim
+AIM_ENABLED = AIM_ENABLED or false
+AIM_FOV = AIM_FOV or 100
+AIM_SMOOTH = AIM_SMOOTH or 0.2
+AIM_TARGET_PART = AIM_TARGET_PART or "Head"
+AIM_WALLCHECK = AIM_WALLCHECK or true
+AIM_TEAM_FILTER = AIM_TEAM_FILTER or "Enemy"
+
+-- Player Aim
+PlayerAimEnabled = PlayerAimEnabled or false
+PlayerAimSmoothness = PlayerAimSmoothness or 0.15
+PlayerAimPart = PlayerAimPart or "Head"
+PlayerAimFOVRadius = PlayerAimFOVRadius or 100
+PlayerAimPrediction = PlayerAimPrediction or 0.13
+PlayerAimWallCheck = PlayerAimWallCheck or true
+
+-- Protection
+godMode = godMode or false
+lockHP = lockHP or false
+antiKB = antiKB or false
+antiVoid = antiVoid or false
+
+-- Visuals
+FULLBRIGHT_ENABLED = FULLBRIGHT_ENABLED or false
+NO_CAMERA_SHAKE = NO_CAMERA_SHAKE or false
+
+-- Utility
+noclip = noclip or false
+shiftLockEnabled = shiftLockEnabled or false
+_G.InstaInteract = _G.InstaInteract or false
+ANTI_AFK_ENABLED = ANTI_AFK_ENABLED or false
+
+-- Waypoints
+savedWaypoints = savedWaypoints or {}
+
+-- ================== SISTEMA DE CONFIG MANUAL ==================
 local ConfigFolder = "UniversalHub"
 local ConfigFileName = "UserConfig.json"
 
@@ -2682,190 +2750,118 @@ end
 
 local ConfigPath = ConfigFolder .. "/" .. ConfigFileName
 
--- Configurações padrão
-local DefaultConfig = {
-    Movement = {
-        WalkSpeed = 16,
-        JumpPower = 50,
-        FlySpeed = 1,
-        InfiniteJump = false,
-        AntiFall = false
-    },
-    Combat = {
-        AutoClickerEnabled = false,
-        AutoClickerCPS = 10,
-        HitRangeEnabled = false,
-        HitRangeSize = 10,
-        AutoPressEnabled = false,
-        AutoPressInterval = 0.25,
-        AttackSpeed = 1,
-        AttackRange = 5
-    },
-    ESP = {
-        Enabled = false,
-        ShowNames = true,
-        ShowDistance = true,
-        ShowHealth = true,
-        ShowLine = true,
-        ShowOutline = true,
-        TeamFilter = "All",
-        Color = Color3.fromRGB(255, 0, 0),
-        LineColor = Color3.fromRGB(255, 255, 255),
-        MaxDistance = 1000
-    },
-    Highlight = {
-        Enabled = false,
-        TeamFilter = "All",
-        TeamColor = Color3.fromRGB(0, 255, 0),
-        EnemyColor = Color3.fromRGB(255, 0, 0),
-        FillTrans = 0.5,
-        OutlineTrans = 0
-    },
-    Aim = {
-        Enabled = false,
-        FOV = 100,
-        Smoothing = 0.2,
-        TargetPart = "Head",
-        WallCheck = true,
-        TeamFilter = "Enemy"
-    },
-    PlayerAim = {
-        Enabled = false,
-        Smoothness = 0.15,
-        Part = "Head",
-        FOVRadius = 100,
-        Prediction = 0.13,
-        WallCheck = true
-    },
-    Protection = {
-        GodMode = false,
-        LockHP = false,
-        AntiKB = false,
-        AntiVoid = false
-    },
-    Visuals = {
-        FOV = 70,
-        Fullbright = false,
-        NoCameraShake = false
-    },
-    World = {
-        Gravity = 196,
-        ClockTime = 14
-    },
-    Utility = {
-        Noclip = false,
-        ShiftLock = false,
-        InstaInteract = false,
-        AntiAFK = false
-    },
-    Waypoints = {}
-}
+print("📁 Caminho do Config: " .. ConfigPath)
 
--- Função para salvar configuração (COM PROTEÇÃO TOTAL)
+-- Função para salvar configuração
 local function SaveConfig()
     local success, errorMsg = pcall(function()
-        -- Coleta TODAS as configurações atuais do sistema
+        print("💾 Iniciando salvamento...")
+        
+        -- Coleta configurações atuais
         local currentConfig = {
-            Movement = {
-                WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
-                JumpPower = Humanoid and Humanoid.JumpPower or 50,
-                FlySpeed = flySpeed or 1,
-                InfiniteJump = infJump or false,
-                AntiFall = antiFall or false
-            },
-            Combat = {
-                AutoClickerEnabled = AUTO_CLICKER_ENABLED or false,
-                AutoClickerCPS = AUTO_CLICKER_CPS or 10,
-                HitRangeEnabled = HIT_RANGE_ENABLED or false,
-                HitRangeSize = HIT_RANGE_SIZE or 10,
-                AutoPressEnabled = AUTO_PRESS_ENABLED or false,
-                AutoPressInterval = AUTO_PRESS_INTERVAL or 0.25,
-                AttackSpeed = attackSpeed or 1,
-                AttackRange = attackRange or 5
-            },
-            ESP = {
-                Enabled = ESP_ENABLED or false,
-                ShowNames = NAME_ENABLED or true,
-                ShowDistance = DISTANCE_ENABLED or true,
-                ShowHealth = HEALTH_ENABLED or true,
-                ShowLine = LINE_ENABLED or true,
-                ShowOutline = OUTLINE_ENABLED or true,
-                TeamFilter = ESP_TEAM_FILTER or "All",
-                Color = ESP_COLOR or Color3.fromRGB(255, 0, 0),
-                LineColor = LINE_COLOR or Color3.fromRGB(255, 255, 255),
-                MaxDistance = _G.ESP_MAX_DISTANCE or 1000
-            },
-            Highlight = {
-                Enabled = HIGHLIGHT_ENABLED or false,
-                TeamFilter = HIGHLIGHT_TEAM_FILTER or "All",
-                TeamColor = teamColor or Color3.fromRGB(0, 255, 0),
-                EnemyColor = enemyColor or Color3.fromRGB(255, 0, 0),
-                FillTrans = highlightFillTrans or 0.5,
-                OutlineTrans = highlightOutlineTrans or 0
-            },
-            Aim = {
-                Enabled = AIM_ENABLED or false,
-                FOV = AIM_FOV or 100,
-                Smoothing = AIM_SMOOTH or 0.2,
-                TargetPart = AIM_TARGET_PART or "Head",
-                WallCheck = AIM_WALLCHECK or true,
-                TeamFilter = AIM_TEAM_FILTER or "Enemy"
-            },
-            PlayerAim = {
-                Enabled = PlayerAimEnabled or false,
-                Smoothness = PlayerAimSmoothness or 0.15,
-                Part = PlayerAimPart or "Head",
-                FOVRadius = PlayerAimFOVRadius or 100,
-                Prediction = PlayerAimPrediction or 0.13,
-                WallCheck = PlayerAimWallCheck or true
-            },
-            Protection = {
-                GodMode = godMode or false,
-                LockHP = lockHP or false,
-                AntiKB = antiKB or false,
-                AntiVoid = antiVoid or false
-            },
-            Visuals = {
-                FOV = Camera.FieldOfView or 70,
-                Fullbright = FULLBRIGHT_ENABLED or false,
-                NoCameraShake = NO_CAMERA_SHAKE or false
-            },
-            World = {
-                Gravity = workspace.Gravity or 196,
-                ClockTime = Lighting.ClockTime or 14
-            },
-            Utility = {
-                Noclip = noclip or false,
-                ShiftLock = shiftLockEnabled or false,
-                InstaInteract = _G.InstaInteract or false,
-                AntiAFK = ANTI_AFK_ENABLED or false
-            },
-            Waypoints = savedWaypoints or {}
+            -- Movement
+            WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
+            JumpPower = Humanoid and Humanoid.JumpPower or 50,
+            InfiniteJump = infJump or false,
+            AntiFall = antiFall or false,
+            FlySpeed = flySpeed or 1,
+            
+            -- Combat
+            AutoClickerEnabled = AUTO_CLICKER_ENABLED,
+            AutoClickerCPS = AUTO_CLICKER_CPS,
+            HitRangeEnabled = HIT_RANGE_ENABLED,
+            HitRangeSize = HIT_RANGE_SIZE,
+            AutoPressEnabled = AUTO_PRESS_ENABLED,
+            AutoPressInterval = AUTO_PRESS_INTERVAL,
+            AttackSpeed = attackSpeed,
+            AttackRange = attackRange,
+            
+            -- ESP
+            ESP_Enabled = ESP_ENABLED,
+            ESP_Name = NAME_ENABLED,
+            ESP_Distance = DISTANCE_ENABLED,
+            ESP_Health = HEALTH_ENABLED,
+            ESP_Line = LINE_ENABLED,
+            ESP_Outline = OUTLINE_ENABLED,
+            ESP_TeamFilter = ESP_TEAM_FILTER,
+            ESP_Color = {ESP_COLOR.R * 255, ESP_COLOR.G * 255, ESP_COLOR.B * 255},
+            ESP_LineColor = {LINE_COLOR.R * 255, LINE_COLOR.G * 255, LINE_COLOR.B * 255},
+            ESP_MaxDistance = _G.ESP_MAX_DISTANCE,
+            
+            -- Highlight ESP
+            HighlightEnabled = HIGHLIGHT_ENABLED,
+            HighlightTeamFilter = HIGHLIGHT_TEAM_FILTER,
+            HighlightTeamColor = {teamColor.R * 255, teamColor.G * 255, teamColor.B * 255},
+            HighlightEnemyColor = {enemyColor.R * 255, enemyColor.G * 255, enemyColor.B * 255},
+            HighlightFillTrans = highlightFillTrans,
+            HighlightOutlineTrans = highlightOutlineTrans,
+            
+            -- Aim Assist
+            AimEnabled = AIM_ENABLED,
+            AimFOV = AIM_FOV,
+            AimSmooth = AIM_SMOOTH,
+            AimTargetPart = AIM_TARGET_PART,
+            AimWallCheck = AIM_WALLCHECK,
+            AimTeamFilter = AIM_TEAM_FILTER,
+            
+            -- Player Aim
+            PlayerAimEnabled = PlayerAimEnabled,
+            PlayerAimSmoothness = PlayerAimSmoothness,
+            PlayerAimPart = PlayerAimPart,
+            PlayerAimFOVRadius = PlayerAimFOVRadius,
+            PlayerAimPrediction = PlayerAimPrediction,
+            PlayerAimWallCheck = PlayerAimWallCheck,
+            
+            -- Protection
+            GodMode = godMode,
+            LockHP = lockHP,
+            AntiKnockback = antiKB,
+            AntiVoid = antiVoid,
+            
+            -- Visuals
+            CameraFOV = Camera.FieldOfView,
+            Fullbright = FULLBRIGHT_ENABLED,
+            NoCameraShake = NO_CAMERA_SHAKE,
+            
+            -- World
+            Gravity = workspace.Gravity,
+            ClockTime = Lighting.ClockTime,
+            
+            -- Waypoints
+            SavedWaypoints = savedWaypoints,
+            
+            -- Utility
+            Noclip = noclip,
+            ShiftLock = shiftLockEnabled,
+            InstaInteract = _G.InstaInteract,
+            AntiAFK = ANTI_AFK_ENABLED
         }
         
-        -- Converte configuração para JSON
+        print("📦 Configuração coletada!")
+        
+        -- Converte para JSON
         local jsonData = HttpService:JSONEncode(currentConfig)
+        print("📝 JSON criado! Tamanho: " .. #jsonData .. " caracteres")
         
-        -- Salva no arquivo
+        -- Salva arquivo
         writefile(ConfigPath, jsonData)
+        print("✅ Arquivo salvo com sucesso!")
         
-        -- Notifica sucesso
         Rayfield:Notify({
-            Title = "✅ Configuração Salva",
-            Content = "Suas configurações foram salvas com sucesso!",
+            Title = "✅ Config Salva",
+            Content = "Configuração salva com sucesso!",
             Duration = 3,
             Image = 4483362458
         })
         
-        print("✅ Configuração salva em: " .. ConfigPath)
         return true
     end)
     
     if not success then
-        warn("❌ ERRO ao salvar configuração: " .. tostring(errorMsg))
+        warn("❌ ERRO ao salvar: " .. tostring(errorMsg))
         Rayfield:Notify({
-            Title = "❌ Erro ao Salvar",
-            Content = "Não foi possível salvar as configurações. Verifique o console.",
+            Title = "❌ Erro",
+            Content = "Falha ao salvar: " .. tostring(errorMsg),
             Duration = 5,
             Image = 4483362458
         })
@@ -2875,198 +2871,231 @@ local function SaveConfig()
     return true
 end
 
--- Função para carregar configuração (COM PROTEÇÃO TOTAL)
+-- Função para carregar configuração
 local function LoadConfig()
-    -- Verifica se o arquivo existe
     if not isfile(ConfigPath) then
+        print("⚠️ Arquivo não encontrado: " .. ConfigPath)
         Rayfield:Notify({
-            Title = "⚠️ Nenhuma Config Salva",
-            Content = "Nenhuma configuração encontrada. Usando padrões.",
+            Title = "⚠️ Sem Config",
+            Content = "Nenhuma configuração salva encontrada.",
             Duration = 3,
             Image = 4483362458
         })
-        print("⚠️ Arquivo de config não encontrado: " .. ConfigPath)
-        return DefaultConfig
+        return false
     end
     
-    -- Tenta carregar o arquivo
-    local success, result = pcall(function()
+    local success, config = pcall(function()
+        print("📂 Lendo arquivo...")
         local fileContent = readfile(ConfigPath)
+        print("📝 Arquivo lido! Tamanho: " .. #fileContent .. " caracteres")
+        
         local decoded = HttpService:JSONDecode(fileContent)
+        print("✅ JSON decodificado!")
         return decoded
     end)
     
-    if success and result then
+    if not success then
+        warn("❌ ERRO ao carregar: " .. tostring(config))
         Rayfield:Notify({
-            Title = "✅ Config Carregada",
-            Content = "Suas configurações foram restauradas!",
-            Duration = 3,
-            Image = 4483362458
-        })
-        print("✅ Configuração carregada de: " .. ConfigPath)
-        return result
-    else
-        warn("❌ ERRO ao carregar config. Arquivo pode estar corrompido.")
-        warn("Erro: " .. tostring(result))
-        Rayfield:Notify({
-            Title = "⚠️ Config Corrompida",
-            Content = "Arquivo corrompido detectado. Usando configurações padrão.",
+            Title = "❌ Erro",
+            Content = "Arquivo corrompido! Use Resetar.",
             Duration = 5,
             Image = 4483362458
         })
-        return DefaultConfig
+        return false
     end
-end
-
--- Função para aplicar configurações carregadas ao sistema
-local function ApplyLoadedConfig(config)
+    
+    -- Aplica configurações
     pcall(function()
+        print("🔧 Aplicando configurações...")
+        
         -- Movement
-        if config.Movement then
-            if Humanoid then
-                Humanoid.WalkSpeed = config.Movement.WalkSpeed or 16
-                Humanoid.JumpPower = config.Movement.JumpPower or 50
-            end
-            flySpeed = config.Movement.FlySpeed or 1
-            infJump = config.Movement.InfiniteJump or false
-            antiFall = config.Movement.AntiFall or false
+        if config.WalkSpeed and Humanoid then
+            Humanoid.WalkSpeed = config.WalkSpeed
         end
+        if config.JumpPower and Humanoid then
+            Humanoid.JumpPower = config.JumpPower
+        end
+        infJump = config.InfiniteJump or false
+        antiFall = config.AntiFall or false
+        flySpeed = config.FlySpeed or 1
         
         -- Combat
-        if config.Combat then
-            AUTO_CLICKER_ENABLED = config.Combat.AutoClickerEnabled or false
-            AUTO_CLICKER_CPS = config.Combat.AutoClickerCPS or 10
-            HIT_RANGE_ENABLED = config.Combat.HitRangeEnabled or false
-            HIT_RANGE_SIZE = config.Combat.HitRangeSize or 10
-            AUTO_PRESS_ENABLED = config.Combat.AutoPressEnabled or false
-            AUTO_PRESS_INTERVAL = config.Combat.AutoPressInterval or 0.25
-            attackSpeed = config.Combat.AttackSpeed or 1
-            attackRange = config.Combat.AttackRange or 5
-        end
+        AUTO_CLICKER_ENABLED = config.AutoClickerEnabled or false
+        AUTO_CLICKER_CPS = config.AutoClickerCPS or 10
+        HIT_RANGE_ENABLED = config.HitRangeEnabled or false
+        HIT_RANGE_SIZE = config.HitRangeSize or 10
+        AUTO_PRESS_ENABLED = config.AutoPressEnabled or false
+        AUTO_PRESS_INTERVAL = config.AutoPressInterval or 0.25
+        attackSpeed = config.AttackSpeed or 1
+        attackRange = config.AttackRange or 5
         
         -- ESP
-        if config.ESP then
-            ESP_ENABLED = config.ESP.Enabled or false
-            NAME_ENABLED = config.ESP.ShowNames or true
-            DISTANCE_ENABLED = config.ESP.ShowDistance or true
-            HEALTH_ENABLED = config.ESP.ShowHealth or true
-            LINE_ENABLED = config.ESP.ShowLine or true
-            OUTLINE_ENABLED = config.ESP.ShowOutline or true
-            ESP_TEAM_FILTER = config.ESP.TeamFilter or "All"
-            ESP_COLOR = config.ESP.Color or Color3.fromRGB(255, 0, 0)
-            LINE_COLOR = config.ESP.LineColor or Color3.fromRGB(255, 255, 255)
-            _G.ESP_MAX_DISTANCE = config.ESP.MaxDistance or 1000
+        ESP_ENABLED = config.ESP_Enabled or false
+        NAME_ENABLED = config.ESP_Name ~= nil and config.ESP_Name or true
+        DISTANCE_ENABLED = config.ESP_Distance ~= nil and config.ESP_Distance or true
+        HEALTH_ENABLED = config.ESP_Health ~= nil and config.ESP_Health or true
+        LINE_ENABLED = config.ESP_Line ~= nil and config.ESP_Line or true
+        OUTLINE_ENABLED = config.ESP_Outline ~= nil and config.ESP_Outline or true
+        ESP_TEAM_FILTER = config.ESP_TeamFilter or "All"
+        
+        if config.ESP_Color then
+            ESP_COLOR = Color3.fromRGB(config.ESP_Color[1], config.ESP_Color[2], config.ESP_Color[3])
         end
+        if config.ESP_LineColor then
+            LINE_COLOR = Color3.fromRGB(config.ESP_LineColor[1], config.ESP_LineColor[2], config.ESP_LineColor[3])
+        end
+        _G.ESP_MAX_DISTANCE = config.ESP_MaxDistance or 1000
         
         -- Highlight
-        if config.Highlight then
-            HIGHLIGHT_ENABLED = config.Highlight.Enabled or false
-            HIGHLIGHT_TEAM_FILTER = config.Highlight.TeamFilter or "All"
-            teamColor = config.Highlight.TeamColor or Color3.fromRGB(0, 255, 0)
-            enemyColor = config.Highlight.EnemyColor or Color3.fromRGB(255, 0, 0)
-            highlightFillTrans = config.Highlight.FillTrans or 0.5
-            highlightOutlineTrans = config.Highlight.OutlineTrans or 0
-        end
+        HIGHLIGHT_ENABLED = config.HighlightEnabled or false
+        HIGHLIGHT_TEAM_FILTER = config.HighlightTeamFilter or "All"
         
-        -- Aim Assist
-        if config.Aim then
-            AIM_ENABLED = config.Aim.Enabled or false
-            AIM_FOV = config.Aim.FOV or 100
-            AIM_SMOOTH = config.Aim.Smoothing or 0.2
-            AIM_TARGET_PART = config.Aim.TargetPart or "Head"
-            AIM_WALLCHECK = config.Aim.WallCheck or true
-            AIM_TEAM_FILTER = config.Aim.TeamFilter or "Enemy"
+        if config.HighlightTeamColor then
+            teamColor = Color3.fromRGB(config.HighlightTeamColor[1], config.HighlightTeamColor[2], config.HighlightTeamColor[3])
         end
+        if config.HighlightEnemyColor then
+            enemyColor = Color3.fromRGB(config.HighlightEnemyColor[1], config.HighlightEnemyColor[2], config.HighlightEnemyColor[3])
+        end
+        highlightFillTrans = config.HighlightFillTrans or 0.5
+        highlightOutlineTrans = config.HighlightOutlineTrans or 0
+        
+        -- Aim
+        AIM_ENABLED = config.AimEnabled or false
+        AIM_FOV = config.AimFOV or 100
+        AIM_SMOOTH = config.AimSmooth or 0.2
+        AIM_TARGET_PART = config.AimTargetPart or "Head"
+        AIM_WALLCHECK = config.AimWallCheck ~= nil and config.AimWallCheck or true
+        AIM_TEAM_FILTER = config.AimTeamFilter or "Enemy"
         
         -- Player Aim
-        if config.PlayerAim then
-            PlayerAimEnabled = config.PlayerAim.Enabled or false
-            PlayerAimSmoothness = config.PlayerAim.Smoothness or 0.15
-            PlayerAimPart = config.PlayerAim.Part or "Head"
-            PlayerAimFOVRadius = config.PlayerAim.FOVRadius or 100
-            PlayerAimPrediction = config.PlayerAim.Prediction or 0.13
-            PlayerAimWallCheck = config.PlayerAim.WallCheck or true
-        end
+        PlayerAimEnabled = config.PlayerAimEnabled or false
+        PlayerAimSmoothness = config.PlayerAimSmoothness or 0.15
+        PlayerAimPart = config.PlayerAimPart or "Head"
+        PlayerAimFOVRadius = config.PlayerAimFOVRadius or 100
+        PlayerAimPrediction = config.PlayerAimPrediction or 0.13
+        PlayerAimWallCheck = config.PlayerAimWallCheck ~= nil and config.PlayerAimWallCheck or true
         
         -- Protection
-        if config.Protection then
-            godMode = config.Protection.GodMode or false
-            lockHP = config.Protection.LockHP or false
-            antiKB = config.Protection.AntiKB or false
-            antiVoid = config.Protection.AntiVoid or false
-        end
+        godMode = config.GodMode or false
+        lockHP = config.LockHP or false
+        antiKB = config.AntiKnockback or false
+        antiVoid = config.AntiVoid or false
         
         -- Visuals
-        if config.Visuals then
-            if Camera then
-                Camera.FieldOfView = config.Visuals.FOV or 70
-            end
-            FULLBRIGHT_ENABLED = config.Visuals.Fullbright or false
-            NO_CAMERA_SHAKE = config.Visuals.NoCameraShake or false
+        if config.CameraFOV and Camera then
+            Camera.FieldOfView = config.CameraFOV
         end
+        FULLBRIGHT_ENABLED = config.Fullbright or false
+        NO_CAMERA_SHAKE = config.NoCameraShake or false
         
         -- World
-        if config.World then
-            workspace.Gravity = config.World.Gravity or 196
-            Lighting.ClockTime = config.World.ClockTime or 14
+        if config.Gravity then workspace.Gravity = config.Gravity end
+        if config.ClockTime then Lighting.ClockTime = config.ClockTime end
+        
+        -- Waypoints
+        if config.SavedWaypoints then
+            savedWaypoints = config.SavedWaypoints
         end
         
         -- Utility
-        if config.Utility then
-            noclip = config.Utility.Noclip or false
-            shiftLockEnabled = config.Utility.ShiftLock or false
-            _G.InstaInteract = config.Utility.InstaInteract or false
-            ANTI_AFK_ENABLED = config.Utility.AntiAFK or false
-        end
+        noclip = config.Noclip or false
+        shiftLockEnabled = config.ShiftLock or false
+        _G.InstaInteract = config.InstaInteract or false
+        ANTI_AFK_ENABLED = config.AntiAFK or false
         
-        -- Waypoints
-        if config.Waypoints then
-            savedWaypoints = config.Waypoints
-        end
-        
-        print("✅ Configurações aplicadas ao sistema!")
+        print("✅ Configurações aplicadas!")
     end)
-end
-
--- Função para resetar configurações
-local function ResetConfig()
-    -- Deleta o arquivo se existir
-    if isfile(ConfigPath) then
-        delfile(ConfigPath)
-        print("🗑️ Arquivo de configuração deletado")
-    end
     
     Rayfield:Notify({
-        Title = "🔄 Config Resetada",
-        Content = "Todas as configurações foram restauradas ao padrão!",
+        Title = "✅ Config Carregada",
+        Content = "Configurações restauradas!",
         Duration = 3,
         Image = 4483362458
     })
     
-    -- Aplica configurações padrão
-    ApplyLoadedConfig(DefaultConfig)
+    return true
+end
+
+-- Função para resetar
+local function ResetConfig()
+    print("🔄 Resetando configurações...")
+    
+    -- Deleta arquivo
+    if isfile(ConfigPath) then
+        delfile(ConfigPath)
+        print("🗑️ Arquivo deletado")
+    end
+    
+    -- Aplica valores padrão
+    if Humanoid then
+        Humanoid.WalkSpeed = 16
+        Humanoid.JumpPower = 50
+    end
+    flySpeed = 1
+    infJump = false
+    antiFall = false
+    
+    AUTO_CLICKER_ENABLED = false
+    AUTO_CLICKER_CPS = 10
+    HIT_RANGE_ENABLED = false
+    HIT_RANGE_SIZE = 10
+    AUTO_PRESS_ENABLED = false
+    AUTO_PRESS_INTERVAL = 0.25
+    attackSpeed = 1
+    attackRange = 5
+    
+    ESP_ENABLED = false
+    HIGHLIGHT_ENABLED = false
+    AIM_ENABLED = false
+    PlayerAimEnabled = false
+    
+    godMode = false
+    lockHP = false
+    antiKB = false
+    antiVoid = false
+    
+    if Camera then Camera.FieldOfView = 70 end
+    FULLBRIGHT_ENABLED = false
+    NO_CAMERA_SHAKE = false
+    
+    workspace.Gravity = 196
+    Lighting.ClockTime = 14
+    
+    noclip = false
+    shiftLockEnabled = false
+    _G.InstaInteract = false
+    ANTI_AFK_ENABLED = false
+    
+    savedWaypoints = {}
+    
+    print("✅ Configurações resetadas!")
+    
+    Rayfield:Notify({
+        Title = "🔄 Resetado",
+        Content = "Todas configurações voltaram ao padrão!",
+        Duration = 3,
+        Image = 4483362458
+    })
 end
 
 -- ==================================================================================
--- ========================== ABA DE CONFIG (NOVA INTERFACE) =======================
+-- ================================ ABA DE CONFIG ===================================
 -- ==================================================================================
 
 TabConfig:CreateSection("💾 Gerenciamento de Configuração")
 
-TabConfig:CreateLabel("Sistema Manual - Sem Corrupção de Arquivos!")
-
 TabConfig:CreateButton({
-    Name = "💾 Salvar Configuração Atual",
+    Name = "💾 Salvar Configuração",
     Callback = function()
         SaveConfig()
     end
 })
 
 TabConfig:CreateButton({
-    Name = "📂 Carregar Configuração Salva",
+    Name = "📂 Carregar Configuração",
     Callback = function()
-        local config = LoadConfig()
-        ApplyLoadedConfig(config)
+        LoadConfig()
     end
 })
 
@@ -3083,40 +3112,39 @@ local autoSaveEnabled = false
 local autoSaveConnection
 
 TabConfig:CreateToggle({
-    Name = "Auto-Save (a cada 5 minutos)",
+    Name = "Auto-Save (a cada 5 min)",
     CurrentValue = false,
-    Flag = "AutoSaveToggle",
+    Flag = "AutoSave",
     Callback = function(v)
         autoSaveEnabled = v
         
         if autoSaveEnabled then
-            -- Inicia loop de auto-save
+            print("⏰ Auto-save ATIVADO")
             autoSaveConnection = task.spawn(function()
                 while autoSaveEnabled do
                     task.wait(300) -- 5 minutos
                     if autoSaveEnabled then
+                        print("⏰ Executando auto-save...")
                         SaveConfig()
-                        print("⏰ Auto-save executado às " .. os.date("%H:%M:%S"))
                     end
                 end
             end)
             
             Rayfield:Notify({
-                Title = "⏰ Auto-Save Ativado",
-                Content = "Salvamento automático a cada 5 minutos!",
+                Title = "⏰ Auto-Save ON",
+                Content = "Salvando a cada 5 minutos!",
                 Duration = 3,
                 Image = 4483362458
             })
         else
-            -- Para o loop de auto-save
+            print("⏰ Auto-save DESATIVADO")
             if autoSaveConnection then
                 task.cancel(autoSaveConnection)
-                autoSaveConnection = nil
             end
             
             Rayfield:Notify({
-                Title = "⏰ Auto-Save Desativado",
-                Content = "Salvamento automático desativado.",
+                Title = "⏰ Auto-Save OFF",
+                Content = "Auto-save desativado.",
                 Duration = 3,
                 Image = 4483362458
             })
@@ -3126,10 +3154,8 @@ TabConfig:CreateToggle({
 
 TabConfig:CreateSection("ℹ️ Informações")
 
-TabConfig:CreateLabel("📁 Caminho: " .. ConfigPath)
-TabConfig:CreateLabel("🔒 Sistema com proteção contra corrupção")
-TabConfig:CreateLabel("✨ Criado por: ZakyzVortex")
-TabConfig:CreateLabel("🛠️ Corrigido por: Claude AI")
+TabConfig:CreateLabel("Caminho: " .. ConfigPath)
+TabConfig:CreateLabel("Sistema manual - Sem corrupção!")
 
 TabConfig:CreateSection("⌨️ Keybinds")
 
@@ -3141,7 +3167,6 @@ TabConfig:CreateKeybind({
     Name = "Toggle ESP",
     CurrentKeybind = "E",
     HoldToInteract = false,
-    Flag = "ESPKeybind",
     Callback = function(key)
         keybindESP = key
     end
@@ -3151,7 +3176,6 @@ TabConfig:CreateKeybind({
     Name = "Toggle Aim",
     CurrentKeybind = "R",
     HoldToInteract = false,
-    Flag = "AimKeybind",
     Callback = function(key)
         keybindAim = key
     end
@@ -3161,13 +3185,11 @@ TabConfig:CreateKeybind({
     Name = "Toggle GUI",
     CurrentKeybind = "RightControl",
     HoldToInteract = false,
-    Flag = "GUIKeybind",
     Callback = function(key)
         keybindGUI = key
     end
 })
 
--- Listener para keybinds
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
@@ -3176,28 +3198,21 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not ESP_ENABLED then
             clearAllESP()
         end
-        print("ESP: " .. tostring(ESP_ENABLED))
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
-        print("Aim Assist: " .. tostring(AIM_ENABLED))
     elseif input.KeyCode == keybindGUI then
         Rayfield:Toggle()
     end
 end)
 
-TabConfig:CreateSection("🚪 GUI")
+TabConfig:CreateSection("GUI")
 
 TabConfig:CreateButton({
     Name = "Destruir GUI",
     Callback = function()
-        -- Limpa todos os ESPs e highlights
-        if clearAllESP then clearAllESP() end
-        if removeAllHighlights then removeAllHighlights() end
-        
-        -- Destrói a interface
+        clearAllESP()
+        removeAllHighlights()
         Rayfield:Destroy()
-        
-        print("👋 Universal Hub destruído!")
     end
 })
 
