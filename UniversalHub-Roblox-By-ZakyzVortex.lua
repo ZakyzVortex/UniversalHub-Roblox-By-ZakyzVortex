@@ -2666,8 +2666,9 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
--- ================================ CONFIG TAB ======================================
+-- ============================== CONFIG TAB (ATUALIZADO) ===========================
 -- ==================================================================================
+--
 
 TabConfig:CreateSection("Anti AFK")
 
@@ -2689,53 +2690,438 @@ TabConfig:CreateToggle({
     end
 })
 
-TabConfig:CreateSection("Configs")
+-- ==================================================================================
+-- ============== SISTEMA DE CONFIGURAÇÕES COM LISTA AUTOMÁTICA ====================
+-- ==================================================================================
 
-local configName = "default"
+TabConfig:CreateSection("Sistema de Configurações")
 
-TabConfig:CreateInput({
-    Name = "Nome da Config",
-    PlaceholderText = "default",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        configName = text
+local ConfigManager = {
+    CurrentConfig = "Default",
+    ConfigFolder = "UniversalHub_Configs"
+}
+
+-- Função para obter lista de configs salvas
+local function getConfigList()
+    local configs = {"Default"}
+    
+    -- Tenta ler arquivos salvos
+    if isfolder and listfiles then
+        if not isfolder(ConfigManager.ConfigFolder) then
+            makefolder(ConfigManager.ConfigFolder)
+        end
+        
+        local files = listfiles(ConfigManager.ConfigFolder)
+        for _, file in pairs(files) do
+            local fileName = file:match("([^/\\]+)%.json$")
+            if fileName and fileName ~= "Default" then
+                table.insert(configs, fileName)
+            end
+        end
     end
-})
+    
+    return configs
+end
 
-TabConfig:CreateButton({
-    Name = "Salvar Config",
-    Callback = function()
-        local config = {
-            WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
-            JumpPower = Humanoid and Humanoid.JumpPower or 50,
-            savedWaypoints = savedWaypoints
-        }
-        writefile("UniversalHub_"..configName..".json", HttpService:JSONEncode(config))
-        Rayfield:Notify({Title = "Config Salva", Content = "Config salva!", Duration = 2})
-    end
-})
-
-TabConfig:CreateButton({
-    Name = "Carregar Config",
-    Callback = function()
-        local success, result = pcall(function()
-            return readfile("UniversalHub_"..configName..".json")
+-- Função para salvar configuração
+local function saveConfig(configName)
+    if not configName or configName == "" then return false end
+    
+    local config = {
+        -- Movement
+        WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
+        JumpPower = Humanoid and Humanoid.JumpPower or 50,
+        InfiniteJump = infJump or false,
+        AntiFall = antiFall or false,
+        FlySpeed = flySpeed or 1,
+        
+        -- Combat
+        AutoClickerEnabled = AUTO_CLICKER_ENABLED or false,
+        AutoClickerCPS = AUTO_CLICKER_CPS or 10,
+        HitRangeEnabled = HIT_RANGE_ENABLED or false,
+        HitRangeSize = HIT_RANGE_SIZE or 10,
+        AutoPressEnabled = AUTO_PRESS_ENABLED or false,
+        AutoPressInterval = AUTO_PRESS_INTERVAL or 0.25,
+        
+        -- ESP
+        ESP_Enabled = ESP_ENABLED or false,
+        ESP_Name = NAME_ENABLED or true,
+        ESP_Distance = DISTANCE_ENABLED or true,
+        ESP_Health = HEALTH_ENABLED or true,
+        ESP_Line = LINE_ENABLED or true,
+        ESP_Outline = OUTLINE_ENABLED or true,
+        ESP_TeamFilter = ESP_TEAM_FILTER or "All",
+        ESP_Color = ESP_COLOR or Color3.fromRGB(255, 0, 0),
+        ESP_LineColor = LINE_COLOR or Color3.fromRGB(255, 255, 255),
+        
+        -- Highlight ESP
+        HighlightEnabled = HIGHLIGHT_ENABLED or false,
+        HighlightTeamFilter = HIGHLIGHT_TEAM_FILTER or "All",
+        HighlightTeamColor = teamColor or Color3.fromRGB(0, 255, 0),
+        HighlightEnemyColor = enemyColor or Color3.fromRGB(255, 0, 0),
+        HighlightFillTrans = highlightFillTrans or 0.5,
+        HighlightOutlineTrans = highlightOutlineTrans or 0,
+        
+        -- Aim Assist
+        AimEnabled = AIM_ENABLED or false,
+        AimFOV = AIM_FOV or 100,
+        AimSmooth = AIM_SMOOTH or 0.2,
+        AimTargetPart = AIM_TARGET_PART or "Head",
+        AimWallCheck = AIM_WALLCHECK or true,
+        AimTeamFilter = AIM_TEAM_FILTER or "Enemy",
+        
+        -- Player Aim
+        PlayerAimEnabled = PlayerAimEnabled or false,
+        PlayerAimSmoothness = PlayerAimSmoothness or 0.15,
+        PlayerAimPart = PlayerAimPart or "Head",
+        PlayerAimFOVRadius = PlayerAimFOVRadius or 100,
+        PlayerAimPrediction = PlayerAimPrediction or 0.13,
+        PlayerAimWallCheck = PlayerAimWallCheck or true,
+        
+        -- Protection
+        GodMode = godMode or false,
+        LockHP = lockHP or false,
+        AntiKnockback = antiKB or false,
+        AntiVoid = antiVoid or false,
+        
+        -- Visuals
+        CameraFOV = Camera.FieldOfView or 70,
+        Fullbright = FULLBRIGHT_ENABLED or false,
+        NoCameraShake = NO_CAMERA_SHAKE or false,
+        
+        -- World
+        Gravity = workspace.Gravity or 196,
+        ClockTime = Lighting.ClockTime or 14,
+        
+        -- Waypoints
+        SavedWaypoints = savedWaypoints or {},
+        
+        -- Utility
+        Noclip = noclip or false,
+        AntiAFK = ANTI_AFK_ENABLED or false
+    }
+    
+    if writefile and isfolder then
+        if not isfolder(ConfigManager.ConfigFolder) then
+            makefolder(ConfigManager.ConfigFolder)
+        end
+        
+        local configPath = ConfigManager.ConfigFolder .. "/" .. configName .. ".json"
+        local success, err = pcall(function()
+            writefile(configPath, HttpService:JSONEncode(config))
         end)
         
-        if success then
+        return success
+    end
+    
+    return false
+end
+
+-- Função para carregar configuração
+local function loadConfig(configName)
+    if not configName or configName == "" or configName == "Default" then 
+        Rayfield:Notify({
+            Title = "Config Default",
+            Content = "Usando configurações padrão",
+            Duration = 2
+        })
+        return true
+    end
+    
+    if readfile and isfolder then
+        local configPath = ConfigManager.ConfigFolder .. "/" .. configName .. ".json"
+        
+        if not isfile(configPath) then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Configuração não encontrada!",
+                Duration = 3
+            })
+            return false
+        end
+        
+        local success, result = pcall(function()
+            return readfile(configPath)
+        end)
+        
+        if success and result then
             local config = HttpService:JSONDecode(result)
+            
+            -- Aplica configurações
+            -- Movement
             if Humanoid then
                 Humanoid.WalkSpeed = config.WalkSpeed or 16
                 Humanoid.JumpPower = config.JumpPower or 50
             end
-            if config.savedWaypoints then
-                savedWaypoints = config.savedWaypoints
-                waypointDropdown:Refresh(getWaypointList())
+            infJump = config.InfiniteJump or false
+            antiFall = config.AntiFall or false
+            flySpeed = config.FlySpeed or 1
+            
+            -- Combat
+            AUTO_CLICKER_ENABLED = config.AutoClickerEnabled or false
+            AUTO_CLICKER_CPS = config.AutoClickerCPS or 10
+            HIT_RANGE_ENABLED = config.HitRangeEnabled or false
+            HIT_RANGE_SIZE = config.HitRangeSize or 10
+            AUTO_PRESS_ENABLED = config.AutoPressEnabled or false
+            AUTO_PRESS_INTERVAL = config.AutoPressInterval or 0.25
+            
+            -- ESP
+            ESP_ENABLED = config.ESP_Enabled or false
+            NAME_ENABLED = config.ESP_Name ~= nil and config.ESP_Name or true
+            DISTANCE_ENABLED = config.ESP_Distance ~= nil and config.ESP_Distance or true
+            HEALTH_ENABLED = config.ESP_Health ~= nil and config.ESP_Health or true
+            LINE_ENABLED = config.ESP_Line ~= nil and config.ESP_Line or true
+            OUTLINE_ENABLED = config.ESP_Outline ~= nil and config.ESP_Outline or true
+            ESP_TEAM_FILTER = config.ESP_TeamFilter or "All"
+            if config.ESP_Color then
+                ESP_COLOR = Color3.new(config.ESP_Color.r or 1, config.ESP_Color.g or 0, config.ESP_Color.b or 0)
             end
-            Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
+            if config.ESP_LineColor then
+                LINE_COLOR = Color3.new(config.ESP_LineColor.r or 1, config.ESP_LineColor.g or 1, config.ESP_LineColor.b or 1)
+            end
+            
+            -- Highlight
+            HIGHLIGHT_ENABLED = config.HighlightEnabled or false
+            HIGHLIGHT_TEAM_FILTER = config.HighlightTeamFilter or "All"
+            if config.HighlightTeamColor then
+                teamColor = Color3.new(config.HighlightTeamColor.r or 0, config.HighlightTeamColor.g or 1, config.HighlightTeamColor.b or 0)
+            end
+            if config.HighlightEnemyColor then
+                enemyColor = Color3.new(config.HighlightEnemyColor.r or 1, config.HighlightEnemyColor.g or 0, config.HighlightEnemyColor.b or 0)
+            end
+            highlightFillTrans = config.HighlightFillTrans or 0.5
+            highlightOutlineTrans = config.HighlightOutlineTrans or 0
+            
+            -- Aim
+            AIM_ENABLED = config.AimEnabled or false
+            AIM_FOV = config.AimFOV or 100
+            AIM_SMOOTH = config.AimSmooth or 0.2
+            AIM_TARGET_PART = config.AimTargetPart or "Head"
+            AIM_WALLCHECK = config.AimWallCheck ~= nil and config.AimWallCheck or true
+            AIM_TEAM_FILTER = config.AimTeamFilter or "Enemy"
+            
+            -- Player Aim
+            PlayerAimEnabled = config.PlayerAimEnabled or false
+            PlayerAimSmoothness = config.PlayerAimSmoothness or 0.15
+            PlayerAimPart = config.PlayerAimPart or "Head"
+            PlayerAimFOVRadius = config.PlayerAimFOVRadius or 100
+            PlayerAimPrediction = config.PlayerAimPrediction or 0.13
+            PlayerAimWallCheck = config.PlayerAimWallCheck ~= nil and config.PlayerAimWallCheck or true
+            
+            -- Protection
+            godMode = config.GodMode or false
+            lockHP = config.LockHP or false
+            antiKB = config.AntiKnockback or false
+            antiVoid = config.AntiVoid or false
+            
+            -- Visuals
+            if config.CameraFOV then Camera.FieldOfView = config.CameraFOV end
+            FULLBRIGHT_ENABLED = config.Fullbright or false
+            NO_CAMERA_SHAKE = config.NoCameraShake or false
+            
+            -- World
+            if config.Gravity then workspace.Gravity = config.Gravity end
+            if config.ClockTime then Lighting.ClockTime = config.ClockTime end
+            
+            -- Waypoints
+            if config.SavedWaypoints then
+                savedWaypoints = config.SavedWaypoints
+                if waypointDropdown then
+                    waypointDropdown:Refresh(getWaypointList())
+                end
+            end
+            
+            -- Utility
+            noclip = config.Noclip or false
+            ANTI_AFK_ENABLED = config.AntiAFK or false
+            
+            return true
         else
-            Rayfield:Notify({Title = "Erro", Content = "Config não encontrada!", Duration = 3})
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Falha ao carregar configuração!",
+                Duration = 3
+            })
+            return false
         end
+    end
+    
+    return false
+end
+
+-- Dropdown para selecionar configuração
+local configDropdown = TabConfig:CreateDropdown({
+    Name = "Selecionar Configuração",
+    Options = getConfigList(),
+    CurrentOption = "Default",
+    Callback = function(option)
+        ConfigManager.CurrentConfig = option
+        Rayfield:Notify({
+            Title = "Config Selecionada",
+            Content = "Configuração '" .. option .. "' selecionada!",
+            Duration = 2
+        })
+    end
+})
+
+-- Input para criar nova config
+local newConfigName = ""
+TabConfig:CreateInput({
+    Name = "Nome da Nova Config",
+    PlaceholderText = "Digite o nome...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(text)
+        newConfigName = text
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "Criar Nova Configuração",
+    Callback = function()
+        if newConfigName == "" or newConfigName == "Default" then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Digite um nome válido para a configuração!",
+                Duration = 3
+            })
+            return
+        end
+        
+        -- Verifica se já existe
+        local currentConfigs = getConfigList()
+        local alreadyExists = false
+        
+        for _, config in pairs(currentConfigs) do
+            if config == newConfigName then
+                alreadyExists = true
+                break
+            end
+        end
+        
+        if not alreadyExists then
+            ConfigManager.CurrentConfig = newConfigName
+            
+            -- Salva a configuração
+            if saveConfig(newConfigName) then
+                -- Atualiza o dropdown
+                configDropdown:Refresh(getConfigList(), newConfigName)
+                
+                Rayfield:Notify({
+                    Title = "Config Criada",
+                    Content = "Configuração '" .. newConfigName .. "' criada com sucesso!",
+                    Duration = 3
+                })
+                
+                newConfigName = ""
+            else
+                Rayfield:Notify({
+                    Title = "Erro",
+                    Content = "Falha ao criar configuração!",
+                    Duration = 3
+                })
+            end
+        else
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Já existe uma configuração com este nome!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabConfig:CreateSection("Gerenciar Configurações")
+
+TabConfig:CreateButton({
+    Name = "Salvar Configuração Atual",
+    Callback = function()
+        if ConfigManager.CurrentConfig == "" then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Selecione uma configuração primeiro!",
+                Duration = 3
+            })
+            return
+        end
+        
+        if saveConfig(ConfigManager.CurrentConfig) then
+            Rayfield:Notify({
+                Title = "Config Salva",
+                Content = "Configuração '" .. ConfigManager.CurrentConfig .. "' salva com sucesso!",
+                Duration = 3
+            })
+        else
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Falha ao salvar configuração!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "Carregar Configuração",
+    Callback = function()
+        if ConfigManager.CurrentConfig == "" then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Selecione uma configuração primeiro!",
+                Duration = 3
+            })
+            return
+        end
+        
+        if loadConfig(ConfigManager.CurrentConfig) then
+            Rayfield:Notify({
+                Title = "Config Carregada",
+                Content = "Configuração '" .. ConfigManager.CurrentConfig .. "' carregada com sucesso!",
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "Deletar Configuração",
+    Callback = function()
+        if ConfigManager.CurrentConfig == "Default" or ConfigManager.CurrentConfig == "" then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Não é possível deletar a configuração Default!",
+                Duration = 3
+            })
+            return
+        end
+        
+        if delfile and isfolder then
+            local configPath = ConfigManager.ConfigFolder .. "/" .. ConfigManager.CurrentConfig .. ".json"
+            if isfile(configPath) then
+                delfile(configPath)
+            end
+        end
+        
+        -- Atualiza dropdown
+        configDropdown:Refresh(getConfigList(), "Default")
+        ConfigManager.CurrentConfig = "Default"
+        
+        Rayfield:Notify({
+            Title = "Config Deletada",
+            Content = "Configuração deletada com sucesso!",
+            Duration = 3
+        })
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "Atualizar Lista de Configs",
+    Callback = function()
+        configDropdown:Refresh(getConfigList(), ConfigManager.CurrentConfig)
+        Rayfield:Notify({
+            Title = "Lista Atualizada",
+            Content = "Lista de configurações atualizada!",
+            Duration = 2
+        })
     end
 })
 
@@ -2777,7 +3163,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
-        refreshESP()
+        if not ESP_ENABLED then
+            clearAllESP()
+        end
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
     elseif input.KeyCode == keybindGUI then
