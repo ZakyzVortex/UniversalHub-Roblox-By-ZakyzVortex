@@ -2810,45 +2810,92 @@ TabUtil:CreateToggle({
     end
 })
 
--- ================== SHIFT LOCK SYSTEM ==================
+-- ================== SHIFT LOCK SYSTEM (COMPLETO - SEM UI) ==================
 local shiftLockEnabled = false
-local shiftLockConnection
+local shiftLockRotConnection
+local oldAutoRotate
 
-local function enableShiftLock()
-    if shiftLockConnection then
-        shiftLockConnection:Disconnect()
+local function lockMouse(enabled)
+    if UserInputService.MouseEnabled then
+        UserInputService.MouseBehavior = enabled and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+    end
+end
+
+local function faceCameraDirection(humanoid, rootPart, enabled)
+    -- Desconecta conexão anterior se existir
+    if shiftLockRotConnection then
+        shiftLockRotConnection:Disconnect()
+        shiftLockRotConnection = nil
     end
     
-    shiftLockConnection = RunService.RenderStepped:Connect(function()
-        if not Character or not HRP then return end
+    if enabled then
+        -- Salva configuração original
+        oldAutoRotate = humanoid.AutoRotate
+        humanoid.AutoRotate = false
         
-        -- Trava a câmera atrás do personagem
-        local humanoidRootPart = HRP
-        local camera = workspace.CurrentCamera
-        
-        if humanoidRootPart and camera then
-            camera.CFrame = CFrame.new(camera.CFrame.Position, humanoidRootPart.Position)
+        -- Conecta sistema de rotação
+        shiftLockRotConnection = RunService.RenderStepped:Connect(function()
+            local camera = Workspace.CurrentCamera
+            if not rootPart or not camera then return end
+            
+            local lookVector = camera.CFrame.LookVector
+            local flatVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+            
+            if flatVector.Magnitude > 0.0001 then
+                rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatVector.Unit, Vector3.yAxis)
+            end
+        end)
+    else
+        -- Restaura configuração original
+        if oldAutoRotate ~= nil then
+            humanoid.AutoRotate = oldAutoRotate
         end
-    end)
-end
-
-local function disableShiftLock()
-    if shiftLockConnection then
-        shiftLockConnection:Disconnect()
-        shiftLockConnection = nil
     end
 end
+
+local function applyShiftLock(enabled)
+    if not Character or not Humanoid or not HRP then 
+        task.wait(0.5)
+        if LP.Character then
+            BindCharacter(LP.Character)
+        end
+        return 
+    end
+    
+    shiftLockEnabled = enabled
+    lockMouse(enabled)
+    faceCameraDirection(Humanoid, HRP, enabled)
+end
+
+-- Reaplica shift lock quando o personagem respawna
+LP.CharacterAdded:Connect(function()
+    task.defer(function()
+        task.wait(0.5)
+        if shiftLockEnabled then
+            applyShiftLock(true)
+        end
+    end)
+end)
+
+-- Reaplica quando a câmera muda
+local lastCamera = Workspace.CurrentCamera
+Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    local currentCamera = Workspace.CurrentCamera
+    if currentCamera ~= lastCamera then
+        lastCamera = currentCamera
+        if shiftLockEnabled then
+            task.defer(function()
+                applyShiftLock(true)
+            end)
+        end
+    end
+end)
 
 TabUtil:CreateToggle({
     Name = "Shift Lock (Jogos sem suporte)",
     CurrentValue = false,
     Callback = function(v)
-        shiftLockEnabled = v
-        if shiftLockEnabled then
-            enableShiftLock()
-        else
-            disableShiftLock()
-        end
+        applyShiftLock(v)
     end
 })
 
