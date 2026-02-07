@@ -1768,7 +1768,7 @@ TabPlayerAim:CreateSlider({
 })
 
 TabPlayerAim:CreateSlider({
-    Name = "Suavidade (menor = mais rápido)",
+    Name = "Suavidade (maior = mais rápido)",
     Range = {0.01, 1},
     Increment = 0.01,
     CurrentValue = 0.15,
