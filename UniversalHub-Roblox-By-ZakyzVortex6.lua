@@ -2677,27 +2677,15 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
--- ========== SISTEMA DE CONFIG DEFINITIVO (ATUALIZA TOGGLES VISUAIS) ==============
+-- ============ SISTEMA DE CONFIG DEFINITIVO (USA NAMES EXATOS) ====================
 -- ==================================================================================
 -- SUBSTITUA TODA A SEÇÃO DE CONFIG TAB com este código
 
--- ================== VARIÁVEIS GLOBAIS (INICIALIZAÇÃO) ==================
-_G.ConfigValues = _G.ConfigValues or {
-    WalkSpeed = 16,
-    JumpPower = 50,
-    InfiniteJump = false,
-    AntiFall = false,
-    FlySpeed = 1
-}
+-- ================== VARIÁVEIS GLOBAIS ==================
+_G.CurrentWalkSpeed = 16
+_G.CurrentJumpPower = 50
 
--- Força aplicação inicial
-if Humanoid then
-    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
-    Humanoid.JumpPower = _G.ConfigValues.JumpPower
-    Humanoid.UseJumpPower = true
-end
-
--- Inicializa todas as outras variáveis
+-- Inicializa todas as variáveis
 AUTO_CLICKER_ENABLED = AUTO_CLICKER_ENABLED or false
 AUTO_CLICKER_CPS = AUTO_CLICKER_CPS or 10
 HIT_RANGE_ENABLED = HIT_RANGE_ENABLED or false
@@ -2740,6 +2728,9 @@ godMode = godMode or false
 lockHP = lockHP or false
 antiKB = antiKB or false
 antiVoid = antiVoid or false
+infJump = infJump or false
+antiFall = antiFall or false
+flySpeed = flySpeed or 1
 
 FULLBRIGHT_ENABLED = FULLBRIGHT_ENABLED or false
 NO_CAMERA_SHAKE = NO_CAMERA_SHAKE or false
@@ -2751,25 +2742,15 @@ ANTI_AFK_ENABLED = ANTI_AFK_ENABLED or false
 
 savedWaypoints = savedWaypoints or {}
 
--- ================== LOOP DE APLICAÇÃO FORÇADA ==================
-local lastWalkSpeed = _G.ConfigValues.WalkSpeed
-local lastJumpPower = _G.ConfigValues.JumpPower
-
+-- ================== LOOP DE MANUTENÇÃO ==================
 RunService.Heartbeat:Connect(function()
-    if not Humanoid then return end
-    
-    if Humanoid.WalkSpeed ~= _G.ConfigValues.WalkSpeed then
-        Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
-        if lastWalkSpeed ~= _G.ConfigValues.WalkSpeed then
-            lastWalkSpeed = _G.ConfigValues.WalkSpeed
+    if Humanoid then
+        if Humanoid.WalkSpeed ~= _G.CurrentWalkSpeed then
+            Humanoid.WalkSpeed = _G.CurrentWalkSpeed
         end
-    end
-    
-    if Humanoid.JumpPower ~= _G.ConfigValues.JumpPower then
-        Humanoid.UseJumpPower = true
-        Humanoid.JumpPower = _G.ConfigValues.JumpPower
-        if lastJumpPower ~= _G.ConfigValues.JumpPower then
-            lastJumpPower = _G.ConfigValues.JumpPower
+        if Humanoid.JumpPower ~= _G.CurrentJumpPower then
+            Humanoid.UseJumpPower = true
+            Humanoid.JumpPower = _G.CurrentJumpPower
         end
     end
 end)
@@ -2780,9 +2761,9 @@ LP.CharacterAdded:Connect(function(char)
     Humanoid = char:WaitForChild("Humanoid")
     HRP = char:WaitForChild("HumanoidRootPart")
     
-    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
+    Humanoid.WalkSpeed = _G.CurrentWalkSpeed
     Humanoid.UseJumpPower = true
-    Humanoid.JumpPower = _G.ConfigValues.JumpPower
+    Humanoid.JumpPower = _G.CurrentJumpPower
 end)
 
 -- ================== SISTEMA DE CONFIG ==================
@@ -2795,77 +2776,58 @@ end
 
 local ConfigPath = ConfigFolder .. "/" .. ConfigFileName
 
--- Função para atualizar toggle visual
-local function UpdateToggle(flagName, value)
+print("📁 Config: " .. ConfigPath)
+
+-- ================== FUNÇÕES DE ATUALIZAÇÃO VISUAL ==================
+
+local function UpdateToggle(elementName, value)
     pcall(function()
-        if Rayfield and Rayfield.Flags and Rayfield.Flags[flagName] then
-            Rayfield.Flags[flagName]:Set(value)
-            print("✅ Toggle atualizado: " .. flagName .. " = " .. tostring(value))
+        local flag = Rayfield.Flags[elementName]
+        if flag and flag.Set then
+            flag:Set(value)
+            print("✅ Toggle '" .. elementName .. "' = " .. tostring(value))
+        else
+            warn("⚠️ Toggle não encontrado: " .. elementName)
         end
     end)
 end
 
--- Função para atualizar slider visual
-local function UpdateSlider(flagName, value)
+local function UpdateSlider(elementName, value)
     pcall(function()
-        if Rayfield and Rayfield.Flags and Rayfield.Flags[flagName] then
-            Rayfield.Flags[flagName]:Set(value)
-            print("✅ Slider atualizado: " .. flagName .. " = " .. tostring(value))
+        local flag = Rayfield.Flags[elementName]
+        if flag and flag.Set then
+            flag:Set(value)
+            print("✅ Slider '" .. elementName .. "' = " .. tostring(value))
+        else
+            warn("⚠️ Slider não encontrado: " .. elementName)
         end
     end)
 end
 
--- Função para atualizar dropdown visual
-local function UpdateDropdown(flagName, value)
+local function UpdateDropdown(elementName, value)
     pcall(function()
-        if Rayfield and Rayfield.Flags and Rayfield.Flags[flagName] then
-            Rayfield.Flags[flagName]:Set(value)
-            print("✅ Dropdown atualizado: " .. flagName .. " = " .. tostring(value))
+        local flag = Rayfield.Flags[elementName]
+        if flag and flag.Set then
+            flag:Set(value)
+            print("✅ Dropdown '" .. elementName .. "' = " .. tostring(value))
+        else
+            warn("⚠️ Dropdown não encontrado: " .. elementName)
         end
     end)
 end
 
--- Função auxiliar para aplicar valores de movimento
-local function ApplyMovementValues(walkSpeed, jumpPower)
-    _G.ConfigValues.WalkSpeed = walkSpeed or 16
-    _G.ConfigValues.JumpPower = jumpPower or 50
-    
-    if Humanoid then
-        Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
-        Humanoid.UseJumpPower = true
-        Humanoid.JumpPower = _G.ConfigValues.JumpPower
-        
-        task.spawn(function()
-            for i = 1, 5 do
-                task.wait(0.1)
-                if Humanoid then
-                    Humanoid.WalkSpeed = _G.ConfigValues.WalkSpeed
-                    Humanoid.UseJumpPower = true
-                    Humanoid.JumpPower = _G.ConfigValues.JumpPower
-                end
-            end
-        end)
-    end
-    
-    -- Atualiza sliders visuais (se existirem)
-    UpdateSlider("WalkSpeedSlider", _G.ConfigValues.WalkSpeed)
-    UpdateSlider("JumpPowerSlider", _G.ConfigValues.JumpPower)
-    
-    print("✅ Movement aplicado: WalkSpeed=" .. _G.ConfigValues.WalkSpeed .. " | JumpPower=" .. _G.ConfigValues.JumpPower)
-end
-
--- SALVAR
+-- ================== SALVAR ==================
 local function SaveConfig()
     local success, errorMsg = pcall(function()
         print("💾 Salvando configuração...")
         
         local currentConfig = {
             -- Movement
-            WalkSpeed = _G.ConfigValues.WalkSpeed,
-            JumpPower = _G.ConfigValues.JumpPower,
-            InfiniteJump = infJump or false,
-            AntiFall = antiFall or false,
-            FlySpeed = flySpeed or 1,
+            WalkSpeed = _G.CurrentWalkSpeed,
+            JumpPower = _G.CurrentJumpPower,
+            InfiniteJump = infJump,
+            AntiFall = antiFall,
+            FlySpeed = flySpeed,
             
             -- Combat
             AutoClickerEnabled = AUTO_CLICKER_ENABLED,
@@ -2942,16 +2904,16 @@ local function SaveConfig()
         
         Rayfield:Notify({
             Title = "✅ Configuração Salva",
-            Content = "Todas configurações foram salvas!",
+            Content = "Arquivo salvo com " .. #jsonData .. " bytes",
             Duration = 3,
             Image = 4483362458
         })
     end)
     
     if not success then
-        warn("❌ ERRO: " .. tostring(errorMsg))
+        warn("❌ ERRO ao salvar: " .. tostring(errorMsg))
         Rayfield:Notify({
-            Title = "❌ Erro",
+            Title = "❌ Erro ao Salvar",
             Content = tostring(errorMsg),
             Duration = 5,
             Image = 4483362458
@@ -2959,211 +2921,312 @@ local function SaveConfig()
     end
 end
 
--- CARREGAR
+-- ================== CARREGAR ==================
 local function LoadConfig()
     if not isfile(ConfigPath) then
         Rayfield:Notify({
-            Title = "⚠️ Sem Config",
-            Content = "Nenhum arquivo encontrado",
-            Duration = 3,
+            Title = "⚠️ Nenhuma Config Encontrada",
+            Content = "Nenhum arquivo de configuração foi encontrado.",
+            Duration = 4,
             Image = 4483362458
         })
         return
     end
     
     local success, config = pcall(function()
-        print("📂 Carregando...")
+        print("📂 Carregando arquivo...")
         local data = readfile(ConfigPath)
         return HttpService:JSONDecode(data)
     end)
     
-    if not success then
-        warn("❌ Erro: " .. tostring(config))
+    if not success or type(config) ~= "table" then
         Rayfield:Notify({
-            Title = "❌ Corrompido",
-            Content = "Use Resetar",
+            Title = "❌ Configuração Corrompida",
+            Content = "O arquivo está inválido. Tente resetar.",
             Duration = 5,
             Image = 4483362458
         })
         return
     end
     
-    print("🔧 Aplicando configurações...")
+    print("🔧 Aplicando valores e atualizando interface...")
     
     pcall(function()
-        -- Movement
-        if config.WalkSpeed or config.JumpPower then
-            ApplyMovementValues(config.WalkSpeed, config.JumpPower)
+        -- ========== MOVEMENT ==========
+        if config.WalkSpeed then
+            _G.CurrentWalkSpeed = config.WalkSpeed
+            UpdateSlider("Velocidade de Caminhada", config.WalkSpeed)
+            if Humanoid then Humanoid.WalkSpeed = config.WalkSpeed end
         end
         
-        infJump = config.InfiniteJump or false
-        antiFall = config.AntiFall or false
-        flySpeed = config.FlySpeed or 1
+        if config.JumpPower then
+            _G.CurrentJumpPower = config.JumpPower
+            UpdateSlider("Poder de Pulo", config.JumpPower)
+            if Humanoid then 
+                Humanoid.JumpPower = config.JumpPower
+                Humanoid.UseJumpPower = true
+            end
+        end
         
-        UpdateToggle("InfiniteJump", infJump)
-        UpdateToggle("AntiFall", antiFall)
+        if config.InfiniteJump ~= nil then
+            infJump = config.InfiniteJump
+            UpdateToggle("Pulo Infinito", infJump)
+        end
         
-        -- Combat
-        AUTO_CLICKER_ENABLED = config.AutoClickerEnabled or false
-        AUTO_CLICKER_CPS = config.AutoClickerCPS or 10
-        HIT_RANGE_ENABLED = config.HitRangeEnabled or false
-        HIT_RANGE_SIZE = config.HitRangeSize or 10
-        AUTO_PRESS_ENABLED = config.AutoPressEnabled or false
-        AUTO_PRESS_INTERVAL = config.AutoPressInterval or 0.25
+        if config.AntiFall ~= nil then
+            antiFall = config.AntiFall
+            UpdateToggle("Anti Fall", antiFall)
+        end
         
-        UpdateToggle("AutoClicker", AUTO_CLICKER_ENABLED)
-        UpdateSlider("AutoClickerCPS", AUTO_CLICKER_CPS)
-        UpdateToggle("HitRange", HIT_RANGE_ENABLED)
-        UpdateSlider("HitRangeSize", HIT_RANGE_SIZE)
+        if config.FlySpeed then
+            flySpeed = config.FlySpeed
+            UpdateSlider("Velocidade de Fly", flySpeed)
+        end
         
-        -- ESP
-        ESP_ENABLED = config.ESP_Enabled or false
-        NAME_ENABLED = config.ESP_Name ~= nil and config.ESP_Name or true
-        DISTANCE_ENABLED = config.ESP_Distance ~= nil and config.ESP_Distance or true
-        HEALTH_ENABLED = config.ESP_Health ~= nil and config.ESP_Health or true
-        LINE_ENABLED = config.ESP_Line ~= nil and config.ESP_Line or true
-        OUTLINE_ENABLED = config.ESP_Outline ~= nil and config.ESP_Outline or true
-        ESP_TEAM_FILTER = config.ESP_TeamFilter or "All"
+        -- ========== COMBAT ==========
+        if config.AutoClickerEnabled ~= nil then
+            AUTO_CLICKER_ENABLED = config.AutoClickerEnabled
+            UpdateToggle("Ativar Auto Clicker", AUTO_CLICKER_ENABLED)
+        end
         
-        -- Atualiza toggles de ESP
-        UpdateToggle("ESP", ESP_ENABLED)
-        UpdateToggle("ESPName", NAME_ENABLED)
-        UpdateToggle("ESPDistance", DISTANCE_ENABLED)
-        UpdateToggle("ESPHealth", HEALTH_ENABLED)
-        UpdateToggle("ESPLine", LINE_ENABLED)
-        UpdateToggle("ESPOutline", OUTLINE_ENABLED)
-        UpdateDropdown("ESPTeamFilter", ESP_TEAM_FILTER)
+        if config.AutoClickerCPS then
+            AUTO_CLICKER_CPS = config.AutoClickerCPS
+            UpdateSlider("CPS (Cliques por Segundo)", AUTO_CLICKER_CPS)
+        end
+        
+        if config.HitRangeEnabled ~= nil then
+            HIT_RANGE_ENABLED = config.HitRangeEnabled
+            UpdateToggle("Ativar Hit Range", HIT_RANGE_ENABLED)
+        end
+        
+        if config.HitRangeSize then
+            HIT_RANGE_SIZE = config.HitRangeSize
+            UpdateSlider("Tamanho do Hit Range", HIT_RANGE_SIZE)
+        end
+        
+        -- ========== ESP ==========
+        if config.ESP_Enabled ~= nil then
+            ESP_ENABLED = config.ESP_Enabled
+            UpdateToggle("Ativar ESP", ESP_ENABLED)
+            if refreshESP then refreshESP() end
+        end
+        
+        if config.ESP_Name ~= nil then
+            NAME_ENABLED = config.ESP_Name
+            UpdateToggle("Nome", NAME_ENABLED)
+        end
+        
+        if config.ESP_Distance ~= nil then
+            DISTANCE_ENABLED = config.ESP_Distance
+            UpdateToggle("Distância", DISTANCE_ENABLED)
+        end
+        
+        if config.ESP_Health ~= nil then
+            HEALTH_ENABLED = config.ESP_Health
+            UpdateToggle("Vida", HEALTH_ENABLED)
+        end
+        
+        if config.ESP_Line ~= nil then
+            LINE_ENABLED = config.ESP_Line
+            UpdateToggle("Linha Única", LINE_ENABLED)
+        end
+        
+        if config.ESP_Outline ~= nil then
+            OUTLINE_ENABLED = config.ESP_Outline
+            UpdateToggle("Contorno 4 Linhas", OUTLINE_ENABLED)
+        end
+        
+        if config.ESP_TeamFilter then
+            ESP_TEAM_FILTER = config.ESP_TeamFilter
+            UpdateDropdown("Filtro de Time", ESP_TEAM_FILTER)
+        end
         
         if config.ESP_Color then
             ESP_COLOR = Color3.fromRGB(config.ESP_Color[1], config.ESP_Color[2], config.ESP_Color[3])
         end
+        
         if config.ESP_LineColor then
             LINE_COLOR = Color3.fromRGB(config.ESP_LineColor[1], config.ESP_LineColor[2], config.ESP_LineColor[3])
         end
         
-        -- Refresh ESP para aplicar mudanças
+        -- Refresh ESP para aplicar cores
         if refreshESP then
+            task.wait(0.1)
             refreshESP()
         end
         
-        -- Highlight
-        HIGHLIGHT_ENABLED = config.HighlightEnabled or false
-        HIGHLIGHT_TEAM_FILTER = config.HighlightTeamFilter or "All"
+        -- ========== HIGHLIGHT ESP ==========
+        if config.HighlightEnabled ~= nil then
+            HIGHLIGHT_ENABLED = config.HighlightEnabled
+            UpdateToggle("Ativar Highlight ESP", HIGHLIGHT_ENABLED)
+        end
         
-        UpdateToggle("HighlightESP", HIGHLIGHT_ENABLED)
-        UpdateDropdown("HighlightTeamFilter", HIGHLIGHT_TEAM_FILTER)
+        if config.HighlightTeamFilter then
+            HIGHLIGHT_TEAM_FILTER = config.HighlightTeamFilter
+            UpdateDropdown("Filtro de Time", HIGHLIGHT_TEAM_FILTER)
+        end
         
         if config.HighlightTeamColor then
             teamColor = Color3.fromRGB(config.HighlightTeamColor[1], config.HighlightTeamColor[2], config.HighlightTeamColor[3])
         end
+        
         if config.HighlightEnemyColor then
             enemyColor = Color3.fromRGB(config.HighlightEnemyColor[1], config.HighlightEnemyColor[2], config.HighlightEnemyColor[3])
         end
-        highlightFillTrans = config.HighlightFillTrans or 0.5
-        highlightOutlineTrans = config.HighlightOutlineTrans or 0
         
-        -- Aim
-        AIM_ENABLED = config.AimEnabled or false
-        AIM_FOV = config.AimFOV or 100
-        AIM_SMOOTH = config.AimSmooth or 0.2
-        AIM_TARGET_PART = config.AimTargetPart or "Head"
-        AIM_WALLCHECK = config.AimWallCheck ~= nil and config.AimWallCheck or true
-        AIM_TEAM_FILTER = config.AimTeamFilter or "Enemy"
+        if config.HighlightFillTrans then
+            highlightFillTrans = config.HighlightFillTrans
+            UpdateSlider("Transparência de Preenchimento", highlightFillTrans)
+        end
         
-        UpdateToggle("AimAssist", AIM_ENABLED)
-        UpdateSlider("AimFOV", AIM_FOV)
-        UpdateSlider("AimSmooth", AIM_SMOOTH)
-        UpdateDropdown("AimPart", AIM_TARGET_PART)
-        UpdateToggle("AimWallCheck", AIM_WALLCHECK)
-        UpdateDropdown("AimTeamFilter", AIM_TEAM_FILTER)
+        if config.HighlightOutlineTrans then
+            highlightOutlineTrans = config.HighlightOutlineTrans
+            UpdateSlider("Transparência de Contorno", highlightOutlineTrans)
+        end
         
-        -- Player Aim
-        PlayerAimEnabled = config.PlayerAimEnabled or false
-        PlayerAimSmoothness = config.PlayerAimSmoothness or 0.15
-        PlayerAimPart = config.PlayerAimPart or "Head"
-        PlayerAimFOVRadius = config.PlayerAimFOVRadius or 100
-        PlayerAimPrediction = config.PlayerAimPrediction or 0.13
-        PlayerAimWallCheck = config.PlayerAimWallCheck ~= nil and config.PlayerAimWallCheck or true
+        -- ========== AIM ASSIST ==========
+        if config.AimEnabled ~= nil then
+            AIM_ENABLED = config.AimEnabled
+            UpdateToggle("🎯 Ativar Aim Assist", AIM_ENABLED)
+        end
         
-        UpdateToggle("PlayerAim", PlayerAimEnabled)
-        UpdateSlider("PlayerAimSmoothness", PlayerAimSmoothness)
-        UpdateSlider("PlayerAimFOV", PlayerAimFOVRadius)
-        UpdateSlider("PlayerAimPrediction", PlayerAimPrediction)
+        if config.AimFOV then
+            AIM_FOV = config.AimFOV
+            UpdateSlider("FOV Radius", AIM_FOV)
+        end
         
-        -- Protection
-        godMode = config.GodMode or false
-        lockHP = config.LockHP or false
-        antiKB = config.AntiKnockback or false
-        antiVoid = config.AntiVoid or false
+        if config.AimSmooth then
+            AIM_SMOOTH = config.AimSmooth
+            UpdateSlider("Smoothing", AIM_SMOOTH)
+        end
         
-        UpdateToggle("GodMode", godMode)
-        UpdateToggle("LockHP", lockHP)
-        UpdateToggle("AntiKB", antiKB)
-        UpdateToggle("AntiVoid", antiVoid)
+        if config.AimTargetPart then
+            AIM_TARGET_PART = config.AimTargetPart
+            UpdateDropdown("Target Part", AIM_TARGET_PART)
+        end
         
-        -- Visuals
+        if config.AimWallCheck ~= nil then
+            AIM_WALLCHECK = config.AimWallCheck
+            UpdateToggle("Wall Check", AIM_WALLCHECK)
+        end
+        
+        if config.AimTeamFilter then
+            AIM_TEAM_FILTER = config.AimTeamFilter
+            UpdateDropdown("Team Filter", AIM_TEAM_FILTER)
+        end
+        
+        -- ========== PLAYER AIM ==========
+        if config.PlayerAimEnabled ~= nil then
+            PlayerAimEnabled = config.PlayerAimEnabled
+            UpdateToggle("Ativar Player Aim", PlayerAimEnabled)
+        end
+        
+        -- ========== PROTECTION ==========
+        if config.GodMode ~= nil then
+            godMode = config.GodMode
+            UpdateToggle("God Mode", godMode)
+        end
+        
+        if config.LockHP ~= nil then
+            lockHP = config.LockHP
+            UpdateToggle("Lock HP", lockHP)
+        end
+        
+        if config.AntiKnockback ~= nil then
+            antiKB = config.AntiKnockback
+            UpdateToggle("Anti Knockback", antiKB)
+        end
+        
+        if config.AntiVoid ~= nil then
+            antiVoid = config.AntiVoid
+            UpdateToggle("Anti Void", antiVoid)
+        end
+        
+        -- ========== VISUALS ==========
         if config.CameraFOV and Camera then
             Camera.FieldOfView = config.CameraFOV
-            UpdateSlider("CameraFOV", config.CameraFOV)
+            UpdateSlider("FOV", config.CameraFOV)
         end
-        FULLBRIGHT_ENABLED = config.Fullbright or false
-        NO_CAMERA_SHAKE = config.NoCameraShake or false
         
-        UpdateToggle("Fullbright", FULLBRIGHT_ENABLED)
-        UpdateToggle("NoCameraShake", NO_CAMERA_SHAKE)
+        if config.Fullbright ~= nil then
+            FULLBRIGHT_ENABLED = config.Fullbright
+            UpdateToggle("Fullbright", FULLBRIGHT_ENABLED)
+        end
         
-        -- World
+        if config.NoCameraShake ~= nil then
+            NO_CAMERA_SHAKE = config.NoCameraShake
+            UpdateToggle("No Camera Shake", NO_CAMERA_SHAKE)
+        end
+        
+        -- ========== WORLD ==========
         if config.Gravity then
             workspace.Gravity = config.Gravity
-            UpdateSlider("Gravity", config.Gravity)
-        end
-        if config.ClockTime then
-            Lighting.ClockTime = config.ClockTime
-            UpdateSlider("ClockTime", config.ClockTime)
+            UpdateSlider("Gravidade", config.Gravity)
         end
         
-        -- Waypoints
+        if config.ClockTime then
+            Lighting.ClockTime = config.ClockTime
+            UpdateSlider("Hora do Relógio", config.ClockTime)
+        end
+        
+        -- ========== WAYPOINTS ==========
         if config.SavedWaypoints then
             savedWaypoints = config.SavedWaypoints
         end
         
-        -- Utility
-        noclip = config.Noclip or false
-        shiftLockEnabled = config.ShiftLock or false
-        _G.InstaInteract = config.InstaInteract or false
-        ANTI_AFK_ENABLED = config.AntiAFK or false
+        -- ========== UTILITY ==========
+        if config.Noclip ~= nil then
+            noclip = config.Noclip
+            UpdateToggle("Noclip", noclip)
+        end
         
-        UpdateToggle("Noclip", noclip)
-        UpdateToggle("ShiftLock", shiftLockEnabled)
-        UpdateToggle("InstaInteract", _G.InstaInteract)
-        UpdateToggle("AntiAFK", ANTI_AFK_ENABLED)
+        if config.ShiftLock ~= nil then
+            shiftLockEnabled = config.ShiftLock
+            UpdateToggle("Shift Lock", shiftLockEnabled)
+        end
         
-        print("✅ Config carregada e TODOS toggles/sliders atualizados!")
+        if config.InstaInteract ~= nil then
+            _G.InstaInteract = config.InstaInteract
+            UpdateToggle("Insta Interact", _G.InstaInteract)
+        end
+        
+        if config.AntiAFK ~= nil then
+            ANTI_AFK_ENABLED = config.AntiAFK
+            UpdateToggle("Anti AFK", ANTI_AFK_ENABLED)
+        end
+        
+        print("✅ Configuração carregada e interface atualizada!")
     end)
     
-    Rayfield:Notify({
-        Title = "✅ Config Carregada",
-        Content = "Todos toggles e sliders atualizados!",
-        Duration = 3,
-        Image = 4483362458
-    })
+    task.delay(0.3, function()
+        Rayfield:Notify({
+            Title = "✅ Configuração Carregada",
+            Content = "Valores e interface atualizados!",
+            Duration = 4,
+            Image = 4483362458
+        })
+    end)
 end
 
--- RESETAR
+-- ================== RESETAR ==================
 local function ResetConfig()
-    print("🔄 Resetando...")
+    print("🔄 Resetando configurações...")
     
     if isfile(ConfigPath) then
         delfile(ConfigPath)
     end
     
-    -- Reset movement
-    ApplyMovementValues(16, 50)
-    
-    -- Reset outras configs
+    -- Reset valores
+    _G.CurrentWalkSpeed = 16
+    _G.CurrentJumpPower = 50
     flySpeed = 1
     infJump = false
     antiFall = false
+    
+    if Humanoid then
+        Humanoid.WalkSpeed = 16
+        Humanoid.JumpPower = 50
+    end
     
     AUTO_CLICKER_ENABLED = false
     ESP_ENABLED = false
@@ -3183,29 +3246,26 @@ local function ResetConfig()
     noclip = false
     shiftLockEnabled = false
     
-    -- Atualiza todos os toggles para false/padrão
-    UpdateToggle("ESP", false)
-    UpdateToggle("ESPName", true)
-    UpdateToggle("ESPDistance", true)
-    UpdateToggle("ESPHealth", true)
-    UpdateToggle("ESPLine", true)
-    UpdateToggle("ESPOutline", true)
-    
-    UpdateToggle("HighlightESP", false)
-    UpdateToggle("AimAssist", false)
-    UpdateToggle("PlayerAim", false)
-    UpdateToggle("GodMode", false)
-    UpdateToggle("LockHP", false)
-    UpdateToggle("AntiKB", false)
-    UpdateToggle("AntiVoid", false)
+    -- Atualiza interface
+    UpdateSlider("Velocidade de Caminhada", 16)
+    UpdateSlider("Poder de Pulo", 50)
+    UpdateToggle("Ativar ESP", false)
+    UpdateToggle("Nome", true)
+    UpdateToggle("Distância", true)
+    UpdateToggle("Vida", true)
+    UpdateToggle("Linha Única", true)
+    UpdateToggle("Contorno 4 Linhas", true)
+    UpdateToggle("Ativar Highlight ESP", false)
+    UpdateToggle("🎯 Ativar Aim Assist", false)
+    UpdateToggle("God Mode", false)
+    UpdateToggle("Lock HP", false)
     UpdateToggle("Noclip", false)
-    UpdateToggle("ShiftLock", false)
     
     if Camera then Camera.FieldOfView = 70 end
     workspace.Gravity = 196
     Lighting.ClockTime = 14
     
-    print("✅ Resetado!")
+    print("✅ Configurações resetadas!")
     
     Rayfield:Notify({
         Title = "🔄 Resetado",
@@ -3217,7 +3277,7 @@ end
 
 -- ================== ABA CONFIG ==================
 
-TabConfig:CreateSection("💾 Gerenciamento")
+TabConfig:CreateSection("💾 Gerenciamento de Configuração")
 
 TabConfig:CreateButton({
     Name = "💾 Salvar Configuração",
@@ -3234,8 +3294,42 @@ TabConfig:CreateButton({
     Callback = ResetConfig
 })
 
+TabConfig:CreateSection("🧪 Testes Rápidos")
+
+TabConfig:CreateButton({
+    Name = "Teste: Movimento",
+    Callback = function()
+        UpdateSlider("Velocidade de Caminhada", 150)
+        UpdateSlider("Poder de Pulo", 200)
+        UpdateToggle("Pulo Infinito", true)
+        Rayfield:Notify({
+            Title = "🧪 Teste",
+            Content = "Valores de movimento alterados!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end
+})
+
+TabConfig:CreateButton({
+    Name = "Teste: ESP",
+    Callback = function()
+        UpdateToggle("Ativar ESP", true)
+        UpdateToggle("Nome", true)
+        UpdateToggle("Distância", false)
+        UpdateToggle("Vida", true)
+        Rayfield:Notify({
+            Title = "🧪 Teste",
+            Content = "Toggles de ESP alterados!",
+            Duration = 3,
+            Image = 4483362458
+        })
+    end
+})
+
 TabConfig:CreateSection("ℹ️ Informações")
-TabConfig:CreateLabel("Atualiza toggles e sliders visuais!")
+TabConfig:CreateLabel("Sistema com atualização visual")
+TabConfig:CreateLabel("Usa Names exatos dos elementos")
 TabConfig:CreateLabel("Caminho: " .. ConfigPath)
 
 TabConfig:CreateSection("⏰ Auto-Save")
@@ -3261,7 +3355,7 @@ TabConfig:CreateToggle({
             
             Rayfield:Notify({
                 Title = "⏰ Auto-Save ON",
-                Content = "Salvando a cada 5min",
+                Content = "Salvando a cada 5 minutos",
                 Duration = 3,
                 Image = 4483362458
             })
@@ -3318,7 +3412,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
-        UpdateToggle("ESP", ESP_ENABLED)
+        UpdateToggle("Ativar ESP", ESP_ENABLED)
         if not ESP_ENABLED and clearAllESP then
             clearAllESP()
         elseif refreshESP then
@@ -3326,7 +3420,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
-        UpdateToggle("AimAssist", AIM_ENABLED)
+        UpdateToggle("🎯 Ativar Aim Assist", AIM_ENABLED)
     elseif input.KeyCode == keybindGUI then
         Rayfield:Toggle()
     end
@@ -3343,8 +3437,9 @@ TabConfig:CreateButton({
     end
 })
 
-print("✅ Sistema de Config com Atualização Visual ativado!")
-print("🔄 Toggles e sliders serão atualizados ao carregar!")
+print("✅ Sistema de Config DEFINITIVO carregado!")
+print("🔧 Usa Names exatos para atualizar interface")
+print("🧪 Use os botões de teste para verificar funcionamento")
 
 -- ==================================================================================
 -- =============================== UTILITY TAB ======================================
