@@ -2666,7 +2666,7 @@ task.spawn(function()
 end)
 
 -- ==================================================================================
--- ================================ CONFIG TAB ======================================
+-- ================================ CONFIG TAB ==========================
 -- ==================================================================================
 
 TabConfig:CreateSection("Anti AFK")
@@ -2686,115 +2686,311 @@ TabConfig:CreateToggle({
     CurrentValue = false,
     Callback = function(v)
         ANTI_AFK_ENABLED = v
-    end
-})
-
-TabConfig:CreateSection("Configs")
-
-local configName = "default"
-
-TabConfig:CreateInput({
-    Name = "Nome da Config",
-    PlaceholderText = "default",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        configName = text
-    end
-})
-
-TabConfig:CreateButton({
-    Name = "Salvar Config",
-    Callback = function()
-        local config = {
-            WalkSpeed = Humanoid and Humanoid.WalkSpeed or 16,
-            JumpPower = Humanoid and Humanoid.JumpPower or 50,
-            savedWaypoints = savedWaypoints
-        }
-        writefile("UniversalHub_"..configName..".json", HttpService:JSONEncode(config))
-        Rayfield:Notify({Title = "Config Salva", Content = "Config salva!", Duration = 2})
-    end
-})
-
-TabConfig:CreateButton({
-    Name = "Carregar Config",
-    Callback = function()
-        local success, result = pcall(function()
-            return readfile("UniversalHub_"..configName..".json")
-        end)
-        
-        if success then
-            local config = HttpService:JSONDecode(result)
-            if Humanoid then
-                Humanoid.WalkSpeed = config.WalkSpeed or 16
-                Humanoid.JumpPower = config.JumpPower or 50
-            end
-            if config.savedWaypoints then
-                savedWaypoints = config.savedWaypoints
-                waypointDropdown:Refresh(getWaypointList())
-            end
-            Rayfield:Notify({Title = "Config Carregada", Content = "Config carregada!", Duration = 2})
-        else
-            Rayfield:Notify({Title = "Erro", Content = "Config não encontrada!", Duration = 3})
+        if v then
+            Rayfield:Notify({
+                Title = "Anti AFK Ativado",
+                Content = "Você não será kickado por inatividade",
+                Duration = 2
+            })
         end
     end
 })
 
-TabConfig:CreateSection("Keybinds")
+TabConfig:CreateSection("⌨️ Keybinds Principais")
 
+-- ==================== VARIÁVEIS DE KEYBIND ====================
 local keybindESP = Enum.KeyCode.E
+local keybindHighlight = Enum.KeyCode.H
 local keybindAim = Enum.KeyCode.R
+local keybindPlayerAim = Enum.KeyCode.T
+local keybindFly = Enum.KeyCode.F
+local keybindNoclip = Enum.KeyCode.N
+local keybindGodMode = Enum.KeyCode.G
+local keybindInfJump = Enum.KeyCode.J
+local keybindAutoClicker = Enum.KeyCode.C
+local keybindFullbright = Enum.KeyCode.B
 local keybindGUI = Enum.KeyCode.RightControl
 
+-- ==================== ESP KEYBIND ====================
 TabConfig:CreateKeybind({
     Name = "Toggle ESP",
     CurrentKeybind = "E",
     HoldToInteract = false,
+    Flag = "KeybindESP",
     Callback = function(key)
         keybindESP = key
     end
 })
 
+-- ==================== HIGHLIGHT ESP KEYBIND ====================
 TabConfig:CreateKeybind({
-    Name = "Toggle Aim",
+    Name = "Toggle Highlight ESP",
+    CurrentKeybind = "H",
+    HoldToInteract = false,
+    Flag = "KeybindHighlight",
+    Callback = function(key)
+        keybindHighlight = key
+    end
+})
+
+-- ==================== AIM ASSIST KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Aim Assist",
     CurrentKeybind = "R",
     HoldToInteract = false,
+    Flag = "KeybindAim",
     Callback = function(key)
         keybindAim = key
     end
 })
 
+-- ==================== PLAYER AIM KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Player Aim",
+    CurrentKeybind = "T",
+    HoldToInteract = false,
+    Flag = "KeybindPlayerAim",
+    Callback = function(key)
+        keybindPlayerAim = key
+    end
+})
+
+TabConfig:CreateSection("⌨️ Keybinds de Movimento")
+
+-- ==================== FLY KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Fly",
+    CurrentKeybind = "F",
+    HoldToInteract = false,
+    Flag = "KeybindFly",
+    Callback = function(key)
+        keybindFly = key
+    end
+})
+
+-- ==================== NOCLIP KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Noclip",
+    CurrentKeybind = "N",
+    HoldToInteract = false,
+    Flag = "KeybindNoclip",
+    Callback = function(key)
+        keybindNoclip = key
+    end
+})
+
+-- ==================== INFINITE JUMP KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Infinite Jump",
+    CurrentKeybind = "J",
+    HoldToInteract = false,
+    Flag = "KeybindInfJump",
+    Callback = function(key)
+        keybindInfJump = key
+    end
+})
+
+TabConfig:CreateSection("⌨️ Keybinds de Combat")
+
+-- ==================== AUTO CLICKER KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Auto Clicker",
+    CurrentKeybind = "C",
+    HoldToInteract = false,
+    Flag = "KeybindAutoClicker",
+    Callback = function(key)
+        keybindAutoClicker = key
+    end
+})
+
+TabConfig:CreateSection("⌨️ Keybinds de Proteção")
+
+-- ==================== GOD MODE KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle God Mode",
+    CurrentKeybind = "G",
+    HoldToInteract = false,
+    Flag = "KeybindGodMode",
+    Callback = function(key)
+        keybindGodMode = key
+    end
+})
+
+TabConfig:CreateSection("⌨️ Keybinds Visuais")
+
+-- ==================== FULLBRIGHT KEYBIND ====================
+TabConfig:CreateKeybind({
+    Name = "Toggle Fullbright",
+    CurrentKeybind = "B",
+    HoldToInteract = false,
+    Flag = "KeybindFullbright",
+    Callback = function(key)
+        keybindFullbright = key
+    end
+})
+
+TabConfig:CreateSection("⌨️ Keybind da GUI")
+
+-- ==================== GUI TOGGLE KEYBIND ====================
 TabConfig:CreateKeybind({
     Name = "Toggle GUI",
     CurrentKeybind = "RightControl",
     HoldToInteract = false,
+    Flag = "KeybindGUI",
     Callback = function(key)
         keybindGUI = key
     end
 })
 
+-- ==================================================================================
+-- ===================== SISTEMA DE DETECÇÃO DE KEYBINDS ===========================
+-- ==================================================================================
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
+    -- ESP TOGGLE
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
         refreshESP()
+        Rayfield:Notify({
+            Title = "ESP",
+            Content = ESP_ENABLED and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- HIGHLIGHT ESP TOGGLE
+    elseif input.KeyCode == keybindHighlight then
+        HIGHLIGHT_ENABLED = not HIGHLIGHT_ENABLED
+        updateAllHighlights()
+        Rayfield:Notify({
+            Title = "Highlight ESP",
+            Content = HIGHLIGHT_ENABLED and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- AIM ASSIST TOGGLE
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
+        currentTarget = nil
+        Rayfield:Notify({
+            Title = "Aim Assist",
+            Content = AIM_ENABLED and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- PLAYER AIM TOGGLE
+    elseif input.KeyCode == keybindPlayerAim then
+        if not TargetPlayerName then
+            Rayfield:Notify({
+                Title = "⚠️ Player Aim",
+                Content = "Selecione um jogador primeiro!",
+                Duration = 2
+            })
+            return
+        end
+        
+        PlayerAimEnabled = not PlayerAimEnabled
+        Rayfield:Notify({
+            Title = "Player Aim",
+            Content = PlayerAimEnabled and ("✅ Mirando em " .. tostring(TargetPlayerName)) or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- FLY TOGGLE
+    elseif input.KeyCode == keybindFly then
+        local newState = not flyEnabled
+        toggleFly(newState)
+        Rayfield:Notify({
+            Title = "Fly",
+            Content = newState and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- NOCLIP TOGGLE
+    elseif input.KeyCode == keybindNoclip then
+        noclip = not noclip
+        Rayfield:Notify({
+            Title = "Noclip",
+            Content = noclip and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- INFINITE JUMP TOGGLE
+    elseif input.KeyCode == keybindInfJump then
+        infJump = not infJump
+        Rayfield:Notify({
+            Title = "Infinite Jump",
+            Content = infJump and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- AUTO CLICKER TOGGLE
+    elseif input.KeyCode == keybindAutoClicker then
+        AUTO_CLICKER_ENABLED = not AUTO_CLICKER_ENABLED
+        if AUTO_CLICKER_ENABLED then 
+            lastClick = tick() 
+        end
+        Rayfield:Notify({
+            Title = "Auto Clicker",
+            Content = AUTO_CLICKER_ENABLED and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- GOD MODE TOGGLE
+    elseif input.KeyCode == keybindGodMode then
+        godMode = not godMode
+        Rayfield:Notify({
+            Title = "God Mode",
+            Content = godMode and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- FULLBRIGHT TOGGLE
+    elseif input.KeyCode == keybindFullbright then
+        FULLBRIGHT_ENABLED = not FULLBRIGHT_ENABLED
+        toggleFullbright(FULLBRIGHT_ENABLED)
+        Rayfield:Notify({
+            Title = "Fullbright",
+            Content = FULLBRIGHT_ENABLED and "✅ Ativado" or "❌ Desativado",
+            Duration = 1.5
+        })
+    
+    -- GUI TOGGLE
     elseif input.KeyCode == keybindGUI then
         Rayfield:Toggle()
     end
 end)
 
-TabConfig:CreateSection("GUI")
+TabConfig:CreateSection("🗑️ GUI")
 
 TabConfig:CreateButton({
-    Name = "Destruir GUI",
+    Name = "Destruir GUI (Irreversível)",
     Callback = function()
         clearAllESP()
         removeAllHighlights()
+        Rayfield:Notify({
+            Title = "⚠️ GUI Destruída",
+            Content = "Recarregue o script para usar novamente",
+            Duration = 3
+        })
+        task.wait(1)
         Rayfield:Destroy()
     end
 })
+
+TabConfig:CreateSection("📋 Lista de Keybinds")
+
+TabConfig:CreateLabel("ESP: E | Highlight: H")
+TabConfig:CreateLabel("Aim: R | Player Aim: T")
+TabConfig:CreateLabel("Fly: F | Noclip: N")
+TabConfig:CreateLabel("Inf Jump: J | Auto Click: C")
+TabConfig:CreateLabel("God Mode: G | Fullbright: B")
+TabConfig:CreateLabel("Toggle GUI: RightControl")
+
+-- ==================================================================================
+-- FIM DA CONFIG TAB
+-- ==================================================================================
 
 -- ==================================================================================
 -- =============================== UTILITY TAB ======================================
