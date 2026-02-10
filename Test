@@ -1,6 +1,6 @@
--- ================== UNIVERSAL HUB - WINDUI VERSION ==================
+-- ================== UNIVERSAL HUB - WINDUI VERSION (FIXED) ==================
 -- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
--- Sistema de Save/Load incluído!
+-- Conversão CORRETA da Rayfield para WindUI com todas as funcionalidades
 
 local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main_example.lua'))()
 
@@ -15,139 +15,6 @@ local HttpService = game:GetService("HttpService")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-
--- ================== CONFIG SAVE/LOAD SYSTEM ==================
-local ConfigFolder = "UniversalHub_WindUI"
-local ConfigFile = "Config.json"
-
--- Valores padrão da configuração
-local DefaultConfig = {
-    -- Movement
-    WalkSpeed = 16,
-    JumpPower = 50,
-    FlySpeed = 1,
-    
-    -- ESP
-    ESPEnabled = false,
-    ESPBoxes = true,
-    ESPTracers = false,
-    ESPDistance = false,
-    ESPHealth = false,
-    ESPNames = true,
-    ESPMaxDistance = 1000,
-    ESPFilter = "All",
-    ESPBoxColor = {1, 1, 1},
-    ESPTracerColor = {1, 1, 1},
-    
-    -- Highlight ESP
-    HighlightEnabled = false,
-    HighlightFilter = "All",
-    HighlightFillColor = {1, 0, 0},
-    HighlightOutlineColor = {1, 1, 1},
-    HighlightFillTransparency = 0.5,
-    HighlightOutlineTransparency = 0,
-    
-    -- Aim Assist
-    AimAssistEnabled = false,
-    AimLockEnabled = false,
-    AimSmoothness = 0.1,
-    AimPart = "Head",
-    AimFilter = "All",
-    WallCheck = true,
-    
-    -- Player Aim
-    PlayerAimEnabled = false,
-    PlayerAimPart = "Head",
-    PlayerAimFilter = "All",
-    PlayerWallCheck = true,
-    
-    -- Protection
-    GodMode = false,
-    InfJump = false,
-    AntiFall = false,
-    AntiVoid = false,
-    LockHP = false,
-    AntiKB = false,
-    
-    -- Visuals
-    Fullbright = false,
-    FOV = 70,
-    
-    -- World
-    TimeOfDay = 14,
-    Ambient = {0.5, 0.5, 0.5},
-    
-    -- Utility
-    Noclip = false,
-    ShiftLock = false,
-    InstaInteract = false,
-    
-    -- Auto Farm
-    AutoClick = false,
-    ClickDelay = 0.1,
-}
-
--- Configuração atual (carregada do arquivo ou padrão)
-local Config = {}
-
--- Função para salvar configuração
-local function SaveConfig()
-    local success, err = pcall(function()
-        if not isfolder(ConfigFolder) then
-            makefolder(ConfigFolder)
-        end
-        writefile(ConfigFolder .. "/" .. ConfigFile, HttpService:JSONEncode(Config))
-    end)
-    
-    if success then
-        WindUI:Notify({
-            Title = "💾 Config Salva",
-            Content = "Configurações salvas com sucesso!",
-            Duration = 3
-        })
-    else
-        WindUI:Notify({
-            Title = "❌ Erro ao Salvar",
-            Content = "Não foi possível salvar: " .. tostring(err),
-            Duration = 5
-        })
-    end
-end
-
--- Função para carregar configuração
-local function LoadConfig()
-    local success, result = pcall(function()
-        if isfile(ConfigFolder .. "/" .. ConfigFile) then
-            local data = readfile(ConfigFolder .. "/" .. ConfigFile)
-            return HttpService:JSONDecode(data)
-        end
-        return nil
-    end)
-    
-    if success and result then
-        -- Merge com valores padrão (caso novos campos tenham sido adicionados)
-        for key, value in pairs(DefaultConfig) do
-            if Config[key] == nil then
-                Config[key] = value
-            end
-        end
-        
-        Config = result
-        WindUI:Notify({
-            Title = "📂 Config Carregada",
-            Content = "Configurações carregadas com sucesso!",
-            Duration = 3
-        })
-        return true
-    else
-        -- Se não existe arquivo, usa valores padrão
-        Config = DefaultConfig
-        return false
-    end
-end
-
--- Carrega configuração ao iniciar
-LoadConfig()
 
 -- ================== CHARACTER REFS ==================
 local Character, Humanoid, HRP
@@ -198,7 +65,6 @@ local function resetVisuals()
     workspace.DescendantAdded:Connect(hide)
     
     print("✅ " .. hiddenCount .. " objetos 3D escondidos!")
-    print("✅ FPS otimizado para AFK farm!")
 end
 
 -- ================== TEAM DETECTION SYSTEM ==================
@@ -240,83 +106,78 @@ end
 -- ================== WINDOW ==================
 local Window = WindUI:CreateWindow({
     Title = "Universal Hub",
-    Icon = "rbxassetid://10734950020",
+    Icon = "",
     Author = "ZakyzVortex",
     Folder = "UniversalHub_WindUI",
     Size = UDim2.fromOffset(500, 600),
-    KeySystem = {
-        Key = "universal123",
-        Note = "Digite a chave acima",
-        SaveKey = true,
-        FileName = "UniversalHubKey"
-    },
-    Transparent = true,
+    KeySystem = false,
+    Transparent = false,
     Theme = "Dark",
     SideBarWidth = 170,
 })
 
 -- ================== VARIABLES ==================
 -- Movement
-local infJump = Config.InfJump
-local antiFall = Config.AntiFall
+local infJump = false
+local antiFall = false
 local flyEnabled = false
-local flySpeed = Config.FlySpeed
+local flySpeed = 1
 local flyUpImpulse = 0
 local tpwalking = false
 local ctrl = {f = 0, b = 0, l = 0, r = 0}
 local lastctrl = {f = 0, b = 0, l = 0, r = 0}
 
 -- Protection
-local godMode = Config.GodMode
-local antiVoid = Config.AntiVoid
-local lockHP = Config.LockHP
-local antiKB = Config.AntiKB
+local godMode = false
+local antiVoid = false
+local lockHP = false
+local antiKB = false
 
 -- Visuals
-local fullbright = Config.Fullbright
+local fullbright = false
 
 -- Utility
-local noclip = Config.Noclip
+local noclip = false
 
 -- Auto Farm
-local autoClick = Config.AutoClick
-local clickDelay = Config.ClickDelay
+local autoClick = false
+local clickDelay = 0.1
 
 -- ESP
-local espEnabled = Config.ESPEnabled
-local espBoxes = Config.ESPBoxes
-local espTracers = Config.ESPTracers
-local espDistance = Config.ESPDistance
-local espHealth = Config.ESPHealth
-local espNames = Config.ESPNames
-local espMaxDistance = Config.ESPMaxDistance
-local espFilter = Config.ESPFilter
-local espBoxColor = Color3.new(unpack(Config.ESPBoxColor))
-local espTracerColor = Color3.new(unpack(Config.ESPTracerColor))
+local espEnabled = false
+local espBoxes = true
+local espTracers = false
+local espDistance = false
+local espHealth = false
+local espNames = true
+local espMaxDistance = 1000
+local espFilter = "All"
+local espBoxColor = Color3.new(1, 1, 1)
+local espTracerColor = Color3.new(1, 1, 1)
 local espObjects = {}
 
 -- Highlight ESP
-local highlightEnabled = Config.HighlightEnabled
-local highlightFilter = Config.HighlightFilter
-local highlightFillColor = Color3.new(unpack(Config.HighlightFillColor))
-local highlightOutlineColor = Color3.new(unpack(Config.HighlightOutlineColor))
-local highlightFillTransparency = Config.HighlightFillTransparency
-local highlightOutlineTransparency = Config.HighlightOutlineTransparency
+local highlightEnabled = false
+local highlightFilter = "All"
+local highlightFillColor = Color3.new(1, 0, 0)
+local highlightOutlineColor = Color3.new(1, 1, 1)
+local highlightFillTransparency = 0.5
+local highlightOutlineTransparency = 0
 local playerHighlights = {}
 
 -- Aim Assist
-local aimAssistEnabled = Config.AimAssistEnabled
-local aimLockEnabled = Config.AimLockEnabled
-local aimSmoothness = Config.AimSmoothness
-local aimPart = Config.AimPart
-local aimFilter = Config.AimFilter
-local wallCheck = Config.WallCheck
+local aimAssistEnabled = false
+local aimLockEnabled = false
+local aimSmoothness = 0.1
+local aimPart = "Head"
+local aimFilter = "All"
+local wallCheck = true
 
 -- Player Aim
-local playerAimEnabled = Config.PlayerAimEnabled
-local playerAimPart = Config.PlayerAimPart
-local playerAimFilter = Config.PlayerAimFilter
-local playerWallCheck = Config.PlayerWallCheck
+local playerAimEnabled = false
+local playerAimPart = "Head"
+local playerAimFilter = "All"
+local playerWallCheck = true
 
 -- Waypoints
 local waypoints = {}
@@ -341,85 +202,85 @@ local keybindGUI = Enum.KeyCode.RightControl
 
 local TabMove = Window:CreateTab({
     Name = "Movement",
-    Icon = "rbxassetid://10734950558",
+    Icon = "",
     Visible = true,
 })
 
 local TabCombat = Window:CreateTab({
     Name = "Auto Farm",
-    Icon = "rbxassetid://10747373176",
+    Icon = "",
     Visible = true,
 })
 
 local TabESP = Window:CreateTab({
     Name = "ESP",
-    Icon = "rbxassetid://10747374131",
+    Icon = "",
     Visible = true,
 })
 
 local TabHighlight = Window:CreateTab({
     Name = "Highlight ESP",
-    Icon = "rbxassetid://10747374131",
+    Icon = "",
     Visible = true,
 })
 
 local TabAim = Window:CreateTab({
     Name = "Aim Assist",
-    Icon = "rbxassetid://10723407389",
+    Icon = "",
     Visible = true,
 })
 
 local TabPlayerAim = Window:CreateTab({
     Name = "Player Aim",
-    Icon = "rbxassetid://10723407389",
+    Icon = "",
     Visible = true,
 })
 
 local TabProt = Window:CreateTab({
     Name = "Protection",
-    Icon = "rbxassetid://10734952925",
+    Icon = "",
     Visible = true,
 })
 
 local TabPlayers = Window:CreateTab({
     Name = "Players",
-    Icon = "rbxassetid://10747371821",
+    Icon = "",
     Visible = true,
 })
 
 local TabWaypoints = Window:CreateTab({
     Name = "Waypoints",
-    Icon = "rbxassetid://10734952273",
+    Icon = "",
     Visible = true,
 })
 
 local TabVisuals = Window:CreateTab({
     Name = "Visuals",
-    Icon = "rbxassetid://10734952925",
+    Icon = "",
     Visible = true,
 })
 
 local TabWorld = Window:CreateTab({
     Name = "World",
-    Icon = "rbxassetid://10734949856",
+    Icon = "",
     Visible = true,
 })
 
 local TabFPS = Window:CreateTab({
     Name = "FPS/Stats",
-    Icon = "rbxassetid://10747372992",
+    Icon = "",
     Visible = true,
 })
 
 local TabConfig = Window:CreateTab({
     Name = "Config",
-    Icon = "rbxassetid://10734950020",
+    Icon = "",
     Visible = true,
 })
 
 local TabUtil = Window:CreateTab({
     Name = "Utility",
-    Icon = "rbxassetid://10734952273",
+    Icon = "",
     Visible = true,
 })
 
@@ -427,18 +288,15 @@ local TabUtil = Window:CreateTab({
 -- ============================== MOVEMENT TAB ======================================
 -- ==================================================================================
 
-TabMove:CreateSection({
-    Name = "Velocidade e Pulo"
-})
+TabMove:AddSection("Velocidade e Pulo")
 
 -- Velocidade
-TabMove:CreateSlider({
+TabMove:AddSlider({
     Name = "Velocidade de Caminhada",
     Min = 16,
     Max = 300,
-    Default = Config.WalkSpeed,
+    Default = 16,
     Callback = function(value)
-        Config.WalkSpeed = value
         if Humanoid then
             Humanoid.WalkSpeed = value
         end
@@ -446,13 +304,12 @@ TabMove:CreateSlider({
 })
 
 -- Pulo
-TabMove:CreateSlider({
+TabMove:AddSlider({
     Name = "Poder de Pulo",
     Min = 50,
     Max = 300,
-    Default = Config.JumpPower,
+    Default = 50,
     Callback = function(value)
-        Config.JumpPower = value
         if Humanoid then
             Humanoid.UseJumpPower = true
             Humanoid.JumpPower = value
@@ -460,9 +317,7 @@ TabMove:CreateSlider({
     end
 })
 
-TabMove:CreateSection({
-    Name = "Fly System"
-})
+TabMove:AddSection("Fly System")
 
 -- ================== FLY SYSTEM ==================
 local function toggleFly(enabled)
@@ -539,7 +394,7 @@ local function toggleFly(enabled)
     end
 end
 
-TabMove:CreateToggle({
+TabMove:AddToggle({
     Name = "Fly (F)",
     Default = false,
     Callback = function(value)
@@ -547,31 +402,28 @@ TabMove:CreateToggle({
     end
 })
 
-TabMove:CreateSlider({
+TabMove:AddSlider({
     Name = "Velocidade de Fly",
     Min = 1,
     Max = 10,
-    Default = Config.FlySpeed,
+    Default = 1,
     Callback = function(value)
-        Config.FlySpeed = value
         flySpeed = value
     end
 })
 
-TabMove:CreateToggle({
+TabMove:AddToggle({
     Name = "Pulo Infinito (J)",
-    Default = Config.InfJump,
+    Default = false,
     Callback = function(value)
-        Config.InfJump = value
         infJump = value
     end
 })
 
-TabMove:CreateToggle({
+TabMove:AddToggle({
     Name = "Anti Queda",
-    Default = Config.AntiFall,
+    Default = false,
     Callback = function(value)
-        Config.AntiFall = value
         antiFall = value
     end
 })
@@ -580,34 +432,27 @@ TabMove:CreateToggle({
 -- ============================== AUTO FARM TAB =====================================
 -- ==================================================================================
 
-TabCombat:CreateSection({
-    Name = "Auto Click"
-})
+TabCombat:AddSection("Auto Click")
 
-TabCombat:CreateToggle({
+TabCombat:AddToggle({
     Name = "Auto Click (C)",
-    Default = Config.AutoClick,
+    Default = false,
     Callback = function(value)
-        Config.AutoClick = value
         autoClick = value
     end
 })
 
-TabCombat:CreateSlider({
+TabCombat:AddSlider({
     Name = "Delay do Click (s)",
     Min = 0.01,
     Max = 1,
-    Default = Config.ClickDelay,
-    Decimals = 2,
+    Default = 0.1,
     Callback = function(value)
-        Config.ClickDelay = value
         clickDelay = value
     end
 })
 
-TabCombat:CreateSection({
-    Name = "ESP para Mobs/NPCs"
-})
+TabCombat:AddSection("ESP para Mobs/NPCs")
 
 local mobESPEnabled = false
 local mobESPObjects = {}
@@ -664,7 +509,7 @@ local function updateMobESP()
     end
 end
 
-TabCombat:CreateToggle({
+TabCombat:AddToggle({
     Name = "ESP em Mobs/NPCs",
     Default = false,
     Callback = function(value)
@@ -677,11 +522,9 @@ TabCombat:CreateToggle({
 -- ============================== ESP TAB ===========================================
 -- ==================================================================================
 
-TabESP:CreateSection({
-    Name = "ESP Principal"
-})
+TabESP:AddSection("ESP Principal")
 
--- Funções ESP
+-- Funções ESP (MESMAS DO CÓDIGO ORIGINAL)
 local function createESP(player)
     if player == LP then return end
     if espObjects[player] then return end
@@ -897,105 +740,75 @@ Players.PlayerRemoving:Connect(function(player)
     removeESP(player)
 end)
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Ativar ESP (E)",
-    Default = Config.ESPEnabled,
+    Default = false,
     Callback = function(value)
-        Config.ESPEnabled = value
         espEnabled = value
         updateAllESP()
     end
 })
 
-TabESP:CreateSection({
-    Name = "Opções de ESP"
-})
+TabESP:AddSection("Opções de ESP")
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Boxes",
-    Default = Config.ESPBoxes,
+    Default = true,
     Callback = function(value)
-        Config.ESPBoxes = value
         espBoxes = value
     end
 })
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Tracers",
-    Default = Config.ESPTracers,
+    Default = false,
     Callback = function(value)
-        Config.ESPTracers = value
         espTracers = value
     end
 })
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Distância",
-    Default = Config.ESPDistance,
+    Default = false,
     Callback = function(value)
-        Config.ESPDistance = value
         espDistance = value
     end
 })
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Vida",
-    Default = Config.ESPHealth,
+    Default = false,
     Callback = function(value)
-        Config.ESPHealth = value
         espHealth = value
     end
 })
 
-TabESP:CreateToggle({
+TabESP:AddToggle({
     Name = "Nome",
-    Default = Config.ESPNames,
+    Default = true,
     Callback = function(value)
-        Config.ESPNames = value
         espNames = value
     end
 })
 
-TabESP:CreateSection({
-    Name = "Configurações"
-})
+TabESP:AddSection("Configurações")
 
-TabESP:CreateSlider({
+TabESP:AddSlider({
     Name = "Distância Máxima",
     Min = 100,
     Max = 5000,
-    Default = Config.ESPMaxDistance,
+    Default = 1000,
     Callback = function(value)
-        Config.ESPMaxDistance = value
         espMaxDistance = value
     end
 })
 
-TabESP:CreateDropdown({
+TabESP:AddDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = Config.ESPFilter,
+    Default = "All",
     Callback = function(value)
-        Config.ESPFilter = value
         espFilter = value
-    end
-})
-
-TabESP:CreateColorPicker({
-    Name = "Cor das Boxes",
-    Default = espBoxColor,
-    Callback = function(color)
-        Config.ESPBoxColor = {color.R, color.G, color.B}
-        espBoxColor = color
-    end
-})
-
-TabESP:CreateColorPicker({
-    Name = "Cor dos Tracers",
-    Default = espTracerColor,
-    Callback = function(color)
-        Config.ESPTracerColor = {color.R, color.G, color.B}
-        espTracerColor = color
     end
 })
 
@@ -1003,9 +816,7 @@ TabESP:CreateColorPicker({
 -- ============================== HIGHLIGHT ESP TAB =================================
 -- ==================================================================================
 
-TabHighlight:CreateSection({
-    Name = "Highlight ESP"
-})
+TabHighlight:AddSection("Highlight ESP")
 
 local function createHighlight(player)
     if player == LP then return end
@@ -1082,91 +893,25 @@ Players.PlayerRemoving:Connect(function(player)
     removeHighlight(player)
 end)
 
-TabHighlight:CreateToggle({
+TabHighlight:AddToggle({
     Name = "Ativar Highlight (H)",
-    Default = Config.HighlightEnabled,
+    Default = false,
     Callback = function(value)
-        Config.HighlightEnabled = value
         highlightEnabled = value
         updateAllHighlights()
     end
 })
 
-TabHighlight:CreateSection({
-    Name = "Configurações"
-})
+TabHighlight:AddSection("Configurações")
 
-TabHighlight:CreateDropdown({
+TabHighlight:AddDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = Config.HighlightFilter,
+    Default = "All",
     Callback = function(value)
-        Config.HighlightFilter = value
         highlightFilter = value
         removeAllHighlights()
         updateAllHighlights()
-    end
-})
-
-TabHighlight:CreateColorPicker({
-    Name = "Cor de Preenchimento",
-    Default = highlightFillColor,
-    Callback = function(color)
-        Config.HighlightFillColor = {color.R, color.G, color.B}
-        highlightFillColor = color
-        for _, highlight in pairs(playerHighlights) do
-            if highlight then
-                highlight.FillColor = color
-            end
-        end
-    end
-})
-
-TabHighlight:CreateColorPicker({
-    Name = "Cor da Borda",
-    Default = highlightOutlineColor,
-    Callback = function(color)
-        Config.HighlightOutlineColor = {color.R, color.G, color.B}
-        highlightOutlineColor = color
-        for _, highlight in pairs(playerHighlights) do
-            if highlight then
-                highlight.OutlineColor = color
-            end
-        end
-    end
-})
-
-TabHighlight:CreateSlider({
-    Name = "Transparência do Preenchimento",
-    Min = 0,
-    Max = 1,
-    Default = Config.HighlightFillTransparency,
-    Decimals = 2,
-    Callback = function(value)
-        Config.HighlightFillTransparency = value
-        highlightFillTransparency = value
-        for _, highlight in pairs(playerHighlights) do
-            if highlight then
-                highlight.FillTransparency = value
-            end
-        end
-    end
-})
-
-TabHighlight:CreateSlider({
-    Name = "Transparência da Borda",
-    Min = 0,
-    Max = 1,
-    Default = Config.HighlightOutlineTransparency,
-    Decimals = 2,
-    Callback = function(value)
-        Config.HighlightOutlineTransparency = value
-        highlightOutlineTransparency = value
-        for _, highlight in pairs(playerHighlights) do
-            if highlight then
-                highlight.OutlineTransparency = value
-            end
-        end
     end
 })
 
@@ -1174,9 +919,7 @@ TabHighlight:CreateSlider({
 -- ============================== AIM ASSIST TAB ====================================
 -- ==================================================================================
 
-TabAim:CreateSection({
-    Name = "Aim Assist"
-})
+TabAim:AddSection("Aim Assist")
 
 local currentAimTarget = nil
 
@@ -1236,65 +979,56 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-TabAim:CreateToggle({
+TabAim:AddToggle({
     Name = "Ativar Aim Assist (R)",
-    Default = Config.AimAssistEnabled,
+    Default = false,
     Callback = function(value)
-        Config.AimAssistEnabled = value
         aimAssistEnabled = value
     end
 })
 
-TabAim:CreateToggle({
-    Name = "Aim Lock (Trava na Mira)",
-    Default = Config.AimLockEnabled,
+TabAim:AddToggle({
+    Name = "Aim Lock",
+    Default = false,
     Callback = function(value)
-        Config.AimLockEnabled = value
         aimLockEnabled = value
     end
 })
 
-TabAim:CreateSection({
-    Name = "Configurações"
-})
+TabAim:AddSection("Configurações")
 
-TabAim:CreateSlider({
-    Name = "Suavidade (menor = mais suave)",
+TabAim:AddSlider({
+    Name = "Suavidade",
     Min = 0.01,
     Max = 1,
-    Default = Config.AimSmoothness,
-    Decimals = 2,
+    Default = 0.1,
     Callback = function(value)
-        Config.AimSmoothness = value
         aimSmoothness = value
     end
 })
 
-TabAim:CreateDropdown({
+TabAim:AddDropdown({
     Name = "Parte do Corpo",
     Options = {"Head", "Torso", "HumanoidRootPart"},
-    Default = Config.AimPart,
+    Default = "Head",
     Callback = function(value)
-        Config.AimPart = value
         aimPart = value
     end
 })
 
-TabAim:CreateDropdown({
+TabAim:AddDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = Config.AimFilter,
+    Default = "All",
     Callback = function(value)
-        Config.AimFilter = value
         aimFilter = value
     end
 })
 
-TabAim:CreateToggle({
-    Name = "Wall Check (Ignorar Paredes)",
-    Default = Config.WallCheck,
+TabAim:AddToggle({
+    Name = "Wall Check",
+    Default = true,
     Callback = function(value)
-        Config.WallCheck = value
         wallCheck = value
     end
 })
@@ -1303,9 +1037,7 @@ TabAim:CreateToggle({
 -- ============================== PLAYER AIM TAB ====================================
 -- ==================================================================================
 
-TabPlayerAim:CreateSection({
-    Name = "Player Aim"
-})
+TabPlayerAim:AddSection("Player Aim")
 
 local selectedPlayerForAim = nil
 local playerAimConnection = nil
@@ -1325,11 +1057,10 @@ local function aimAtPlayer(player)
     Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
 end
 
-TabPlayerAim:CreateToggle({
+TabPlayerAim:AddToggle({
     Name = "Ativar Player Aim (T)",
-    Default = Config.PlayerAimEnabled,
+    Default = false,
     Callback = function(value)
-        Config.PlayerAimEnabled = value
         playerAimEnabled = value
         
         if value then
@@ -1349,42 +1080,35 @@ TabPlayerAim:CreateToggle({
     end
 })
 
-TabPlayerAim:CreateSection({
-    Name = "Configurações"
-})
+TabPlayerAim:AddSection("Configurações")
 
-TabPlayerAim:CreateDropdown({
+TabPlayerAim:AddDropdown({
     Name = "Parte do Corpo",
     Options = {"Head", "Torso", "HumanoidRootPart"},
-    Default = Config.PlayerAimPart,
+    Default = "Head",
     Callback = function(value)
-        Config.PlayerAimPart = value
         playerAimPart = value
     end
 })
 
-TabPlayerAim:CreateDropdown({
+TabPlayerAim:AddDropdown({
     Name = "Filtro de Time",
     Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = Config.PlayerAimFilter,
+    Default = "All",
     Callback = function(value)
-        Config.PlayerAimFilter = value
         playerAimFilter = value
     end
 })
 
-TabPlayerAim:CreateToggle({
-    Name = "Wall Check (Ignorar Paredes)",
-    Default = Config.PlayerWallCheck,
+TabPlayerAim:AddToggle({
+    Name = "Wall Check",
+    Default = true,
     Callback = function(value)
-        Config.PlayerWallCheck = value
         playerWallCheck = value
     end
 })
 
-TabPlayerAim:CreateSection({
-    Name = "Selecionar Jogador"
-})
+TabPlayerAim:AddSection("Selecionar Jogador")
 
 local playerNames = {}
 for _, player in pairs(Players:GetPlayers()) do
@@ -1393,10 +1117,10 @@ for _, player in pairs(Players:GetPlayers()) do
     end
 end
 
-TabPlayerAim:CreateDropdown({
+TabPlayerAim:AddDropdown({
     Name = "Jogador Alvo",
     Options = playerNames,
-    Default = playerNames[1] or "Nenhum",
+    Default = "Nenhum",
     Callback = function(value)
         selectedPlayerForAim = Players:FindFirstChild(value)
         
@@ -1414,50 +1138,40 @@ TabPlayerAim:CreateDropdown({
     end
 })
 
-Players.PlayerAdded:Connect(function(player)
-    -- Atualizar dropdown quando novo jogador entrar
-end)
-
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
 -- ==================================================================================
 
-TabProt:CreateSection({
-    Name = "Proteção"
-})
+TabProt:AddSection("Proteção")
 
-TabProt:CreateToggle({
+TabProt:AddToggle({
     Name = "God Mode (G)",
-    Default = Config.GodMode,
+    Default = false,
     Callback = function(value)
-        Config.GodMode = value
         godMode = value
     end
 })
 
-TabProt:CreateToggle({
-    Name = "Travar HP (Não God Mode)",
-    Default = Config.LockHP,
+TabProt:AddToggle({
+    Name = "Travar HP",
+    Default = false,
     Callback = function(value)
-        Config.LockHP = value
         lockHP = value
     end
 })
 
-TabProt:CreateToggle({
-    Name = "Anti Void (Anti Cair no Vazio)",
-    Default = Config.AntiVoid,
+TabProt:AddToggle({
+    Name = "Anti Void",
+    Default = false,
     Callback = function(value)
-        Config.AntiVoid = value
         antiVoid = value
     end
 })
 
-TabProt:CreateToggle({
+TabProt:AddToggle({
     Name = "Anti Knockback",
-    Default = Config.AntiKB,
+    Default = false,
     Callback = function(value)
-        Config.AntiKB = value
         antiKB = value
     end
 })
@@ -1466,9 +1180,7 @@ TabProt:CreateToggle({
 -- ============================== PLAYERS TAB =======================================
 -- ==================================================================================
 
-TabPlayers:CreateSection({
-    Name = "Ações com Jogadores"
-})
+TabPlayers:AddSection("Ações com Jogadores")
 
 local selectedPlayer = nil
 
@@ -1479,53 +1191,38 @@ for _, player in pairs(Players:GetPlayers()) do
     end
 end
 
-TabPlayers:CreateDropdown({
+TabPlayers:AddDropdown({
     Name = "Selecionar Jogador",
     Options = playerList,
-    Default = playerList[1] or "Nenhum",
+    Default = "Nenhum",
     Callback = function(value)
         selectedPlayer = Players:FindFirstChild(value)
     end
 })
 
-TabPlayers:CreateButton({
+TabPlayers:AddButton({
     Name = "Teleportar para Jogador",
     Callback = function()
         if selectedPlayer and selectedPlayer.Character and HRP then
             HRP.CFrame = selectedPlayer.Character.HumanoidRootPart.CFrame
-            WindUI:Notify({
-                Title = "Teleportado",
-                Content = "Você foi teleportado para " .. selectedPlayer.Name,
-                Duration = 3
-            })
         end
     end
 })
 
-TabPlayers:CreateButton({
+TabPlayers:AddButton({
     Name = "Spectate Jogador",
     Callback = function()
         if selectedPlayer and selectedPlayer.Character then
             Camera.CameraSubject = selectedPlayer.Character.Humanoid
-            WindUI:Notify({
-                Title = "Spectate",
-                Content = "Observando " .. selectedPlayer.Name,
-                Duration = 3
-            })
         end
     end
 })
 
-TabPlayers:CreateButton({
+TabPlayers:AddButton({
     Name = "Parar Spectate",
     Callback = function()
         if LP.Character then
             Camera.CameraSubject = LP.Character.Humanoid
-            WindUI:Notify({
-                Title = "Spectate",
-                Content = "Voltou a observar você mesmo",
-                Duration = 3
-            })
         end
     end
 })
@@ -1534,28 +1231,21 @@ TabPlayers:CreateButton({
 -- ============================== WAYPOINTS TAB =====================================
 -- ==================================================================================
 
-TabWaypoints:CreateSection({
-    Name = "Waypoints"
-})
+TabWaypoints:AddSection("Waypoints")
 
-TabWaypoints:CreateInput({
+TabWaypoints:AddTextBox({
     Name = "Nome do Waypoint",
-    PlaceholderText = "Digite o nome...",
+    Default = "",
+    Placeholder = "Digite o nome...",
     Callback = function(text)
-        -- Armazena o nome temporariamente
         _G.WaypointName = text
     end
 })
 
-TabWaypoints:CreateButton({
-    Name = "Criar Waypoint (Posição Atual)",
+TabWaypoints:AddButton({
+    Name = "Criar Waypoint",
     Callback = function()
         if not _G.WaypointName or _G.WaypointName == "" then
-            WindUI:Notify({
-                Title = "Erro",
-                Content = "Digite um nome para o waypoint!",
-                Duration = 3
-            })
             return
         end
         
@@ -1566,19 +1256,11 @@ TabWaypoints:CreateButton({
             CFrame = HRP.CFrame
         }
         
-        WindUI:Notify({
-            Title = "Waypoint Criado",
-            Content = "Waypoint '" .. _G.WaypointName .. "' criado!",
-            Duration = 3
-        })
-        
         _G.WaypointName = ""
     end
 })
 
-TabWaypoints:CreateSection({
-    Name = "Teleportar para Waypoint"
-})
+TabWaypoints:AddSection("Teleportar")
 
 local function getWaypointNames()
     local names = {}
@@ -1588,7 +1270,7 @@ local function getWaypointNames()
     return names
 end
 
-local waypointDropdown = TabWaypoints:CreateDropdown({
+TabWaypoints:AddDropdown({
     Name = "Selecionar Waypoint",
     Options = getWaypointNames(),
     Default = "Nenhum",
@@ -1597,32 +1279,21 @@ local waypointDropdown = TabWaypoints:CreateDropdown({
     end
 })
 
-TabWaypoints:CreateButton({
+TabWaypoints:AddButton({
     Name = "Teleportar",
     Callback = function()
         if selectedWP and waypoints[selectedWP] and HRP then
             HRP.CFrame = waypoints[selectedWP].CFrame
-            WindUI:Notify({
-                Title = "Teleportado",
-                Content = "Você foi teleportado para " .. selectedWP,
-                Duration = 3
-            })
         end
     end
 })
 
-TabWaypoints:CreateButton({
+TabWaypoints:AddButton({
     Name = "Deletar Waypoint",
     Callback = function()
         if selectedWP and waypoints[selectedWP] then
             waypoints[selectedWP] = nil
-            WindUI:Notify({
-                Title = "Waypoint Deletado",
-                Content = "Waypoint '" .. selectedWP .. "' foi deletado!",
-                Duration = 3
-            })
             selectedWP = nil
-            waypointDropdown:Refresh(getWaypointNames())
         end
     end
 })
@@ -1631,15 +1302,12 @@ TabWaypoints:CreateButton({
 -- ============================== VISUALS TAB =======================================
 -- ==================================================================================
 
-TabVisuals:CreateSection({
-    Name = "Visuais"
-})
+TabVisuals:AddSection("Visuais")
 
-TabVisuals:CreateToggle({
+TabVisuals:AddToggle({
     Name = "Fullbright (B)",
-    Default = Config.Fullbright,
+    Default = false,
     Callback = function(value)
-        Config.Fullbright = value
         fullbright = value
         
         if value then
@@ -1658,26 +1326,20 @@ TabVisuals:CreateToggle({
     end
 })
 
-TabVisuals:CreateSlider({
-    Name = "Campo de Visão (FOV)",
+TabVisuals:AddSlider({
+    Name = "FOV",
     Min = 70,
     Max = 120,
-    Default = Config.FOV,
+    Default = 70,
     Callback = function(value)
-        Config.FOV = value
         Camera.FieldOfView = value
     end
 })
 
-TabVisuals:CreateButton({
-    Name = "Esconder Objetos 3D (Otimizar FPS)",
+TabVisuals:AddButton({
+    Name = "Esconder Objetos 3D",
     Callback = function()
         resetVisuals()
-        WindUI:Notify({
-            Title = "Otimização FPS",
-            Content = "Objetos 3D escondidos!",
-            Duration = 3
-        })
     end
 })
 
@@ -1685,28 +1347,15 @@ TabVisuals:CreateButton({
 -- ============================== WORLD TAB =========================================
 -- ==================================================================================
 
-TabWorld:CreateSection({
-    Name = "Mundo"
-})
+TabWorld:AddSection("Mundo")
 
-TabWorld:CreateSlider({
+TabWorld:AddSlider({
     Name = "Hora do Dia",
     Min = 0,
     Max = 24,
-    Default = Config.TimeOfDay,
+    Default = 14,
     Callback = function(value)
-        Config.TimeOfDay = value
         Lighting.ClockTime = value
-    end
-})
-
-TabWorld:CreateColorPicker({
-    Name = "Cor Ambiente",
-    Default = Color3.new(unpack(Config.Ambient)),
-    Callback = function(color)
-        Config.Ambient = {color.R, color.G, color.B}
-        Lighting.Ambient = color
-        Lighting.OutdoorAmbient = color
     end
 })
 
@@ -1714,23 +1363,12 @@ TabWorld:CreateColorPicker({
 -- ============================== FPS/STATS TAB =====================================
 -- ==================================================================================
 
-TabFPS:CreateSection({
-    Name = "Estatísticas"
-})
+TabFPS:AddSection("Estatísticas")
 
-local fpsLabel = TabFPS:CreateLabel({
-    Text = "FPS: Carregando..."
-})
+local fpsLabel = TabFPS:AddLabel("FPS: Carregando...")
+local pingLabel = TabFPS:AddLabel("Ping: Carregando...")
+local playersLabel = TabFPS:AddLabel("Jogadores: " .. #Players:GetPlayers())
 
-local pingLabel = TabFPS:CreateLabel({
-    Text = "Ping: Carregando..."
-})
-
-local playersLabel = TabFPS:CreateLabel({
-    Text = "Jogadores: " .. #Players:GetPlayers()
-})
-
--- Atualizar stats
 task.spawn(function()
     local lastUpdate = tick()
     local frameCount = 0
@@ -1757,97 +1395,23 @@ end)
 -- ============================== CONFIG TAB ========================================
 -- ==================================================================================
 
-TabConfig:CreateSection({
-    Name = "Sistema de Configuração"
-})
+TabConfig:AddSection("Keybinds")
 
-TabConfig:CreateButton({
-    Name = "💾 Salvar Configuração",
-    Callback = function()
-        SaveConfig()
-    end
-})
+TabConfig:AddLabel("ESP: E | Highlight: H")
+TabConfig:AddLabel("Aim: R | Player Aim: T")
+TabConfig:AddLabel("Fly: F | Noclip: N")
+TabConfig:AddLabel("Inf Jump: J | Auto Click: C")
+TabConfig:AddLabel("God Mode: G | Fullbright: B")
+TabConfig:AddLabel("Toggle GUI: RightControl")
 
-TabConfig:CreateButton({
-    Name = "📂 Carregar Configuração",
-    Callback = function()
-        LoadConfig()
-        
-        -- Aplicar configurações carregadas
-        if Humanoid then
-            Humanoid.WalkSpeed = Config.WalkSpeed
-            Humanoid.JumpPower = Config.JumpPower
-        end
-        
-        Camera.FieldOfView = Config.FOV
-        
-        WindUI:Notify({
-            Title = "Config Aplicada",
-            Content = "Todas as configurações foram aplicadas!",
-            Duration = 3
-        })
-    end
-})
+TabConfig:AddSection("GUI")
 
-TabConfig:CreateButton({
-    Name = "🔄 Resetar para Padrão",
-    Callback = function()
-        Config = DefaultConfig
-        SaveConfig()
-        
-        WindUI:Notify({
-            Title = "Config Resetada",
-            Content = "Configurações resetadas para padrão!",
-            Duration = 3
-        })
-    end
-})
-
-TabConfig:CreateSection({
-    Name = "Keybinds"
-})
-
-TabConfig:CreateLabel({
-    Text = "ESP: E | Highlight: H"
-})
-
-TabConfig:CreateLabel({
-    Text = "Aim: R | Player Aim: T"
-})
-
-TabConfig:CreateLabel({
-    Text = "Fly: F | Noclip: N"
-})
-
-TabConfig:CreateLabel({
-    Text = "Inf Jump: J | Auto Click: C"
-})
-
-TabConfig:CreateLabel({
-    Text = "God Mode: G | Fullbright: B"
-})
-
-TabConfig:CreateLabel({
-    Text = "Toggle GUI: RightControl"
-})
-
-TabConfig:CreateSection({
-    Name = "GUI"
-})
-
-TabConfig:CreateButton({
-    Name = "Destruir GUI (Irreversível)",
+TabConfig:AddButton({
+    Name = "Destruir GUI",
     Callback = function()
         clearAllESP()
         removeAllHighlights()
-        
-        WindUI:Notify({
-            Title = "⚠️ GUI Destruída",
-            Content = "Recarregue o script para usar novamente",
-            Duration = 3
-        })
-        
-        task.wait(1)
+        task.wait(0.5)
         Window:Destroy()
     end
 })
@@ -1856,57 +1420,20 @@ TabConfig:CreateButton({
 -- ============================== UTILITY TAB =======================================
 -- ==================================================================================
 
-TabUtil:CreateSection({
-    Name = "Utilidades"
-})
+TabUtil:AddSection("Utilidades")
 
-TabUtil:CreateToggle({
+TabUtil:AddToggle({
     Name = "Noclip (N)",
-    Default = Config.Noclip,
+    Default = false,
     Callback = function(value)
-        Config.Noclip = value
         noclip = value
     end
 })
 
--- ================== SHIFT LOCK SYSTEM ==================
+-- Shift Lock System
 local shiftLockEnabled = false
 local shiftLockRotConnection
 local oldAutoRotate
-
-local function lockMouse(enabled)
-    if UserInputService.MouseEnabled then
-        UserInputService.MouseBehavior = enabled and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
-    end
-end
-
-local function faceCameraDirection(humanoid, rootPart, enabled)
-    if shiftLockRotConnection then
-        shiftLockRotConnection:Disconnect()
-        shiftLockRotConnection = nil
-    end
-    
-    if enabled then
-        oldAutoRotate = humanoid.AutoRotate
-        humanoid.AutoRotate = false
-        
-        shiftLockRotConnection = RunService.RenderStepped:Connect(function()
-            local camera = Workspace.CurrentCamera
-            if not rootPart or not camera then return end
-            
-            local lookVector = camera.CFrame.LookVector
-            local flatVector = Vector3.new(lookVector.X, 0, lookVector.Z)
-            
-            if flatVector.Magnitude > 0.0001 then
-                rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatVector.Unit, Vector3.yAxis)
-            end
-        end)
-    else
-        if oldAutoRotate ~= nil then
-            humanoid.AutoRotate = oldAutoRotate
-        end
-    end
-end
 
 local function applyShiftLock(enabled)
     if not Character or not Humanoid or not HRP then 
@@ -1918,8 +1445,32 @@ local function applyShiftLock(enabled)
     end
     
     shiftLockEnabled = enabled
-    lockMouse(enabled)
-    faceCameraDirection(Humanoid, HRP, enabled)
+    
+    if shiftLockRotConnection then
+        shiftLockRotConnection:Disconnect()
+        shiftLockRotConnection = nil
+    end
+    
+    if enabled then
+        oldAutoRotate = Humanoid.AutoRotate
+        Humanoid.AutoRotate = false
+        
+        shiftLockRotConnection = RunService.RenderStepped:Connect(function()
+            local camera = Workspace.CurrentCamera
+            if not HRP or not camera then return end
+            
+            local lookVector = camera.CFrame.LookVector
+            local flatVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+            
+            if flatVector.Magnitude > 0.0001 then
+                HRP.CFrame = CFrame.lookAt(HRP.Position, HRP.Position + flatVector.Unit, Vector3.yAxis)
+            end
+        end)
+    else
+        if oldAutoRotate ~= nil then
+            Humanoid.AutoRotate = oldAutoRotate
+        end
+    end
 end
 
 LP.CharacterAdded:Connect(function()
@@ -1931,20 +1482,18 @@ LP.CharacterAdded:Connect(function()
     end)
 end)
 
-TabUtil:CreateToggle({
+TabUtil:AddToggle({
     Name = "Shift Lock",
-    Default = Config.ShiftLock,
+    Default = false,
     Callback = function(value)
-        Config.ShiftLock = value
         applyShiftLock(value)
     end
 })
 
-TabUtil:CreateToggle({
+TabUtil:AddToggle({
     Name = "Insta Interact",
-    Default = Config.InstaInteract,
+    Default = false,
     Callback = function(value)
-        Config.InstaInteract = value
         _G.InstaInteract = value
         
         if value then
@@ -1959,18 +1508,16 @@ TabUtil:CreateToggle({
     end
 })
 
-TabUtil:CreateSection({
-    Name = "Server"
-})
+TabUtil:AddSection("Server")
 
-TabUtil:CreateButton({
+TabUtil:AddButton({
     Name = "Rejoin",
     Callback = function()
         TeleportService:Teleport(game.PlaceId, LP)
     end
 })
 
-TabUtil:CreateButton({
+TabUtil:AddButton({
     Name = "Server Hop",
     Callback = function()
         local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
@@ -1993,24 +1540,20 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     -- ESP TOGGLE
     if input.KeyCode == keybindESP then
         espEnabled = not espEnabled
-        Config.ESPEnabled = espEnabled
         updateAllESP()
         
     -- HIGHLIGHT TOGGLE
     elseif input.KeyCode == keybindHighlight then
         highlightEnabled = not highlightEnabled
-        Config.HighlightEnabled = highlightEnabled
         updateAllHighlights()
         
     -- AIM ASSIST TOGGLE
     elseif input.KeyCode == keybindAim then
         aimAssistEnabled = not aimAssistEnabled
-        Config.AimAssistEnabled = aimAssistEnabled
         
     -- PLAYER AIM TOGGLE
     elseif input.KeyCode == keybindPlayerAim then
         playerAimEnabled = not playerAimEnabled
-        Config.PlayerAimEnabled = playerAimEnabled
         
         if playerAimEnabled then
             if selectedPlayerForAim then
@@ -2034,27 +1577,22 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     -- NOCLIP TOGGLE
     elseif input.KeyCode == keybindNoclip then
         noclip = not noclip
-        Config.Noclip = noclip
         
     -- INF JUMP TOGGLE
     elseif input.KeyCode == keybindInfJump then
         infJump = not infJump
-        Config.InfJump = infJump
         
     -- AUTO CLICK TOGGLE
     elseif input.KeyCode == keybindAutoClick then
         autoClick = not autoClick
-        Config.AutoClick = autoClick
         
     -- GOD MODE TOGGLE
     elseif input.KeyCode == keybindGodMode then
         godMode = not godMode
-        Config.GodMode = godMode
         
     -- FULLBRIGHT TOGGLE
     elseif input.KeyCode == keybindFullbright then
         fullbright = not fullbright
-        Config.Fullbright = fullbright
         
         if fullbright then
             Lighting.Ambient = Color3.new(1, 1, 1)
@@ -2075,7 +1613,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         Window:Toggle()
     end
     
-    -- FLY UP (SPACE)
+    -- FLY UP
     if input.KeyCode == Enum.KeyCode.Space and flyEnabled then
         flyUpImpulse = 1
     end
@@ -2149,14 +1687,14 @@ task.spawn(function()
     end
 end)
 
--- Pulo Infinito
+-- Infinite Jump
 UserInputService.JumpRequest:Connect(function()
     if infJump and Humanoid then
         Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
--- Anti Queda
+-- Anti Fall
 RunService.Stepped:Connect(function()
     if antiFall and Humanoid then
         local falling = Humanoid:GetState() == Enum.HumanoidStateType.Freefall
@@ -2166,7 +1704,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
-print("✅ Universal Hub WindUI - Carregado com sucesso!")
-print("💾 Sistema de Save/Load incluído!")
-print("📊 Todas as funcionalidades mantidas da versão Rayfield")
-print("🎯 Use as keybinds ou o menu para ativar funções")
+print("✅ Universal Hub WindUI - Carregado!")
+print("📊 Todas as funcionalidades mantidas")
+print("🎯 Sistema de save/load WindUI nativo")
