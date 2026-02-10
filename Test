@@ -1,10 +1,8 @@
--- ==================================================================================
--- ================ UNIVERSAL HUB - WINDUI VERSION (COM CONFIG) ====================
--- ==================================================================================
--- Universal Hub By ZakyzVortex - Convertido para WindUI
--- Config System: 100% Funcional
+-- ================== UNIVERSAL HUB - WINDUI VERSION ==================
+-- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
+-- Sistema de Save/Load incluído!
 
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/source.lua"))()
+local WindUI = loadstring(game:HttpGet('https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main_example.lua'))()
 
 -- ================== SERVICES ==================
 local Players = game:GetService("Players")
@@ -17,6 +15,139 @@ local HttpService = game:GetService("HttpService")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+
+-- ================== CONFIG SAVE/LOAD SYSTEM ==================
+local ConfigFolder = "UniversalHub_WindUI"
+local ConfigFile = "Config.json"
+
+-- Valores padrão da configuração
+local DefaultConfig = {
+    -- Movement
+    WalkSpeed = 16,
+    JumpPower = 50,
+    FlySpeed = 1,
+    
+    -- ESP
+    ESPEnabled = false,
+    ESPBoxes = true,
+    ESPTracers = false,
+    ESPDistance = false,
+    ESPHealth = false,
+    ESPNames = true,
+    ESPMaxDistance = 1000,
+    ESPFilter = "All",
+    ESPBoxColor = {1, 1, 1},
+    ESPTracerColor = {1, 1, 1},
+    
+    -- Highlight ESP
+    HighlightEnabled = false,
+    HighlightFilter = "All",
+    HighlightFillColor = {1, 0, 0},
+    HighlightOutlineColor = {1, 1, 1},
+    HighlightFillTransparency = 0.5,
+    HighlightOutlineTransparency = 0,
+    
+    -- Aim Assist
+    AimAssistEnabled = false,
+    AimLockEnabled = false,
+    AimSmoothness = 0.1,
+    AimPart = "Head",
+    AimFilter = "All",
+    WallCheck = true,
+    
+    -- Player Aim
+    PlayerAimEnabled = false,
+    PlayerAimPart = "Head",
+    PlayerAimFilter = "All",
+    PlayerWallCheck = true,
+    
+    -- Protection
+    GodMode = false,
+    InfJump = false,
+    AntiFall = false,
+    AntiVoid = false,
+    LockHP = false,
+    AntiKB = false,
+    
+    -- Visuals
+    Fullbright = false,
+    FOV = 70,
+    
+    -- World
+    TimeOfDay = 14,
+    Ambient = {0.5, 0.5, 0.5},
+    
+    -- Utility
+    Noclip = false,
+    ShiftLock = false,
+    InstaInteract = false,
+    
+    -- Auto Farm
+    AutoClick = false,
+    ClickDelay = 0.1,
+}
+
+-- Configuração atual (carregada do arquivo ou padrão)
+local Config = {}
+
+-- Função para salvar configuração
+local function SaveConfig()
+    local success, err = pcall(function()
+        if not isfolder(ConfigFolder) then
+            makefolder(ConfigFolder)
+        end
+        writefile(ConfigFolder .. "/" .. ConfigFile, HttpService:JSONEncode(Config))
+    end)
+    
+    if success then
+        WindUI:Notify({
+            Title = "💾 Config Salva",
+            Content = "Configurações salvas com sucesso!",
+            Duration = 3
+        })
+    else
+        WindUI:Notify({
+            Title = "❌ Erro ao Salvar",
+            Content = "Não foi possível salvar: " .. tostring(err),
+            Duration = 5
+        })
+    end
+end
+
+-- Função para carregar configuração
+local function LoadConfig()
+    local success, result = pcall(function()
+        if isfile(ConfigFolder .. "/" .. ConfigFile) then
+            local data = readfile(ConfigFolder .. "/" .. ConfigFile)
+            return HttpService:JSONDecode(data)
+        end
+        return nil
+    end)
+    
+    if success and result then
+        -- Merge com valores padrão (caso novos campos tenham sido adicionados)
+        for key, value in pairs(DefaultConfig) do
+            if Config[key] == nil then
+                Config[key] = value
+            end
+        end
+        
+        Config = result
+        WindUI:Notify({
+            Title = "📂 Config Carregada",
+            Content = "Configurações carregadas com sucesso!",
+            Duration = 3
+        })
+        return true
+    else
+        -- Se não existe arquivo, usa valores padrão
+        Config = DefaultConfig
+        return false
+    end
+end
+
+-- Carrega configuração ao iniciar
+LoadConfig()
 
 -- ================== CHARACTER REFS ==================
 local Character, Humanoid, HRP
@@ -36,450 +167,2006 @@ end
 
 LP.CharacterAdded:Connect(BindCharacter)
 
--- ================== CONFIGURAÇÃO INICIAL ==================
--- Armazena referências dos elementos para atualização
-_G.UIElements = {}
+-- ================== FUNÇÃO PARA ESCONDER OBJETOS 3D DO JOGO ==================
+local function resetVisuals()
+    local hiddenCount = 0
+    
+    local function hide(obj)
+        if LP.Character and obj:IsDescendantOf(LP.Character) then 
+            return 
+        end
+        
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+            hiddenCount = hiddenCount + 1
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
+        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            obj.Enabled = false
+            hiddenCount = hiddenCount + 1
+        end
+    end
+    
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        hide(obj)
+    end
+    
+    workspace.DescendantAdded:Connect(hide)
+    
+    print("✅ " .. hiddenCount .. " objetos 3D escondidos!")
+    print("✅ FPS otimizado para AFK farm!")
+end
 
--- Variáveis globais
-_G.CurrentWalkSpeed = 16
-_G.CurrentJumpPower = 50
+-- ================== TEAM DETECTION SYSTEM ==================
+local function getPlayerTeam(player)
+    if not player then return nil end
+    return player.Team
+end
+
+local function isPlayerOnSameTeam(player)
+    if not player or player == LP then return false end
+    local myTeam = getPlayerTeam(LP)
+    local theirTeam = getPlayerTeam(player)
+    
+    if not myTeam or not theirTeam then return false end
+    return myTeam == theirTeam
+end
+
+local function shouldShowPlayer(player, filterMode)
+    if not player or player == LP then return false end
+    
+    if filterMode == "All" then
+        return true
+    elseif filterMode == "MyTeam" or filterMode == "Team" then
+        local myTeam = getPlayerTeam(LP)
+        local theirTeam = getPlayerTeam(player)
+        if not myTeam or not theirTeam then return false end
+        return myTeam == theirTeam
+    elseif filterMode == "EnemyTeam" or filterMode == "Enemy" then
+        local myTeam = getPlayerTeam(LP)
+        local theirTeam = getPlayerTeam(player)
+        
+        if not myTeam or not theirTeam then return true end
+        return myTeam ~= theirTeam
+    end
+    
+    return true
+end
 
 -- ================== WINDOW ==================
 local Window = WindUI:CreateWindow({
     Title = "Universal Hub",
-    Icon = "rbxassetid://10723434711",
+    Icon = "rbxassetid://10734950020",
     Author = "ZakyzVortex",
     Folder = "UniversalHub_WindUI",
-    Size = UDim2.fromOffset(480, 550),
+    Size = UDim2.fromOffset(500, 600),
     KeySystem = {
-        Key = "",
-        Note = "Universal Hub - WindUI Version",
-        URL = "",
-        SaveKey = false
+        Key = "universal123",
+        Note = "Digite a chave acima",
+        SaveKey = true,
+        FileName = "UniversalHubKey"
     },
-    Transparent = false,
+    Transparent = true,
     Theme = "Dark",
     SideBarWidth = 170,
-    HasOutline = true
 })
 
--- ================== NOTIFICAÇÃO INICIAL ==================
-Window:Notify({
-    Title = "Universal Hub Carregado!",
-    Content = "Versão WindUI com Config Funcional",
-    Duration = 5
+-- ================== VARIABLES ==================
+-- Movement
+local infJump = Config.InfJump
+local antiFall = Config.AntiFall
+local flyEnabled = false
+local flySpeed = Config.FlySpeed
+local flyUpImpulse = 0
+local tpwalking = false
+local ctrl = {f = 0, b = 0, l = 0, r = 0}
+local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+
+-- Protection
+local godMode = Config.GodMode
+local antiVoid = Config.AntiVoid
+local lockHP = Config.LockHP
+local antiKB = Config.AntiKB
+
+-- Visuals
+local fullbright = Config.Fullbright
+
+-- Utility
+local noclip = Config.Noclip
+
+-- Auto Farm
+local autoClick = Config.AutoClick
+local clickDelay = Config.ClickDelay
+
+-- ESP
+local espEnabled = Config.ESPEnabled
+local espBoxes = Config.ESPBoxes
+local espTracers = Config.ESPTracers
+local espDistance = Config.ESPDistance
+local espHealth = Config.ESPHealth
+local espNames = Config.ESPNames
+local espMaxDistance = Config.ESPMaxDistance
+local espFilter = Config.ESPFilter
+local espBoxColor = Color3.new(unpack(Config.ESPBoxColor))
+local espTracerColor = Color3.new(unpack(Config.ESPTracerColor))
+local espObjects = {}
+
+-- Highlight ESP
+local highlightEnabled = Config.HighlightEnabled
+local highlightFilter = Config.HighlightFilter
+local highlightFillColor = Color3.new(unpack(Config.HighlightFillColor))
+local highlightOutlineColor = Color3.new(unpack(Config.HighlightOutlineColor))
+local highlightFillTransparency = Config.HighlightFillTransparency
+local highlightOutlineTransparency = Config.HighlightOutlineTransparency
+local playerHighlights = {}
+
+-- Aim Assist
+local aimAssistEnabled = Config.AimAssistEnabled
+local aimLockEnabled = Config.AimLockEnabled
+local aimSmoothness = Config.AimSmoothness
+local aimPart = Config.AimPart
+local aimFilter = Config.AimFilter
+local wallCheck = Config.WallCheck
+
+-- Player Aim
+local playerAimEnabled = Config.PlayerAimEnabled
+local playerAimPart = Config.PlayerAimPart
+local playerAimFilter = Config.PlayerAimFilter
+local playerWallCheck = Config.PlayerWallCheck
+
+-- Waypoints
+local waypoints = {}
+local selectedWP = nil
+
+-- Keybinds
+local keybindESP = Enum.KeyCode.E
+local keybindHighlight = Enum.KeyCode.H
+local keybindAim = Enum.KeyCode.R
+local keybindPlayerAim = Enum.KeyCode.T
+local keybindFly = Enum.KeyCode.F
+local keybindNoclip = Enum.KeyCode.N
+local keybindInfJump = Enum.KeyCode.J
+local keybindAutoClick = Enum.KeyCode.C
+local keybindGodMode = Enum.KeyCode.G
+local keybindFullbright = Enum.KeyCode.B
+local keybindGUI = Enum.KeyCode.RightControl
+
+-- ==================================================================================
+-- ============================== CREATE TABS ======================================
+-- ==================================================================================
+
+local TabMove = Window:CreateTab({
+    Name = "Movement",
+    Icon = "rbxassetid://10734950558",
+    Visible = true,
 })
 
--- ================== CRIAR TABS ==================
-local TabMovement = Window:Tab({
-    Title = "Movement",
-    Icon = "rbxassetid://10734950309"
+local TabCombat = Window:CreateTab({
+    Name = "Auto Farm",
+    Icon = "rbxassetid://10747373176",
+    Visible = true,
 })
 
-local TabCombat = Window:Tab({
-    Title = "Combat",
-    Icon = "rbxassetid://10747373176"
+local TabESP = Window:CreateTab({
+    Name = "ESP",
+    Icon = "rbxassetid://10747374131",
+    Visible = true,
 })
 
-local TabESP = Window:Tab({
-    Title = "ESP",
-    Icon = "rbxassetid://10747372992"
+local TabHighlight = Window:CreateTab({
+    Name = "Highlight ESP",
+    Icon = "rbxassetid://10747374131",
+    Visible = true,
 })
 
-local TabHighlight = Window:Tab({
-    Title = "Highlight ESP",
-    Icon = "rbxassetid://10723407389"
+local TabAim = Window:CreateTab({
+    Name = "Aim Assist",
+    Icon = "rbxassetid://10723407389",
+    Visible = true,
 })
 
-local TabAim = Window:Tab({
-    Title = "Aim Assist",
-    Icon = "rbxassetid://10723424838"
+local TabPlayerAim = Window:CreateTab({
+    Name = "Player Aim",
+    Icon = "rbxassetid://10723407389",
+    Visible = true,
 })
 
-local TabProtection = Window:Tab({
-    Title = "Protection",
-    Icon = "rbxassetid://10734952273"
+local TabProt = Window:CreateTab({
+    Name = "Protection",
+    Icon = "rbxassetid://10734952925",
+    Visible = true,
 })
 
-local TabVisuals = Window:Tab({
-    Title = "Visuals",
-    Icon = "rbxassetid://10734949856"
+local TabPlayers = Window:CreateTab({
+    Name = "Players",
+    Icon = "rbxassetid://10747371821",
+    Visible = true,
 })
 
-local TabWorld = Window:Tab({
-    Title = "World",
-    Icon = "rbxassetid://10723346959"
+local TabWaypoints = Window:CreateTab({
+    Name = "Waypoints",
+    Icon = "rbxassetid://10734952273",
+    Visible = true,
 })
 
-local TabUtility = Window:Tab({
-    Title = "Utility",
-    Icon = "rbxassetid://10747384394"
+local TabVisuals = Window:CreateTab({
+    Name = "Visuals",
+    Icon = "rbxassetid://10734952925",
+    Visible = true,
 })
 
-local TabConfig = Window:Tab({
-    Title = "Config",
-    Icon = "rbxassetid://10734924532"
+local TabWorld = Window:CreateTab({
+    Name = "World",
+    Icon = "rbxassetid://10734949856",
+    Visible = true,
+})
+
+local TabFPS = Window:CreateTab({
+    Name = "FPS/Stats",
+    Icon = "rbxassetid://10747372992",
+    Visible = true,
+})
+
+local TabConfig = Window:CreateTab({
+    Name = "Config",
+    Icon = "rbxassetid://10734950020",
+    Visible = true,
+})
+
+local TabUtil = Window:CreateTab({
+    Name = "Utility",
+    Icon = "rbxassetid://10734952273",
+    Visible = true,
 })
 
 -- ==================================================================================
 -- ============================== MOVEMENT TAB ======================================
 -- ==================================================================================
 
-local SectionMovement = TabMovement:Section({Title = "Velocidade e Pulo"})
+TabMove:CreateSection({
+    Name = "Velocidade e Pulo"
+})
 
 -- Velocidade
-_G.UIElements.WalkSpeed = SectionMovement:Slider({
-    Title = "Velocidade de Caminhada",
+TabMove:CreateSlider({
+    Name = "Velocidade de Caminhada",
     Min = 16,
     Max = 300,
-    Default = 16,
-    Callback = function(v)
-        _G.CurrentWalkSpeed = v
+    Default = Config.WalkSpeed,
+    Callback = function(value)
+        Config.WalkSpeed = value
         if Humanoid then
-            Humanoid.WalkSpeed = v
+            Humanoid.WalkSpeed = value
         end
     end
 })
 
 -- Pulo
-_G.UIElements.JumpPower = SectionMovement:Slider({
-    Title = "Poder de Pulo",
+TabMove:CreateSlider({
+    Name = "Poder de Pulo",
     Min = 50,
     Max = 300,
-    Default = 50,
-    Callback = function(v)
-        _G.CurrentJumpPower = v
+    Default = Config.JumpPower,
+    Callback = function(value)
+        Config.JumpPower = value
         if Humanoid then
             Humanoid.UseJumpPower = true
-            Humanoid.JumpPower = v
+            Humanoid.JumpPower = value
         end
     end
 })
 
--- Loop para manter valores
-RunService.Heartbeat:Connect(function()
-    if Humanoid then
-        if Humanoid.WalkSpeed ~= _G.CurrentWalkSpeed then
-            Humanoid.WalkSpeed = _G.CurrentWalkSpeed
+TabMove:CreateSection({
+    Name = "Fly System"
+})
+
+-- ================== FLY SYSTEM ==================
+local function toggleFly(enabled)
+    flyEnabled = enabled
+    local speaker = LP
+    local chr = speaker.Character
+    local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+    
+    if not chr or not hum then return end
+    
+    if enabled then
+        chr.Animate.Disabled = true
+        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
+        for i,v in next, AnimController:GetPlayingAnimationTracks() do
+            v:AdjustSpeed(0)
         end
-        if Humanoid.JumpPower ~= _G.CurrentJumpPower then
-            Humanoid.UseJumpPower = true
-            Humanoid.JumpPower = _G.CurrentJumpPower
+        
+        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Running, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, false)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        hum:ChangeState(Enum.HumanoidStateType.Swimming)
+        
+        for i = 1, flySpeed do
+            spawn(function()
+                local hb = game:GetService("RunService").Heartbeat
+                tpwalking = true
+                local chr = LP.Character
+                local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
+                while tpwalking and hb:Wait() and chr and hum and hum.Parent do
+                    if hum.MoveDirection.Magnitude > 0 then
+                        chr:TranslateBy(hum.MoveDirection)
+                    end
+                end
+            end)
+        end
+    else
+        tpwalking = false
+        chr.Animate.Disabled = false
+        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Running, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+        hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
+        
+        if HRP:FindFirstChild("FlyVel") then
+            HRP.FlyVel:Destroy()
+        end
+        if HRP:FindFirstChild("FlyGyro") then
+            HRP.FlyGyro:Destroy()
+        end
+    end
+end
+
+TabMove:CreateToggle({
+    Name = "Fly (F)",
+    Default = false,
+    Callback = function(value)
+        toggleFly(value)
+    end
+})
+
+TabMove:CreateSlider({
+    Name = "Velocidade de Fly",
+    Min = 1,
+    Max = 10,
+    Default = Config.FlySpeed,
+    Callback = function(value)
+        Config.FlySpeed = value
+        flySpeed = value
+    end
+})
+
+TabMove:CreateToggle({
+    Name = "Pulo Infinito (J)",
+    Default = Config.InfJump,
+    Callback = function(value)
+        Config.InfJump = value
+        infJump = value
+    end
+})
+
+TabMove:CreateToggle({
+    Name = "Anti Queda",
+    Default = Config.AntiFall,
+    Callback = function(value)
+        Config.AntiFall = value
+        antiFall = value
+    end
+})
+
+-- ==================================================================================
+-- ============================== AUTO FARM TAB =====================================
+-- ==================================================================================
+
+TabCombat:CreateSection({
+    Name = "Auto Click"
+})
+
+TabCombat:CreateToggle({
+    Name = "Auto Click (C)",
+    Default = Config.AutoClick,
+    Callback = function(value)
+        Config.AutoClick = value
+        autoClick = value
+    end
+})
+
+TabCombat:CreateSlider({
+    Name = "Delay do Click (s)",
+    Min = 0.01,
+    Max = 1,
+    Default = Config.ClickDelay,
+    Decimals = 2,
+    Callback = function(value)
+        Config.ClickDelay = value
+        clickDelay = value
+    end
+})
+
+TabCombat:CreateSection({
+    Name = "ESP para Mobs/NPCs"
+})
+
+local mobESPEnabled = false
+local mobESPObjects = {}
+
+local function createMobESP(model)
+    if not model:IsA("Model") or not model:FindFirstChild("HumanoidRootPart") then return end
+    if model.Parent ~= workspace then return end
+    if model == Character then return end
+    
+    local hrp = model:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "MobESP"
+    billboardGui.Adornee = hrp
+    billboardGui.Size = UDim2.new(0, 100, 0, 50)
+    billboardGui.StudsOffset = Vector3.new(0, 2, 0)
+    billboardGui.AlwaysOnTop = true
+    billboardGui.Parent = hrp
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = model.Name
+    textLabel.TextColor3 = Color3.new(1, 0, 0)
+    textLabel.TextStrokeTransparency = 0
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextSize = 14
+    textLabel.Parent = billboardGui
+    
+    table.insert(mobESPObjects, billboardGui)
+end
+
+local function clearMobESP()
+    for _, obj in pairs(mobESPObjects) do
+        if obj then
+            obj:Destroy()
+        end
+    end
+    mobESPObjects = {}
+end
+
+local function updateMobESP()
+    if mobESPEnabled then
+        for _, model in pairs(workspace:GetChildren()) do
+            if model:IsA("Model") and model:FindFirstChild("Humanoid") and model ~= Character then
+                if not model:FindFirstChild("HumanoidRootPart"):FindFirstChild("MobESP") then
+                    createMobESP(model)
+                end
+            end
+        end
+    else
+        clearMobESP()
+    end
+end
+
+TabCombat:CreateToggle({
+    Name = "ESP em Mobs/NPCs",
+    Default = false,
+    Callback = function(value)
+        mobESPEnabled = value
+        updateMobESP()
+    end
+})
+
+-- ==================================================================================
+-- ============================== ESP TAB ===========================================
+-- ==================================================================================
+
+TabESP:CreateSection({
+    Name = "ESP Principal"
+})
+
+-- Funções ESP
+local function createESP(player)
+    if player == LP then return end
+    if espObjects[player] then return end
+    
+    local espContainer = Instance.new("Folder")
+    espContainer.Name = "ESP_" .. player.Name
+    espContainer.Parent = game.CoreGui
+    
+    espObjects[player] = {
+        Container = espContainer,
+        Box = nil,
+        Tracer = nil,
+        Distance = nil,
+        Health = nil,
+        Name = nil,
+        Connections = {}
+    }
+    
+    local function updateESP()
+        if not espEnabled or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            return
+        end
+        
+        if not shouldShowPlayer(player, espFilter) then
+            return
+        end
+        
+        local hrp = player.Character.HumanoidRootPart
+        local distance = (hrp.Position - HRP.Position).Magnitude
+        
+        if distance > espMaxDistance then return end
+        
+        local vector, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+        
+        -- Box ESP
+        if espBoxes then
+            if not espObjects[player].Box then
+                local box = Drawing.new("Square")
+                box.Visible = true
+                box.Color = espBoxColor
+                box.Thickness = 2
+                box.Transparency = 1
+                box.Filled = false
+                espObjects[player].Box = box
+            end
+            
+            if onScreen then
+                local head = player.Character:FindFirstChild("Head")
+                if head then
+                    local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                    local legPos = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                    
+                    local height = math.abs(headPos.Y - legPos.Y)
+                    local width = height / 2
+                    
+                    espObjects[player].Box.Size = Vector2.new(width, height)
+                    espObjects[player].Box.Position = Vector2.new(vector.X - width/2, vector.Y - height/2)
+                    espObjects[player].Box.Visible = true
+                end
+            else
+                espObjects[player].Box.Visible = false
+            end
+        end
+        
+        -- Tracer ESP
+        if espTracers then
+            if not espObjects[player].Tracer then
+                local tracer = Drawing.new("Line")
+                tracer.Visible = true
+                tracer.Color = espTracerColor
+                tracer.Thickness = 1
+                tracer.Transparency = 1
+                espObjects[player].Tracer = tracer
+            end
+            
+            if onScreen then
+                local screenSize = Camera.ViewportSize
+                espObjects[player].Tracer.From = Vector2.new(screenSize.X / 2, screenSize.Y)
+                espObjects[player].Tracer.To = Vector2.new(vector.X, vector.Y)
+                espObjects[player].Tracer.Visible = true
+            else
+                espObjects[player].Tracer.Visible = false
+            end
+        end
+        
+        -- Distance ESP
+        if espDistance then
+            if not espObjects[player].Distance then
+                local dist = Drawing.new("Text")
+                dist.Visible = true
+                dist.Color = Color3.new(1, 1, 1)
+                dist.Size = 14
+                dist.Center = true
+                dist.Outline = true
+                espObjects[player].Distance = dist
+            end
+            
+            if onScreen then
+                espObjects[player].Distance.Text = math.floor(distance) .. "m"
+                espObjects[player].Distance.Position = Vector2.new(vector.X, vector.Y + 20)
+                espObjects[player].Distance.Visible = true
+            else
+                espObjects[player].Distance.Visible = false
+            end
+        end
+        
+        -- Health ESP
+        if espHealth then
+            if not espObjects[player].Health then
+                local health = Drawing.new("Text")
+                health.Visible = true
+                health.Color = Color3.new(0, 1, 0)
+                health.Size = 14
+                health.Center = true
+                health.Outline = true
+                espObjects[player].Health = health
+            end
+            
+            if onScreen and player.Character:FindFirstChild("Humanoid") then
+                local hum = player.Character.Humanoid
+                local healthPercent = math.floor((hum.Health / hum.MaxHealth) * 100)
+                espObjects[player].Health.Text = healthPercent .. "%"
+                espObjects[player].Health.Position = Vector2.new(vector.X, vector.Y + 35)
+                espObjects[player].Health.Visible = true
+                
+                if healthPercent > 75 then
+                    espObjects[player].Health.Color = Color3.new(0, 1, 0)
+                elseif healthPercent > 50 then
+                    espObjects[player].Health.Color = Color3.new(1, 1, 0)
+                elseif healthPercent > 25 then
+                    espObjects[player].Health.Color = Color3.new(1, 0.5, 0)
+                else
+                    espObjects[player].Health.Color = Color3.new(1, 0, 0)
+                end
+            else
+                if espObjects[player].Health then
+                    espObjects[player].Health.Visible = false
+                end
+            end
+        end
+        
+        -- Name ESP
+        if espNames then
+            if not espObjects[player].Name then
+                local name = Drawing.new("Text")
+                name.Visible = true
+                name.Color = Color3.new(1, 1, 1)
+                name.Size = 14
+                name.Center = true
+                name.Outline = true
+                espObjects[player].Name = name
+            end
+            
+            if onScreen then
+                espObjects[player].Name.Text = player.Name
+                espObjects[player].Name.Position = Vector2.new(vector.X, vector.Y - 20)
+                espObjects[player].Name.Visible = true
+            else
+                espObjects[player].Name.Visible = false
+            end
+        end
+    end
+    
+    table.insert(espObjects[player].Connections, RunService.RenderStepped:Connect(updateESP))
+end
+
+local function removeESP(player)
+    if espObjects[player] then
+        for _, connection in pairs(espObjects[player].Connections) do
+            connection:Disconnect()
+        end
+        
+        if espObjects[player].Box then espObjects[player].Box:Remove() end
+        if espObjects[player].Tracer then espObjects[player].Tracer:Remove() end
+        if espObjects[player].Distance then espObjects[player].Distance:Remove() end
+        if espObjects[player].Health then espObjects[player].Health:Remove() end
+        if espObjects[player].Name then espObjects[player].Name:Remove() end
+        
+        if espObjects[player].Container then
+            espObjects[player].Container:Destroy()
+        end
+        
+        espObjects[player] = nil
+    end
+end
+
+local function clearAllESP()
+    for player, _ in pairs(espObjects) do
+        removeESP(player)
+    end
+end
+
+local function updateAllESP()
+    if espEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LP then
+                createESP(player)
+            end
+        end
+    else
+        clearAllESP()
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if espEnabled then
+        task.wait(1)
+        createESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    removeESP(player)
+end)
+
+TabESP:CreateToggle({
+    Name = "Ativar ESP (E)",
+    Default = Config.ESPEnabled,
+    Callback = function(value)
+        Config.ESPEnabled = value
+        espEnabled = value
+        updateAllESP()
+    end
+})
+
+TabESP:CreateSection({
+    Name = "Opções de ESP"
+})
+
+TabESP:CreateToggle({
+    Name = "Boxes",
+    Default = Config.ESPBoxes,
+    Callback = function(value)
+        Config.ESPBoxes = value
+        espBoxes = value
+    end
+})
+
+TabESP:CreateToggle({
+    Name = "Tracers",
+    Default = Config.ESPTracers,
+    Callback = function(value)
+        Config.ESPTracers = value
+        espTracers = value
+    end
+})
+
+TabESP:CreateToggle({
+    Name = "Distância",
+    Default = Config.ESPDistance,
+    Callback = function(value)
+        Config.ESPDistance = value
+        espDistance = value
+    end
+})
+
+TabESP:CreateToggle({
+    Name = "Vida",
+    Default = Config.ESPHealth,
+    Callback = function(value)
+        Config.ESPHealth = value
+        espHealth = value
+    end
+})
+
+TabESP:CreateToggle({
+    Name = "Nome",
+    Default = Config.ESPNames,
+    Callback = function(value)
+        Config.ESPNames = value
+        espNames = value
+    end
+})
+
+TabESP:CreateSection({
+    Name = "Configurações"
+})
+
+TabESP:CreateSlider({
+    Name = "Distância Máxima",
+    Min = 100,
+    Max = 5000,
+    Default = Config.ESPMaxDistance,
+    Callback = function(value)
+        Config.ESPMaxDistance = value
+        espMaxDistance = value
+    end
+})
+
+TabESP:CreateDropdown({
+    Name = "Filtro de Time",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = Config.ESPFilter,
+    Callback = function(value)
+        Config.ESPFilter = value
+        espFilter = value
+    end
+})
+
+TabESP:CreateColorPicker({
+    Name = "Cor das Boxes",
+    Default = espBoxColor,
+    Callback = function(color)
+        Config.ESPBoxColor = {color.R, color.G, color.B}
+        espBoxColor = color
+    end
+})
+
+TabESP:CreateColorPicker({
+    Name = "Cor dos Tracers",
+    Default = espTracerColor,
+    Callback = function(color)
+        Config.ESPTracerColor = {color.R, color.G, color.B}
+        espTracerColor = color
+    end
+})
+
+-- ==================================================================================
+-- ============================== HIGHLIGHT ESP TAB =================================
+-- ==================================================================================
+
+TabHighlight:CreateSection({
+    Name = "Highlight ESP"
+})
+
+local function createHighlight(player)
+    if player == LP then return end
+    if playerHighlights[player] then return end
+    
+    local function addHighlight(char)
+        if not char then return end
+        
+        task.wait(0.1)
+        
+        if not shouldShowPlayer(player, highlightFilter) then
+            return
+        end
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "PlayerHighlight"
+        highlight.Adornee = char
+        highlight.FillColor = highlightFillColor
+        highlight.OutlineColor = highlightOutlineColor
+        highlight.FillTransparency = highlightFillTransparency
+        highlight.OutlineTransparency = highlightOutlineTransparency
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = char
+        
+        playerHighlights[player] = highlight
+    end
+    
+    if player.Character then
+        addHighlight(player.Character)
+    end
+    
+    player.CharacterAdded:Connect(function(char)
+        if highlightEnabled then
+            addHighlight(char)
+        end
+    end)
+end
+
+local function removeHighlight(player)
+    if playerHighlights[player] then
+        playerHighlights[player]:Destroy()
+        playerHighlights[player] = nil
+    end
+end
+
+local function removeAllHighlights()
+    for player, highlight in pairs(playerHighlights) do
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    playerHighlights = {}
+end
+
+local function updateAllHighlights()
+    if highlightEnabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= LP then
+                createHighlight(player)
+            end
+        end
+    else
+        removeAllHighlights()
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if highlightEnabled then
+        createHighlight(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    removeHighlight(player)
+end)
+
+TabHighlight:CreateToggle({
+    Name = "Ativar Highlight (H)",
+    Default = Config.HighlightEnabled,
+    Callback = function(value)
+        Config.HighlightEnabled = value
+        highlightEnabled = value
+        updateAllHighlights()
+    end
+})
+
+TabHighlight:CreateSection({
+    Name = "Configurações"
+})
+
+TabHighlight:CreateDropdown({
+    Name = "Filtro de Time",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = Config.HighlightFilter,
+    Callback = function(value)
+        Config.HighlightFilter = value
+        highlightFilter = value
+        removeAllHighlights()
+        updateAllHighlights()
+    end
+})
+
+TabHighlight:CreateColorPicker({
+    Name = "Cor de Preenchimento",
+    Default = highlightFillColor,
+    Callback = function(color)
+        Config.HighlightFillColor = {color.R, color.G, color.B}
+        highlightFillColor = color
+        for _, highlight in pairs(playerHighlights) do
+            if highlight then
+                highlight.FillColor = color
+            end
+        end
+    end
+})
+
+TabHighlight:CreateColorPicker({
+    Name = "Cor da Borda",
+    Default = highlightOutlineColor,
+    Callback = function(color)
+        Config.HighlightOutlineColor = {color.R, color.G, color.B}
+        highlightOutlineColor = color
+        for _, highlight in pairs(playerHighlights) do
+            if highlight then
+                highlight.OutlineColor = color
+            end
+        end
+    end
+})
+
+TabHighlight:CreateSlider({
+    Name = "Transparência do Preenchimento",
+    Min = 0,
+    Max = 1,
+    Default = Config.HighlightFillTransparency,
+    Decimals = 2,
+    Callback = function(value)
+        Config.HighlightFillTransparency = value
+        highlightFillTransparency = value
+        for _, highlight in pairs(playerHighlights) do
+            if highlight then
+                highlight.FillTransparency = value
+            end
+        end
+    end
+})
+
+TabHighlight:CreateSlider({
+    Name = "Transparência da Borda",
+    Min = 0,
+    Max = 1,
+    Default = Config.HighlightOutlineTransparency,
+    Decimals = 2,
+    Callback = function(value)
+        Config.HighlightOutlineTransparency = value
+        highlightOutlineTransparency = value
+        for _, highlight in pairs(playerHighlights) do
+            if highlight then
+                highlight.OutlineTransparency = value
+            end
+        end
+    end
+})
+
+-- ==================================================================================
+-- ============================== AIM ASSIST TAB ====================================
+-- ==================================================================================
+
+TabAim:CreateSection({
+    Name = "Aim Assist"
+})
+
+local currentAimTarget = nil
+
+local function getClosestPlayer()
+    local closestDist = math.huge
+    local closest = nil
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        if not shouldShowPlayer(player, aimFilter) then continue end
+        
+        local char = player.Character
+        if not char then continue end
+        
+        local targetPart = char:FindFirstChild(aimPart)
+        if not targetPart then continue end
+        
+        if wallCheck then
+            local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
+            local hit, pos = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character, char})
+            if hit then continue end
+        end
+        
+        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+        if not onScreen then continue end
+        
+        local mousePos = UserInputService:GetMouseLocation()
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        
+        if dist < closestDist then
+            closestDist = dist
+            closest = player
+        end
+    end
+    
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if aimAssistEnabled then
+        currentAimTarget = getClosestPlayer()
+        
+        if currentAimTarget and currentAimTarget.Character then
+            local targetPart = currentAimTarget.Character:FindFirstChild(aimPart)
+            if targetPart then
+                local targetPos = Camera:WorldToViewportPoint(targetPart.Position)
+                local mousePos = UserInputService:GetMouseLocation()
+                
+                if aimLockEnabled then
+                    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+                else
+                    local diff = Vector2.new(targetPos.X - mousePos.X, targetPos.Y - mousePos.Y)
+                    mousemoverel(diff.X * aimSmoothness, diff.Y * aimSmoothness)
+                end
+            end
         end
     end
 end)
 
--- Reaplica ao respawnar
-LP.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    if Humanoid then
-        Humanoid.WalkSpeed = _G.CurrentWalkSpeed
-        Humanoid.UseJumpPower = true
-        Humanoid.JumpPower = _G.CurrentJumpPower
+TabAim:CreateToggle({
+    Name = "Ativar Aim Assist (R)",
+    Default = Config.AimAssistEnabled,
+    Callback = function(value)
+        Config.AimAssistEnabled = value
+        aimAssistEnabled = value
     end
+})
+
+TabAim:CreateToggle({
+    Name = "Aim Lock (Trava na Mira)",
+    Default = Config.AimLockEnabled,
+    Callback = function(value)
+        Config.AimLockEnabled = value
+        aimLockEnabled = value
+    end
+})
+
+TabAim:CreateSection({
+    Name = "Configurações"
+})
+
+TabAim:CreateSlider({
+    Name = "Suavidade (menor = mais suave)",
+    Min = 0.01,
+    Max = 1,
+    Default = Config.AimSmoothness,
+    Decimals = 2,
+    Callback = function(value)
+        Config.AimSmoothness = value
+        aimSmoothness = value
+    end
+})
+
+TabAim:CreateDropdown({
+    Name = "Parte do Corpo",
+    Options = {"Head", "Torso", "HumanoidRootPart"},
+    Default = Config.AimPart,
+    Callback = function(value)
+        Config.AimPart = value
+        aimPart = value
+    end
+})
+
+TabAim:CreateDropdown({
+    Name = "Filtro de Time",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = Config.AimFilter,
+    Callback = function(value)
+        Config.AimFilter = value
+        aimFilter = value
+    end
+})
+
+TabAim:CreateToggle({
+    Name = "Wall Check (Ignorar Paredes)",
+    Default = Config.WallCheck,
+    Callback = function(value)
+        Config.WallCheck = value
+        wallCheck = value
+    end
+})
+
+-- ==================================================================================
+-- ============================== PLAYER AIM TAB ====================================
+-- ==================================================================================
+
+TabPlayerAim:CreateSection({
+    Name = "Player Aim"
+})
+
+local selectedPlayerForAim = nil
+local playerAimConnection = nil
+
+local function aimAtPlayer(player)
+    if not player or not player.Character then return end
+    
+    local targetPart = player.Character:FindFirstChild(playerAimPart)
+    if not targetPart then return end
+    
+    if playerWallCheck then
+        local ray = Ray.new(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000)
+        local hit, pos = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character, player.Character})
+        if hit then return end
+    end
+    
+    Camera.CFrame = CFrame.lookAt(Camera.CFrame.Position, targetPart.Position)
+end
+
+TabPlayerAim:CreateToggle({
+    Name = "Ativar Player Aim (T)",
+    Default = Config.PlayerAimEnabled,
+    Callback = function(value)
+        Config.PlayerAimEnabled = value
+        playerAimEnabled = value
+        
+        if value then
+            if selectedPlayerForAim then
+                playerAimConnection = RunService.RenderStepped:Connect(function()
+                    if playerAimEnabled and selectedPlayerForAim then
+                        aimAtPlayer(selectedPlayerForAim)
+                    end
+                end)
+            end
+        else
+            if playerAimConnection then
+                playerAimConnection:Disconnect()
+                playerAimConnection = nil
+            end
+        end
+    end
+})
+
+TabPlayerAim:CreateSection({
+    Name = "Configurações"
+})
+
+TabPlayerAim:CreateDropdown({
+    Name = "Parte do Corpo",
+    Options = {"Head", "Torso", "HumanoidRootPart"},
+    Default = Config.PlayerAimPart,
+    Callback = function(value)
+        Config.PlayerAimPart = value
+        playerAimPart = value
+    end
+})
+
+TabPlayerAim:CreateDropdown({
+    Name = "Filtro de Time",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = Config.PlayerAimFilter,
+    Callback = function(value)
+        Config.PlayerAimFilter = value
+        playerAimFilter = value
+    end
+})
+
+TabPlayerAim:CreateToggle({
+    Name = "Wall Check (Ignorar Paredes)",
+    Default = Config.PlayerWallCheck,
+    Callback = function(value)
+        Config.PlayerWallCheck = value
+        playerWallCheck = value
+    end
+})
+
+TabPlayerAim:CreateSection({
+    Name = "Selecionar Jogador"
+})
+
+local playerNames = {}
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LP then
+        table.insert(playerNames, player.Name)
+    end
+end
+
+TabPlayerAim:CreateDropdown({
+    Name = "Jogador Alvo",
+    Options = playerNames,
+    Default = playerNames[1] or "Nenhum",
+    Callback = function(value)
+        selectedPlayerForAim = Players:FindFirstChild(value)
+        
+        if playerAimEnabled then
+            if playerAimConnection then
+                playerAimConnection:Disconnect()
+            end
+            
+            playerAimConnection = RunService.RenderStepped:Connect(function()
+                if playerAimEnabled and selectedPlayerForAim then
+                    aimAtPlayer(selectedPlayerForAim)
+                end
+            end)
+        end
+    end
+})
+
+Players.PlayerAdded:Connect(function(player)
+    -- Atualizar dropdown quando novo jogador entrar
+end)
+
+-- ==================================================================================
+-- ============================== PROTECTION TAB ====================================
+-- ==================================================================================
+
+TabProt:CreateSection({
+    Name = "Proteção"
+})
+
+TabProt:CreateToggle({
+    Name = "God Mode (G)",
+    Default = Config.GodMode,
+    Callback = function(value)
+        Config.GodMode = value
+        godMode = value
+    end
+})
+
+TabProt:CreateToggle({
+    Name = "Travar HP (Não God Mode)",
+    Default = Config.LockHP,
+    Callback = function(value)
+        Config.LockHP = value
+        lockHP = value
+    end
+})
+
+TabProt:CreateToggle({
+    Name = "Anti Void (Anti Cair no Vazio)",
+    Default = Config.AntiVoid,
+    Callback = function(value)
+        Config.AntiVoid = value
+        antiVoid = value
+    end
+})
+
+TabProt:CreateToggle({
+    Name = "Anti Knockback",
+    Default = Config.AntiKB,
+    Callback = function(value)
+        Config.AntiKB = value
+        antiKB = value
+    end
+})
+
+-- ==================================================================================
+-- ============================== PLAYERS TAB =======================================
+-- ==================================================================================
+
+TabPlayers:CreateSection({
+    Name = "Ações com Jogadores"
+})
+
+local selectedPlayer = nil
+
+local playerList = {}
+for _, player in pairs(Players:GetPlayers()) do
+    if player ~= LP then
+        table.insert(playerList, player.Name)
+    end
+end
+
+TabPlayers:CreateDropdown({
+    Name = "Selecionar Jogador",
+    Options = playerList,
+    Default = playerList[1] or "Nenhum",
+    Callback = function(value)
+        selectedPlayer = Players:FindFirstChild(value)
+    end
+})
+
+TabPlayers:CreateButton({
+    Name = "Teleportar para Jogador",
+    Callback = function()
+        if selectedPlayer and selectedPlayer.Character and HRP then
+            HRP.CFrame = selectedPlayer.Character.HumanoidRootPart.CFrame
+            WindUI:Notify({
+                Title = "Teleportado",
+                Content = "Você foi teleportado para " .. selectedPlayer.Name,
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabPlayers:CreateButton({
+    Name = "Spectate Jogador",
+    Callback = function()
+        if selectedPlayer and selectedPlayer.Character then
+            Camera.CameraSubject = selectedPlayer.Character.Humanoid
+            WindUI:Notify({
+                Title = "Spectate",
+                Content = "Observando " .. selectedPlayer.Name,
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabPlayers:CreateButton({
+    Name = "Parar Spectate",
+    Callback = function()
+        if LP.Character then
+            Camera.CameraSubject = LP.Character.Humanoid
+            WindUI:Notify({
+                Title = "Spectate",
+                Content = "Voltou a observar você mesmo",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- ==================================================================================
+-- ============================== WAYPOINTS TAB =====================================
+-- ==================================================================================
+
+TabWaypoints:CreateSection({
+    Name = "Waypoints"
+})
+
+TabWaypoints:CreateInput({
+    Name = "Nome do Waypoint",
+    PlaceholderText = "Digite o nome...",
+    Callback = function(text)
+        -- Armazena o nome temporariamente
+        _G.WaypointName = text
+    end
+})
+
+TabWaypoints:CreateButton({
+    Name = "Criar Waypoint (Posição Atual)",
+    Callback = function()
+        if not _G.WaypointName or _G.WaypointName == "" then
+            WindUI:Notify({
+                Title = "Erro",
+                Content = "Digite um nome para o waypoint!",
+                Duration = 3
+            })
+            return
+        end
+        
+        if not HRP then return end
+        
+        waypoints[_G.WaypointName] = {
+            Position = HRP.CFrame.Position,
+            CFrame = HRP.CFrame
+        }
+        
+        WindUI:Notify({
+            Title = "Waypoint Criado",
+            Content = "Waypoint '" .. _G.WaypointName .. "' criado!",
+            Duration = 3
+        })
+        
+        _G.WaypointName = ""
+    end
+})
+
+TabWaypoints:CreateSection({
+    Name = "Teleportar para Waypoint"
+})
+
+local function getWaypointNames()
+    local names = {}
+    for name, _ in pairs(waypoints) do
+        table.insert(names, name)
+    end
+    return names
+end
+
+local waypointDropdown = TabWaypoints:CreateDropdown({
+    Name = "Selecionar Waypoint",
+    Options = getWaypointNames(),
+    Default = "Nenhum",
+    Callback = function(value)
+        selectedWP = value
+    end
+})
+
+TabWaypoints:CreateButton({
+    Name = "Teleportar",
+    Callback = function()
+        if selectedWP and waypoints[selectedWP] and HRP then
+            HRP.CFrame = waypoints[selectedWP].CFrame
+            WindUI:Notify({
+                Title = "Teleportado",
+                Content = "Você foi teleportado para " .. selectedWP,
+                Duration = 3
+            })
+        end
+    end
+})
+
+TabWaypoints:CreateButton({
+    Name = "Deletar Waypoint",
+    Callback = function()
+        if selectedWP and waypoints[selectedWP] then
+            waypoints[selectedWP] = nil
+            WindUI:Notify({
+                Title = "Waypoint Deletado",
+                Content = "Waypoint '" .. selectedWP .. "' foi deletado!",
+                Duration = 3
+            })
+            selectedWP = nil
+            waypointDropdown:Refresh(getWaypointNames())
+        end
+    end
+})
+
+-- ==================================================================================
+-- ============================== VISUALS TAB =======================================
+-- ==================================================================================
+
+TabVisuals:CreateSection({
+    Name = "Visuais"
+})
+
+TabVisuals:CreateToggle({
+    Name = "Fullbright (B)",
+    Default = Config.Fullbright,
+    Callback = function(value)
+        Config.Fullbright = value
+        fullbright = value
+        
+        if value then
+            Lighting.Ambient = Color3.new(1, 1, 1)
+            Lighting.Brightness = 2
+            Lighting.FogEnd = 1e10
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        else
+            Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+            Lighting.Brightness = 1
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = true
+            Lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
+        end
+    end
+})
+
+TabVisuals:CreateSlider({
+    Name = "Campo de Visão (FOV)",
+    Min = 70,
+    Max = 120,
+    Default = Config.FOV,
+    Callback = function(value)
+        Config.FOV = value
+        Camera.FieldOfView = value
+    end
+})
+
+TabVisuals:CreateButton({
+    Name = "Esconder Objetos 3D (Otimizar FPS)",
+    Callback = function()
+        resetVisuals()
+        WindUI:Notify({
+            Title = "Otimização FPS",
+            Content = "Objetos 3D escondidos!",
+            Duration = 3
+        })
+    end
+})
+
+-- ==================================================================================
+-- ============================== WORLD TAB =========================================
+-- ==================================================================================
+
+TabWorld:CreateSection({
+    Name = "Mundo"
+})
+
+TabWorld:CreateSlider({
+    Name = "Hora do Dia",
+    Min = 0,
+    Max = 24,
+    Default = Config.TimeOfDay,
+    Callback = function(value)
+        Config.TimeOfDay = value
+        Lighting.ClockTime = value
+    end
+})
+
+TabWorld:CreateColorPicker({
+    Name = "Cor Ambiente",
+    Default = Color3.new(unpack(Config.Ambient)),
+    Callback = function(color)
+        Config.Ambient = {color.R, color.G, color.B}
+        Lighting.Ambient = color
+        Lighting.OutdoorAmbient = color
+    end
+})
+
+-- ==================================================================================
+-- ============================== FPS/STATS TAB =====================================
+-- ==================================================================================
+
+TabFPS:CreateSection({
+    Name = "Estatísticas"
+})
+
+local fpsLabel = TabFPS:CreateLabel({
+    Text = "FPS: Carregando..."
+})
+
+local pingLabel = TabFPS:CreateLabel({
+    Text = "Ping: Carregando..."
+})
+
+local playersLabel = TabFPS:CreateLabel({
+    Text = "Jogadores: " .. #Players:GetPlayers()
+})
+
+-- Atualizar stats
+task.spawn(function()
+    local lastUpdate = tick()
+    local frameCount = 0
+    
+    RunService.RenderStepped:Connect(function()
+        frameCount = frameCount + 1
+        
+        if tick() - lastUpdate >= 1 then
+            local fps = frameCount
+            fpsLabel:Set("FPS: " .. fps)
+            
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+            pingLabel:Set("Ping: " .. math.floor(ping) .. " ms")
+            
+            playersLabel:Set("Jogadores: " .. #Players:GetPlayers())
+            
+            frameCount = 0
+            lastUpdate = tick()
+        end
+    end)
 end)
 
 -- ==================================================================================
 -- ============================== CONFIG TAB ========================================
 -- ==================================================================================
 
-local SectionConfig = TabConfig:Section({Title = "💾 Gerenciamento de Configuração"})
-
--- Caminho do arquivo
-local ConfigFolder = "UniversalHub_WindUI"
-local ConfigFileName = "Config.json"
-
-if not isfolder(ConfigFolder) then
-    makefolder(ConfigFolder)
-end
-
-local ConfigPath = ConfigFolder .. "/" .. ConfigFileName
-
-SectionConfig:Label({
-    Text = "📁 Caminho: " .. ConfigPath
+TabConfig:CreateSection({
+    Name = "Sistema de Configuração"
 })
 
-SectionConfig:Label({
-    Text = "✅ Sistema com atualização visual funcional!"
+TabConfig:CreateButton({
+    Name = "💾 Salvar Configuração",
+    Callback = function()
+        SaveConfig()
+    end
 })
 
--- ================== FUNÇÕES DE CONFIG ==================
-
-local function SaveConfig()
-    local success, errorMsg = pcall(function()
-        print("💾 Salvando configuração...")
+TabConfig:CreateButton({
+    Name = "📂 Carregar Configuração",
+    Callback = function()
+        LoadConfig()
         
-        local currentConfig = {
-            -- Movement
-            WalkSpeed = _G.CurrentWalkSpeed or 16,
-            JumpPower = _G.CurrentJumpPower or 50,
-            
-            -- Adicione outras configurações aqui conforme necessário
-        }
-        
-        local jsonData = HttpService:JSONEncode(currentConfig)
-        writefile(ConfigPath, jsonData)
-        
-        print("✅ Configuração salva! (" .. #jsonData .. " bytes)")
-        
-        Window:Notify({
-            Title = "✅ Configuração Salva",
-            Content = "Salvo com sucesso: " .. #jsonData .. " bytes",
-            Duration = 3
-        })
-    end)
-    
-    if not success then
-        warn("❌ Erro ao salvar: " .. tostring(errorMsg))
-        Window:Notify({
-            Title = "❌ Erro ao Salvar",
-            Content = tostring(errorMsg),
-            Duration = 5
-        })
-    end
-end
-
-local function LoadConfig()
-    if not isfile(ConfigPath) then
-        Window:Notify({
-            Title = "⚠️ Nenhuma Config Encontrada",
-            Content = "Nenhum arquivo de configuração foi encontrado.",
-            Duration = 4
-        })
-        return
-    end
-    
-    local success, config = pcall(function()
-        print("📂 Carregando arquivo...")
-        local data = readfile(ConfigPath)
-        return HttpService:JSONDecode(data)
-    end)
-    
-    if not success or type(config) ~= "table" then
-        Window:Notify({
-            Title = "❌ Configuração Corrompida",
-            Content = "O arquivo está inválido. Tente resetar.",
-            Duration = 5
-        })
-        return
-    end
-    
-    print("🔧 Aplicando valores e atualizando interface...")
-    
-    pcall(function()
-        -- Movement
-        if config.WalkSpeed then
-            _G.CurrentWalkSpeed = config.WalkSpeed
-            _G.UIElements.WalkSpeed:Set(config.WalkSpeed)  -- ✅ ATUALIZA VISUAL!
-            if Humanoid then Humanoid.WalkSpeed = config.WalkSpeed end
-            print("✅ WalkSpeed carregado: " .. config.WalkSpeed)
+        -- Aplicar configurações carregadas
+        if Humanoid then
+            Humanoid.WalkSpeed = Config.WalkSpeed
+            Humanoid.JumpPower = Config.JumpPower
         end
         
-        if config.JumpPower then
-            _G.CurrentJumpPower = config.JumpPower
-            _G.UIElements.JumpPower:Set(config.JumpPower)  -- ✅ ATUALIZA VISUAL!
-            if Humanoid then 
-                Humanoid.JumpPower = config.JumpPower
-                Humanoid.UseJumpPower = true
-            end
-            print("✅ JumpPower carregado: " .. config.JumpPower)
-        end
+        Camera.FieldOfView = Config.FOV
         
-        print("✅ Configuração carregada e interface atualizada!")
-    end)
-    
-    Window:Notify({
-        Title = "✅ Configuração Carregada",
-        Content = "Valores e interface atualizados com sucesso!",
-        Duration = 4
-    })
-end
-
-local function ResetConfig()
-    print("🔄 Resetando configurações...")
-    
-    if isfile(ConfigPath) then
-        delfile(ConfigPath)
-    end
-    
-    -- Reset valores
-    _G.CurrentWalkSpeed = 16
-    _G.CurrentJumpPower = 50
-    
-    -- Atualiza interface
-    _G.UIElements.WalkSpeed:Set(16)
-    _G.UIElements.JumpPower:Set(50)
-    
-    if Humanoid then
-        Humanoid.WalkSpeed = 16
-        Humanoid.JumpPower = 50
-    end
-    
-    if Camera then Camera.FieldOfView = 70 end
-    workspace.Gravity = 196
-    Lighting.ClockTime = 14
-    
-    print("✅ Configurações resetadas!")
-    
-    Window:Notify({
-        Title = "🔄 Configuração Resetada",
-        Content = "Tudo voltou aos valores padrão!",
-        Duration = 3
-    })
-end
-
--- ================== BOTÕES DE CONFIG ==================
-
-SectionConfig:Button({
-    Title = "💾 Salvar Configuração",
-    Callback = SaveConfig
-})
-
-SectionConfig:Button({
-    Title = "📂 Carregar Configuração",
-    Callback = LoadConfig
-})
-
-SectionConfig:Button({
-    Title = "🔄 Resetar para Padrões",
-    Callback = ResetConfig
-})
-
--- ================== TESTES RÁPIDOS ==================
-
-local SectionTest = TabConfig:Section({Title = "🧪 Testes Rápidos"})
-
-SectionTest:Button({
-    Title = "Teste: WalkSpeed 200",
-    Callback = function()
-        _G.UIElements.WalkSpeed:Set(200)
-        Window:Notify({
-            Title = "🧪 Teste",
-            Content = "WalkSpeed definido para 200!",
+        WindUI:Notify({
+            Title = "Config Aplicada",
+            Content = "Todas as configurações foram aplicadas!",
             Duration = 3
         })
     end
 })
 
-SectionTest:Button({
-    Title = "Teste: JumpPower 250",
+TabConfig:CreateButton({
+    Name = "🔄 Resetar para Padrão",
     Callback = function()
-        _G.UIElements.JumpPower:Set(250)
-        Window:Notify({
-            Title = "🧪 Teste",
-            Content = "JumpPower definido para 250!",
-            Duration = 3
-        })
-    end
-})
-
-SectionTest:Button({
-    Title = "Teste: Resetar Movement",
-    Callback = function()
-        _G.UIElements.WalkSpeed:Set(16)
-        _G.UIElements.JumpPower:Set(50)
-        Window:Notify({
-            Title = "🧪 Teste",
-            Content = "Movement resetado!",
-            Duration = 3
-        })
-    end
-})
-
--- ================== AUTO-SAVE ==================
-
-local SectionAutoSave = TabConfig:Section({Title = "⏰ Auto-Save"})
-
-local autoSaveEnabled = false
-local autoSaveConnection
-
-_G.UIElements.AutoSave = SectionAutoSave:Toggle({
-    Title = "Auto-Save (a cada 5 minutos)",
-    Default = false,
-    Callback = function(v)
-        autoSaveEnabled = v
+        Config = DefaultConfig
+        SaveConfig()
         
-        if v then
-            autoSaveConnection = task.spawn(function()
-                while autoSaveEnabled do
-                    task.wait(300) -- 5 minutos
-                    if autoSaveEnabled then
-                        SaveConfig()
-                        print("⏰ Auto-save executado!")
-                    end
-                end
-            end)
-            
-            Window:Notify({
-                Title = "⏰ Auto-Save Ativado",
-                Content = "Salvamento automático a cada 5 minutos!",
-                Duration = 3
-            })
-        else
-            if autoSaveConnection then
-                task.cancel(autoSaveConnection)
-            end
-            
-            Window:Notify({
-                Title = "⏰ Auto-Save Desativado",
-                Content = "Salvamento automático desativado.",
-                Duration = 3
-            })
-        end
+        WindUI:Notify({
+            Title = "Config Resetada",
+            Content = "Configurações resetadas para padrão!",
+            Duration = 3
+        })
     end
 })
 
--- ================== INFORMAÇÕES ==================
-
-local SectionInfo = TabConfig:Section({Title = "ℹ️ Informações"})
-
-SectionInfo:Label({
-    Text = "🎨 UI Library: WindUI"
+TabConfig:CreateSection({
+    Name = "Keybinds"
 })
 
-SectionInfo:Label({
-    Text = "👤 Criado por: ZakyzVortex"
+TabConfig:CreateLabel({
+    Text = "ESP: E | Highlight: H"
 })
 
-SectionInfo:Label({
-    Text = "🔧 Convertido para WindUI com Config"
+TabConfig:CreateLabel({
+    Text = "Aim: R | Player Aim: T"
 })
 
-SectionInfo:Label({
-    Text = "✅ Toggles e Sliders atualizam visualmente!"
+TabConfig:CreateLabel({
+    Text = "Fly: F | Noclip: N"
 })
 
--- ================== KEYBINDS ==================
+TabConfig:CreateLabel({
+    Text = "Inf Jump: J | Auto Click: C"
+})
 
-local SectionKeybinds = TabConfig:Section({Title = "⌨️ Keybinds"})
+TabConfig:CreateLabel({
+    Text = "God Mode: G | Fullbright: B"
+})
 
-SectionKeybinds:Keybind({
-    Title = "Toggle GUI",
-    Default = "RightControl",
+TabConfig:CreateLabel({
+    Text = "Toggle GUI: RightControl"
+})
+
+TabConfig:CreateSection({
+    Name = "GUI"
+})
+
+TabConfig:CreateButton({
+    Name = "Destruir GUI (Irreversível)",
     Callback = function()
-        Window:Toggle()
-    end
-})
-
--- ================== DESTRUIR GUI ==================
-
-local SectionGUI = TabConfig:Section({Title = "🚪 GUI"})
-
-SectionGUI:Button({
-    Title = "Destruir GUI",
-    Callback = function()
+        clearAllESP()
+        removeAllHighlights()
+        
+        WindUI:Notify({
+            Title = "⚠️ GUI Destruída",
+            Content = "Recarregue o script para usar novamente",
+            Duration = 3
+        })
+        
+        task.wait(1)
         Window:Destroy()
     end
 })
 
--- ================== FINALIZAÇÃO ==================
+-- ==================================================================================
+-- ============================== UTILITY TAB =======================================
+-- ==================================================================================
 
-print("✅ Universal Hub - WindUI Version carregado!")
-print("💾 Sistema de configuração funcional!")
-print("🎨 Todos elementos com atualização visual!")
-
-Window:Notify({
-    Title = "✅ Hub Carregado",
-    Content = "Universal Hub - WindUI Version pronto para uso!",
-    Duration = 5
+TabUtil:CreateSection({
+    Name = "Utilidades"
 })
+
+TabUtil:CreateToggle({
+    Name = "Noclip (N)",
+    Default = Config.Noclip,
+    Callback = function(value)
+        Config.Noclip = value
+        noclip = value
+    end
+})
+
+-- ================== SHIFT LOCK SYSTEM ==================
+local shiftLockEnabled = false
+local shiftLockRotConnection
+local oldAutoRotate
+
+local function lockMouse(enabled)
+    if UserInputService.MouseEnabled then
+        UserInputService.MouseBehavior = enabled and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+    end
+end
+
+local function faceCameraDirection(humanoid, rootPart, enabled)
+    if shiftLockRotConnection then
+        shiftLockRotConnection:Disconnect()
+        shiftLockRotConnection = nil
+    end
+    
+    if enabled then
+        oldAutoRotate = humanoid.AutoRotate
+        humanoid.AutoRotate = false
+        
+        shiftLockRotConnection = RunService.RenderStepped:Connect(function()
+            local camera = Workspace.CurrentCamera
+            if not rootPart or not camera then return end
+            
+            local lookVector = camera.CFrame.LookVector
+            local flatVector = Vector3.new(lookVector.X, 0, lookVector.Z)
+            
+            if flatVector.Magnitude > 0.0001 then
+                rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatVector.Unit, Vector3.yAxis)
+            end
+        end)
+    else
+        if oldAutoRotate ~= nil then
+            humanoid.AutoRotate = oldAutoRotate
+        end
+    end
+end
+
+local function applyShiftLock(enabled)
+    if not Character or not Humanoid or not HRP then 
+        task.wait(0.5)
+        if LP.Character then
+            BindCharacter(LP.Character)
+        end
+        return 
+    end
+    
+    shiftLockEnabled = enabled
+    lockMouse(enabled)
+    faceCameraDirection(Humanoid, HRP, enabled)
+end
+
+LP.CharacterAdded:Connect(function()
+    task.defer(function()
+        task.wait(0.5)
+        if shiftLockEnabled then
+            applyShiftLock(true)
+        end
+    end)
+end)
+
+TabUtil:CreateToggle({
+    Name = "Shift Lock",
+    Default = Config.ShiftLock,
+    Callback = function(value)
+        Config.ShiftLock = value
+        applyShiftLock(value)
+    end
+})
+
+TabUtil:CreateToggle({
+    Name = "Insta Interact",
+    Default = Config.InstaInteract,
+    Callback = function(value)
+        Config.InstaInteract = value
+        _G.InstaInteract = value
+        
+        if value then
+            _G.InstaInteractConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
+                fireproximityprompt(prompt)
+            end)
+        else
+            if _G.InstaInteractConnection then
+                _G.InstaInteractConnection:Disconnect()
+            end
+        end
+    end
+})
+
+TabUtil:CreateSection({
+    Name = "Server"
+})
+
+TabUtil:CreateButton({
+    Name = "Rejoin",
+    Callback = function()
+        TeleportService:Teleport(game.PlaceId, LP)
+    end
+})
+
+TabUtil:CreateButton({
+    Name = "Server Hop",
+    Callback = function()
+        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(servers.data) do
+            if s.playing < s.maxPlayers then
+                TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP)
+                break
+            end
+        end
+    end
+})
+
+-- ==================================================================================
+-- ============================== KEYBIND SYSTEM ====================================
+-- ==================================================================================
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    -- ESP TOGGLE
+    if input.KeyCode == keybindESP then
+        espEnabled = not espEnabled
+        Config.ESPEnabled = espEnabled
+        updateAllESP()
+        
+    -- HIGHLIGHT TOGGLE
+    elseif input.KeyCode == keybindHighlight then
+        highlightEnabled = not highlightEnabled
+        Config.HighlightEnabled = highlightEnabled
+        updateAllHighlights()
+        
+    -- AIM ASSIST TOGGLE
+    elseif input.KeyCode == keybindAim then
+        aimAssistEnabled = not aimAssistEnabled
+        Config.AimAssistEnabled = aimAssistEnabled
+        
+    -- PLAYER AIM TOGGLE
+    elseif input.KeyCode == keybindPlayerAim then
+        playerAimEnabled = not playerAimEnabled
+        Config.PlayerAimEnabled = playerAimEnabled
+        
+        if playerAimEnabled then
+            if selectedPlayerForAim then
+                playerAimConnection = RunService.RenderStepped:Connect(function()
+                    if playerAimEnabled and selectedPlayerForAim then
+                        aimAtPlayer(selectedPlayerForAim)
+                    end
+                end)
+            end
+        else
+            if playerAimConnection then
+                playerAimConnection:Disconnect()
+                playerAimConnection = nil
+            end
+        end
+        
+    -- FLY TOGGLE
+    elseif input.KeyCode == keybindFly then
+        toggleFly(not flyEnabled)
+        
+    -- NOCLIP TOGGLE
+    elseif input.KeyCode == keybindNoclip then
+        noclip = not noclip
+        Config.Noclip = noclip
+        
+    -- INF JUMP TOGGLE
+    elseif input.KeyCode == keybindInfJump then
+        infJump = not infJump
+        Config.InfJump = infJump
+        
+    -- AUTO CLICK TOGGLE
+    elseif input.KeyCode == keybindAutoClick then
+        autoClick = not autoClick
+        Config.AutoClick = autoClick
+        
+    -- GOD MODE TOGGLE
+    elseif input.KeyCode == keybindGodMode then
+        godMode = not godMode
+        Config.GodMode = godMode
+        
+    -- FULLBRIGHT TOGGLE
+    elseif input.KeyCode == keybindFullbright then
+        fullbright = not fullbright
+        Config.Fullbright = fullbright
+        
+        if fullbright then
+            Lighting.Ambient = Color3.new(1, 1, 1)
+            Lighting.Brightness = 2
+            Lighting.FogEnd = 1e10
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.new(1, 1, 1)
+        else
+            Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+            Lighting.Brightness = 1
+            Lighting.FogEnd = 100000
+            Lighting.GlobalShadows = true
+            Lighting.OutdoorAmbient = Color3.new(0.5, 0.5, 0.5)
+        end
+        
+    -- GUI TOGGLE
+    elseif input.KeyCode == keybindGUI then
+        Window:Toggle()
+    end
+    
+    -- FLY UP (SPACE)
+    if input.KeyCode == Enum.KeyCode.Space and flyEnabled then
+        flyUpImpulse = 1
+    end
+end)
+
+-- ==================================================================================
+-- ============================== RUNTIME LOOP ======================================
+-- ==================================================================================
+
+local lastRuntimeUpdate = 0
+RunService.RenderStepped:Connect(function(dt)
+    if not Character or not HRP or not Humanoid then return end
+
+    local now = tick()
+    if now - lastRuntimeUpdate < 0.033 then return end
+    lastRuntimeUpdate = now
+
+    if flyUpImpulse > 0 then
+        flyUpImpulse = flyUpImpulse - dt
+    end
+
+    if flyEnabled then
+        if not HRP:FindFirstChild("FlyVel") then
+            local bv = Instance.new("BodyVelocity", HRP)
+            bv.Name = "FlyVel"
+            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            local bg = Instance.new("BodyGyro", HRP)
+            bg.Name = "FlyGyro"
+            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        end
+        local dir = Humanoid.MoveDirection
+        local vel = Vector3.new(dir.X, 0, dir.Z) * flySpeed
+        if flyUpImpulse > 0 then
+            vel = vel + Vector3.new(0, flySpeed, 0)
+        end
+        HRP.FlyVel.Velocity = vel
+        HRP.FlyGyro.CFrame = Camera.CFrame
+    end
+
+    if noclip then
+        for _, p in pairs(Character:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.CanCollide = false
+            end
+        end
+    end
+
+    if godMode then
+        Humanoid.MaxHealth = math.huge
+        Humanoid.Health = Humanoid.MaxHealth
+    elseif lockHP then
+        Humanoid.Health = Humanoid.MaxHealth
+    end
+
+    if antiVoid and HRP.Position.Y < -80 then
+        HRP.CFrame = HRP.CFrame + Vector3.new(0, 200, 0)
+    end
+
+    if antiKB then
+        HRP.Velocity = HRP.Velocity * Vector3.new(0.8, 0.9, 0.8)
+    end
+end)
+
+-- Auto Click Loop
+task.spawn(function()
+    while task.wait() do
+        if autoClick then
+            mouse1click()
+            task.wait(clickDelay)
+        end
+    end
+end)
+
+-- Pulo Infinito
+UserInputService.JumpRequest:Connect(function()
+    if infJump and Humanoid then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- Anti Queda
+RunService.Stepped:Connect(function()
+    if antiFall and Humanoid then
+        local falling = Humanoid:GetState() == Enum.HumanoidStateType.Freefall
+        if falling then
+            Humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end
+end)
+
+print("✅ Universal Hub WindUI - Carregado com sucesso!")
+print("💾 Sistema de Save/Load incluído!")
+print("📊 Todas as funcionalidades mantidas da versão Rayfield")
+print("🎯 Use as keybinds ou o menu para ativar funções")
