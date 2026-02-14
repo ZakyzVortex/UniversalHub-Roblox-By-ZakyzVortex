@@ -2,7 +2,7 @@
 -- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
 
 -- Carrega apenas a biblioteca WindUI (sem o exemplo)
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/src/init.lua"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
 
 -- ================== SERVICES ==================
 local Players = game:GetService("Players")
