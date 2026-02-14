@@ -1,7 +1,7 @@
 -- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
 -- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
 
-local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/main.lua"))()
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/main.lua", true))()
 
 -- ================== SERVICES ==================
 local Players = game:GetService("Players")
