@@ -1,6 +1,5 @@
--- ================== UNIVERSAL HUB - WINDUI COMPLETE ==================
--- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
--- Conversão completa da v13 Rayfield para WindUI
+-- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
+-- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
 
 -- Carrega a biblioteca WindUI
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/refs/heads/main/dist/main.lua"))()
