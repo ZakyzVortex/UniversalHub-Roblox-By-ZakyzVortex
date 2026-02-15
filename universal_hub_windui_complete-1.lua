@@ -165,7 +165,6 @@ local infJump, antiFall = false, false
 TabMove:Slider({
     Title = "Velocidade de Caminhada",
     Min = 16,
-
     Max = 300,
     Increment = 5,
     Default = 16,
@@ -180,7 +179,6 @@ TabMove:Slider({
 TabMove:Slider({
     Title = "Poder de Pulo",
     Min = 50,
-
     Max = 300,
     Increment = 10,
     Default = 50,
@@ -426,7 +424,6 @@ end
 TabMove:Slider({
     Title = "Velocidade de Voo",
     Min = 1,
-
     Max = 50,
     Increment = 1,
     Default = 1,
@@ -555,7 +552,6 @@ TabCombat:Toggle({
 TabCombat:Slider({
     Title = "CPS (Cliques por Segundo)",
     Min = 1,
-
     Max = 50,
     Increment = 1,
     Default = 10,
@@ -631,7 +627,6 @@ TabCombat:Toggle({
 TabCombat:Slider({
     Title = "Tamanho da Hitbox",
     Min = 5,
-
     Max = 30,
     Increment = 1,
     Default = 10,
@@ -1016,7 +1011,6 @@ TabESP:Section({ Title = "ESP Settings" })
 TabESP:Toggle({
     Title = "Ativar ESP",
     Default = false,
-    Flag = "ESP",
     Callback = function(v)
         ESP_ENABLED = v
         refreshESP()
@@ -1026,9 +1020,7 @@ TabESP:Toggle({
 TabESP:Dropdown({
     Title = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    Default = {"All"},
-    MultipleOptions = false,
-    Flag = "ESPTeamFilter",
+    Default = "All",
     Callback = function(option)
         ESP_TEAM_FILTER = typeof(option) == "table" and option[1] or option
         refreshESP()
@@ -1040,7 +1032,6 @@ TabESP:Section({ Title = "ESP Components" })
 TabESP:Toggle({
     Title = "Nome",
     Default = true,
-    Flag = "ESPName",
     Callback = function(v)
         NAME_ENABLED = v
     end
@@ -1049,7 +1040,6 @@ TabESP:Toggle({
 TabESP:Toggle({
     Title = "Distância",
     Default = true,
-    Flag = "ESPDistance",
     Callback = function(v)
         DISTANCE_ENABLED = v
     end
@@ -1058,7 +1048,6 @@ TabESP:Toggle({
 TabESP:Toggle({
     Title = "Vida",
     Default = true,
-    Flag = "ESPHealth",
     Callback = function(v)
         HEALTH_ENABLED = v
     end
@@ -1067,7 +1056,6 @@ TabESP:Toggle({
 TabESP:Toggle({
     Title = "Linha Única",
     Default = true,
-    Flag = "ESPLine",
     Callback = function(v)
         LINE_ENABLED = v
     end
@@ -1076,7 +1064,6 @@ TabESP:Toggle({
 TabESP:Toggle({
     Title = "Contorno 4 Linhas",
     Default = true,
-    Flag = "ESPOutline",
     Callback = function(v)
         OUTLINE_ENABLED = v
     end
@@ -1084,19 +1071,17 @@ TabESP:Toggle({
 
 TabESP:Section({ Title = "Cores" })
 
-TabESP:CreateColorPicker({
+TabESP:ColorPicker({
     Title = "Cor do ESP",
-    Color = Color3.fromRGB(255, 0, 0),
-    Flag = "ESPColor",
+    Default = Color3.fromRGB(255, 0, 0),
     Callback = function(color)
         ESP_COLOR = color
     end
 })
 
-TabESP:CreateColorPicker({
+TabESP:ColorPicker({
     Title = "Cor da Linha",
-    Color = Color3.fromRGB(255, 255, 255),
-    Flag = "LineColor",
+    Default = Color3.fromRGB(255, 255, 255),
     Callback = function(color)
         LINE_COLOR = color
     end
@@ -1267,7 +1252,6 @@ TabHighlight:Section({ Title = "Highlight ESP" })
 TabHighlight:Toggle({
     Title = "Ativar Highlight ESP",
     Default = false,
-    Flag = "Highlight",
     Callback = function(v)
         HIGHLIGHT_ENABLED = v
         updateAllHighlights()
@@ -1277,9 +1261,7 @@ TabHighlight:Toggle({
 TabHighlight:Dropdown({
     Title = "Filtro de Time",
     Options = {"All", "Team", "Enemy"},
-    Default = {"All"},
-    MultipleOptions = false,
-    Flag = "HighlightTeamFilter",
+    Default = "All",
     Callback = function(option)
         HIGHLIGHT_TEAM_FILTER = typeof(option) == "table" and option[1] or option
         updateAllHighlights()
@@ -1288,20 +1270,18 @@ TabHighlight:Dropdown({
 
 TabHighlight:Section({ Title = "Cores" })
 
-TabHighlight:CreateColorPicker({
+TabHighlight:ColorPicker({
     Title = "Cor do Time",
-    Color = Color3.fromRGB(0, 255, 0),
-    Flag = "TeamColor",
+    Default = Color3.fromRGB(0, 255, 0),
     Callback = function(color)
         teamColor = color
         updateAllHighlights()
     end
 })
 
-TabHighlight:CreateColorPicker({
+TabHighlight:ColorPicker({
     Title = "Cor dos Inimigos",
-    Color = Color3.fromRGB(255, 0, 0),
-    Flag = "EnemyColor",
+    Default = Color3.fromRGB(255, 0, 0),
     Callback = function(color)
         enemyColor = color
         updateAllHighlights()
@@ -1313,11 +1293,9 @@ TabHighlight:Section({ Title = "Configurações" })
 TabHighlight:Slider({
     Title = "Transparência do Preenchimento",
     Min = 0,
-
     Max = 1,
     Increment = 0.05,
     Default = 0.5,
-    Flag = "HighlightFillTrans",
     Callback = function(v)
         highlightFillTrans = v
         for _, highlight in pairs(highlightCache) do
@@ -1329,11 +1307,9 @@ TabHighlight:Slider({
 TabHighlight:Slider({
     Title = "Transparência do Contorno",
     Min = 0,
-
     Max = 1,
     Increment = 0.05,
     Default = 0,
-    Flag = "HighlightOutlineTrans",
     Callback = function(v)
         highlightOutlineTrans = v
         for _, highlight in pairs(highlightCache) do
@@ -1346,7 +1322,6 @@ TabHighlight:Dropdown({
     Title = "Modo de Profundidade",
     Options = {"AlwaysOnTop", "Occluded"},
     Default = "AlwaysOnTop",
-    Flag = "HighlightDepthMode",
     Callback = function(option)
         highlightDepthMode = option == "AlwaysOnTop" and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
         for _, highlight in pairs(highlightCache) do
@@ -1359,7 +1334,7 @@ TabHighlight:Button({
     Title = "Atualizar Highlights",
     Callback = function()
         updateAllHighlights()
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -1424,12 +1399,11 @@ end
 TabAim:Toggle({
     Title = "🎯 Ativar Aim Assist",
     Default = false,
-    Flag = "AimEnabled",
     Callback = function(v)
         AIM_ENABLED = v
         currentTarget = nil
         if v then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -1438,7 +1412,6 @@ TabAim:Dropdown({
     Title = "Filtro de Time",
     Options = {"All", "MyTeam", "Enemy"},
     Default = "Enemy",
-    Flag = "AimTeamFilter",
     Callback = function(option)
         AIM_TEAM_FILTER = option
         currentTarget = nil
@@ -1450,7 +1423,6 @@ TabAim:Section({ Title = "Configurações" })
 TabAim:Toggle({
     Title = "Wallcheck (Não atirar através de paredes)",
     Default = true,
-    Flag = "AimWallcheck",
     Callback = function(v)
         AIM_WALLCHECK = v
         currentTarget = nil
@@ -1460,11 +1432,9 @@ TabAim:Toggle({
 TabAim:Slider({
     Title = "FOV (Campo de Visão)",
     Min = 10,
-
     Max = 800,
     Increment = 10,
     Default = 100,
-    Flag = "AimFOV",
     Callback = function(v)
         AIM_FOV = v
     end
@@ -1477,7 +1447,6 @@ TabAim:Slider({
     Max = 1,
     Increment = 0.05,
     Default = 0.2,
-    Flag = "AimSmoothness",
     Callback = function(v)
         AIM_SMOOTH = v
     end
@@ -1487,7 +1456,6 @@ TabAim:Dropdown({
     Title = "Parte do Corpo",
     Options = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
     Default = "Head",
-    Flag = "AimTargetPart",
     Callback = function(option)
         AIM_TARGET_PART = option
         currentTarget = nil
@@ -1498,7 +1466,7 @@ TabAim:Button({
     Title = "🔄 Resetar Alvo",
     Callback = function()
         currentTarget = nil
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -1715,7 +1683,7 @@ local PlayerAimDropdown = TabPlayerAim:Dropdown({
             TargetPlayerName = option
         end
         
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -1724,7 +1692,7 @@ TabPlayerAim:Button({
     Callback = function()
         local list = UpdatePlayerAimList()
         PlayerAimDropdown:Refresh(list)
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -1735,14 +1703,14 @@ TabPlayerAim:Toggle({
     Default = false,
     Callback = function(value)
         if value and not TargetPlayerName then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
             PlayerAimEnabled = false
             return
         end
         
         PlayerAimEnabled = value
         
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -1751,7 +1719,6 @@ TabPlayerAim:Section({ Title = "🎛️ Configurações" })
 TabPlayerAim:Slider({
     Title = "FOV Radius (pixels)",
     Min = 10,
-
     Max = 800,
     Increment = 10,
     Default = 100,
@@ -1788,7 +1755,6 @@ TabPlayerAim:Dropdown({
 TabPlayerAim:Slider({
     Title = "Predição de Movimento",
     Min = 0,
-
     Max = 0.5,
     Increment = 0.01,
     Default = 0,
@@ -2044,7 +2010,7 @@ TabWaypoints:Button({
     Title = "Salvar Posição Atual",
     Callback = function()
         if waypointNameInput == "" or not waypointNameInput then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
             return
         end
         
@@ -2054,9 +2020,9 @@ TabWaypoints:Button({
             waypointSelected = wpName
             local newList = getWaypointList()
             waypointDropdown:Refresh(newList)
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         else
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2074,14 +2040,14 @@ TabWaypoints:Button({
         end
         
         if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
             return
         end
         
         if teleportToWaypoint(targetName) then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         else
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2099,14 +2065,14 @@ TabWaypoints:Button({
         end
         
         if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
             return
         end
         
         deleteWaypoint(targetName)
         waypointSelected = nil
         waypointDropdown:Refresh(getWaypointList())
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     end
 })
 
@@ -2146,11 +2112,11 @@ TabWaypoints:Button({
 
         if spawnLocation then
             HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         else
             -- Fallback: vai para a origem do mapa (0, 5, 0)
             HRP.CFrame = CFrame.new(Vector3.new(0, 5, 0))
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2166,7 +2132,6 @@ local DEFAULT_FOV = Camera.FieldOfView
 TabVisuals:Slider({
     Title = "FOV",
     Min = 70,
-
     Max = 180,
     Increment = 1,
     CurrentValue = DEFAULT_FOV,
@@ -2238,7 +2203,6 @@ TabWorld:Section({ Title = "Tempo e Ambiente" })
 TabWorld:Slider({
     Title = "Hora do Dia",
     Min = 0,
-
     Max = 24,
     Increment = 0.5,
     Default = 14,
@@ -2250,7 +2214,6 @@ TabWorld:Slider({
 TabWorld:Slider({
     Title = "Gravidade",
     Min = 60,
-
     Max = 500,
     Increment = 10,
     Default = 196,
@@ -2566,7 +2529,7 @@ TabFPS:Toggle({
     Callback = function(v)
         if v then
             setupAdvancedAntiLag()
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2584,7 +2547,7 @@ TabFPS:Toggle({
             end
             descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
             
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         else
             -- Disconnect listener when disabled
             if descendantAddedConnection then
@@ -2592,7 +2555,7 @@ TabFPS:Toggle({
                 descendantAddedConnection = nil
             end
             
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2600,7 +2563,6 @@ TabFPS:Toggle({
 TabFPS:Slider({
     Title = "FPS Cap",
     Min = 60,
-
     Max = 240,
     Increment = 10,
     Default = 60,
@@ -2676,7 +2638,7 @@ TabConfig:Toggle({
     Callback = function(v)
         ANTI_AFK_ENABLED = v
         if v then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
         end
     end
 })
@@ -2701,7 +2663,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle ESP",
     CurrentKeybind = "E",
     HoldToInteract = false,
-    Flag = "KeybindESP",
     Callback = function(key)
         keybindESP = key
     end
@@ -2712,7 +2673,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Highlight ESP",
     CurrentKeybind = "H",
     HoldToInteract = false,
-    Flag = "KeybindHighlight",
     Callback = function(key)
         keybindHighlight = key
     end
@@ -2723,7 +2683,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Aim Assist",
     CurrentKeybind = "R",
     HoldToInteract = false,
-    Flag = "KeybindAim",
     Callback = function(key)
         keybindAim = key
     end
@@ -2734,7 +2693,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Player Aim",
     CurrentKeybind = "T",
     HoldToInteract = false,
-    Flag = "KeybindPlayerAim",
     Callback = function(key)
         keybindPlayerAim = key
     end
@@ -2747,7 +2705,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Fly",
     CurrentKeybind = "F",
     HoldToInteract = false,
-    Flag = "KeybindFly",
     Callback = function(key)
         keybindFly = key
     end
@@ -2758,7 +2715,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Noclip",
     CurrentKeybind = "N",
     HoldToInteract = false,
-    Flag = "KeybindNoclip",
     Callback = function(key)
         keybindNoclip = key
     end
@@ -2769,7 +2725,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Infinite Jump",
     CurrentKeybind = "J",
     HoldToInteract = false,
-    Flag = "KeybindInfJump",
     Callback = function(key)
         keybindInfJump = key
     end
@@ -2782,7 +2737,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Auto Clicker",
     CurrentKeybind = "C",
     HoldToInteract = false,
-    Flag = "KeybindAutoClicker",
     Callback = function(key)
         keybindAutoClicker = key
     end
@@ -2795,7 +2749,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle God Mode",
     CurrentKeybind = "G",
     HoldToInteract = false,
-    Flag = "KeybindGodMode",
     Callback = function(key)
         keybindGodMode = key
     end
@@ -2808,7 +2761,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle Fullbright",
     CurrentKeybind = "B",
     HoldToInteract = false,
-    Flag = "KeybindFullbright",
     Callback = function(key)
         keybindFullbright = key
     end
@@ -2821,7 +2773,6 @@ TabConfig:CreateKeybind({
     Title = "Toggle GUI",
     CurrentKeybind = "RightControl",
     HoldToInteract = false,
-    Flag = "KeybindGUI",
     Callback = function(key)
         keybindGUI = key
     end
@@ -2838,45 +2789,45 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
         refreshESP()
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- HIGHLIGHT ESP TOGGLE
     elseif input.KeyCode == keybindHighlight then
         HIGHLIGHT_ENABLED = not HIGHLIGHT_ENABLED
         updateAllHighlights()
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- AIM ASSIST TOGGLE
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
         currentTarget = nil
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- PLAYER AIM TOGGLE
     elseif input.KeyCode == keybindPlayerAim then
         if not TargetPlayerName then
-            -- Notify removido (WindUI não tem Notify)
+            -- Notify removido (WindUI não tem)
             return
         end
         
         PlayerAimEnabled = not PlayerAimEnabled
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- FLY TOGGLE
     elseif input.KeyCode == keybindFly then
         local newState = not flyEnabled
         toggleFly(newState)
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- NOCLIP TOGGLE
     elseif input.KeyCode == keybindNoclip then
         noclip = not noclip
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- INFINITE JUMP TOGGLE
     elseif input.KeyCode == keybindInfJump then
         infJump = not infJump
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- AUTO CLICKER TOGGLE
     elseif input.KeyCode == keybindAutoClicker then
@@ -2884,18 +2835,18 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if AUTO_CLICKER_ENABLED then 
             lastClick = tick() 
         end
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- GOD MODE TOGGLE
     elseif input.KeyCode == keybindGodMode then
         godMode = not godMode
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- FULLBRIGHT TOGGLE
     elseif input.KeyCode == keybindFullbright then
         FULLBRIGHT_ENABLED = not FULLBRIGHT_ENABLED
         toggleFullbright(FULLBRIGHT_ENABLED)
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
     
     -- GUI TOGGLE
     elseif input.KeyCode == keybindGUI then
@@ -2910,7 +2861,7 @@ TabConfig:Button({
     Callback = function()
         clearAllESP()
         removeAllHighlights()
-        -- Notify removido (WindUI não tem Notify)
+        -- Notify removido (WindUI não tem)
         task.wait(1)
         Window:Destroy()
     end
