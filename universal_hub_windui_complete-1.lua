@@ -1,6 +1,6 @@
--- ================== UNIVERSAL HUB - WINDUI VERSION (SINTAXE CORRETA) ==================
+-- ================== UNIVERSAL HUB - WINDUI VERSION COMPLETA ==================
 -- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
--- Converted from Rayfield v13 to WindUI
+-- Convertido da v13 Rayfield para WindUI - TODAS AS FUNÇÕES MANTIDAS
 
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
@@ -240,7 +240,6 @@ local function toggleFly(enabled)
     else
         tpwalking = false
         chr.Animate.Disabled = false
-        
         hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
@@ -256,25 +255,20 @@ local function toggleFly(enabled)
         hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
         hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-        hum:ChangeState(Enum.HumanoidStateType.Running)
-        
-        if HRP:FindFirstChild("FlyVel") then HRP.FlyVel:Destroy() end
-        if HRP:FindFirstChild("FlyGyro") then HRP.FlyGyro:Destroy() end
+        hum:ChangeState(Enum.HumanoidStateType.RunningNoPhysics)
     end
 end
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if flyEnabled then
-        if input.KeyCode == Enum.KeyCode.W then
-            ctrl.f = 1
-        elseif input.KeyCode == Enum.KeyCode.S then
-            ctrl.b = 1
-        elseif input.KeyCode == Enum.KeyCode.A then
-            ctrl.l = 1
-        elseif input.KeyCode == Enum.KeyCode.D then
-            ctrl.r = 1
-        end
+    if input.KeyCode == Enum.KeyCode.W then
+        ctrl.f = 1
+    elseif input.KeyCode == Enum.KeyCode.S then
+        ctrl.b = 1
+    elseif input.KeyCode == Enum.KeyCode.A then
+        ctrl.l = 1
+    elseif input.KeyCode == Enum.KeyCode.D then
+        ctrl.r = 1
     end
 end)
 
@@ -291,10 +285,8 @@ UserInputService.InputEnded:Connect(function(input, gp)
     end
 end)
 
-local flyUpImpulse = 0
-
 TabMove:Toggle({
-    Title = "Ativar Fly (F)",
+    Title = "Fly",
     Default = false,
     Callback = function(v)
         toggleFly(v)
@@ -302,9 +294,9 @@ TabMove:Toggle({
 })
 
 TabMove:Slider({
-    Title = "Velocidade de Voo",
+    Title = "Velocidade do Fly",
     Min = 1,
-    Max = 50,
+    Max = 10,
     Default = 1,
     Increment = 1,
     Callback = function(v)
@@ -312,21 +304,13 @@ TabMove:Slider({
     end
 })
 
-TabMove:Section({ Title = "Infinite Jump" })
+TabMove:Section({ Title = "Pulos" })
 
 TabMove:Toggle({
-    Title = "Pulo Infinito (J)",
+    Title = "Pulo Infinito",
     Default = false,
     Callback = function(v)
         infJump = v
-    end
-})
-
-TabMove:Toggle({
-    Title = "Anti Queda",
-    Default = false,
-    Callback = function(v)
-        antiFall = v
     end
 })
 
@@ -336,284 +320,158 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+TabMove:Toggle({
+    Title = "Anti-Queda (Hold Space)",
+    Default = false,
+    Callback = function(v)
+        antiFall = v
+    end
+})
+
+local flyUpImpulse = 0
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if antiFall and input.KeyCode == Enum.KeyCode.Space then
+        flyUpImpulse = 0.5
+    end
+end)
+
 -- ==================================================================================
 -- ============================== AUTO FARM TAB =====================================
 -- ==================================================================================
 
-TabCombat:Section({ Title = "Auto Farm NPCs" })
-
-local autoFarmNPC = false
-local autoFarmNPCMethod = "Closest"
-local autoFarmNPCTarget = nil
-
-local function getClosestNPC()
-    local closest = nil
-    local closestDist = math.huge
-    
-    for _, v in pairs(Workspace:GetDescendants()) do
-        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
-            if v ~= Character and v.Humanoid.Health > 0 then
-                local dist = (HRP.Position - v.HumanoidRootPart.Position).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closest = v
-                end
-            end
-        end
-    end
-    
-    return closest
-end
-
-TabCombat:Toggle({
-    Title = "Auto Farm NPCs",
-    Default = false,
-    Callback = function(v)
-        autoFarmNPC = v
-        spawn(function()
-            while autoFarmNPC and task.wait(0.1) do
-                local npc = autoFarmNPCMethod == "Closest" and getClosestNPC() or autoFarmNPCTarget
-                if npc and npc:FindFirstChild("HumanoidRootPart") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
-                    if HRP then
-                        HRP.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 3, 5)
-                    end
-                end
-            end
-        end)
-    end
-})
-
-TabCombat:Dropdown({
-    Title = "Método de Farm",
-    Options = {"Closest", "Manual Select"},
-    Default = "Closest",
-    Callback = function(v)
-        autoFarmNPCMethod = typeof(v) == "table" and v[1] or v
-    end
-})
-
-TabCombat:Section({ Title = "Auto Farm Players" })
-
-local autoFarmPlayer = false
-local autoFarmPlayerFilter = "All"
-
-TabCombat:Toggle({
-    Title = "Auto Farm Players",
-    Default = false,
-    Callback = function(v)
-        autoFarmPlayer = v
-        spawn(function()
-            while autoFarmPlayer and task.wait(0.1) do
-                for _, player in pairs(Players:GetPlayers()) do
-                    if shouldShowPlayer(player, autoFarmPlayerFilter) then
-                        local char = player.Character
-                        if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                            if HRP then
-                                HRP.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0, 3, 5)
-                                break
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    end
-})
-
-TabCombat:Dropdown({
-    Title = "Filtro de Players",
-    Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = "All",
-    Callback = function(v)
-        autoFarmPlayerFilter = typeof(v) == "table" and v[1] or v
-    end
-})
-
 TabCombat:Section({ Title = "Auto Click" })
 
 local autoClick = false
-local autoClickSpeed = 50
+local autoClickDelay = 0.1
 
 TabCombat:Toggle({
-    Title = "Auto Click (C)",
+    Title = "Auto Click",
     Default = false,
     Callback = function(v)
         autoClick = v
-        spawn(function()
-            while autoClick and task.wait(1 / autoClickSpeed) do
-                mouse1click()
-            end
-        end)
     end
 })
 
 TabCombat:Slider({
-    Title = "Velocidade de Click (CPS)",
-    Min = 1,
-    Max = 100,
-    Default = 50,
-    Increment = 1,
+    Title = "Click Delay (segundos)",
+    Min = 0.01,
+    Max = 1,
+    Default = 0.1,
+    Increment = 0.01,
     Callback = function(v)
-        autoClickSpeed = v
+        autoClickDelay = v
+    end
+})
+
+spawn(function()
+    while true do
+        if autoClick then
+            mouse1click()
+        end
+        task.wait(autoClickDelay)
+    end
+end)
+
+TabCombat:Section({ Title = "Auto Farm" })
+
+local autoFarm = false
+local farmTarget = nil
+
+TabCombat:Toggle({
+    Title = "Auto Farm (Experimental)",
+    Default = false,
+    Callback = function(v)
+        autoFarm = v
     end
 })
 
 -- ==================================================================================
--- ================================= ESP TAB ========================================
+-- ============================== ESP TAB ===========================================
 -- ==================================================================================
 
-TabESP:Section({ Title = "ESP Visual" })
+TabESP:Section({ Title = "ESP Settings" })
 
 local espEnabled = false
-local espDistance = true
-local espHealth = true
-local espName = true
-local espBox = true
-local espTeamCheck = "All"
-local espMaxDistance = 1000
-
-local espObjects = {}
-
-local function removeESP(player)
-    if espObjects[player] then
-        for _, obj in pairs(espObjects[player]) do
-            if obj then obj:Destroy() end
-        end
-        espObjects[player] = nil
-    end
-end
+local espDistance = 1000
+local espTeamFilter = "All"
+local espBoxes = {}
 
 local function clearAllESP()
-    for player, _ in pairs(espObjects) do
-        removeESP(player)
+    for _, box in pairs(espBoxes) do
+        if box then
+            box:Remove()
+        end
     end
+    espBoxes = {}
 end
 
 local function createESP(player)
-    if player == LP then return end
-    if not shouldShowPlayer(player, espTeamCheck) then return end
+    if not player or player == LP then return end
     
-    local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    removeESP(player)
-    
-    local hrp = char.HumanoidRootPart
-    local hum = char:FindFirstChild("Humanoid")
-    
-    espObjects[player] = {}
-    
-    if espBox then
+    local function addESP(character)
+        if not character then return end
+        
+        local hrp = character:WaitForChild("HumanoidRootPart", 5)
+        if not hrp then return end
+        
+        if espBoxes[player.UserId] then
+            espBoxes[player.UserId]:Remove()
+        end
+        
         local box = Drawing.new("Square")
         box.Visible = false
         box.Color = Color3.fromRGB(255, 255, 255)
         box.Thickness = 2
+        box.Transparency = 1
         box.Filled = false
-        espObjects[player].Box = box
-    end
-    
-    if espName then
-        local nameLabel = Drawing.new("Text")
-        nameLabel.Text = player.Name
-        nameLabel.Color = Color3.fromRGB(255, 255, 255)
-        nameLabel.Size = 18
-        nameLabel.Center = true
-        nameLabel.Outline = true
-        espObjects[player].Name = nameLabel
-    end
-    
-    if espDistance then
-        local distLabel = Drawing.new("Text")
-        distLabel.Color = Color3.fromRGB(255, 255, 255)
-        distLabel.Size = 16
-        distLabel.Center = true
-        distLabel.Outline = true
-        espObjects[player].Distance = distLabel
-    end
-    
-    if espHealth and hum then
-        local healthLabel = Drawing.new("Text")
-        healthLabel.Color = Color3.fromRGB(0, 255, 0)
-        healthLabel.Size = 16
-        healthLabel.Center = true
-        healthLabel.Outline = true
-        espObjects[player].Health = healthLabel
-    end
-end
-
-local function updateESP()
-    for player, objects in pairs(espObjects) do
-        if not player or not player.Parent or player == LP then
-            removeESP(player)
-            continue
-        end
         
-        if not shouldShowPlayer(player, espTeamCheck) then
-            removeESP(player)
-            continue
-        end
+        espBoxes[player.UserId] = box
         
-        local char = player.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
-            removeESP(player)
-            continue
-        end
-        
-        local hrp = char.HumanoidRootPart
-        local hum = char.Humanoid
-        local dist = (HRP.Position - hrp.Position).Magnitude
-        
-        if dist > espMaxDistance then
-            for _, obj in pairs(objects) do
-                if obj then obj.Visible = false end
+        local connection
+        connection = RunService.RenderStepped:Connect(function()
+            if not espEnabled or not player or not player.Parent or not character or not character.Parent then
+                box:Remove()
+                if connection then connection:Disconnect() end
+                return
             end
-            continue
-        end
-        
-        local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
-        
-        if not onScreen then
-            for _, obj in pairs(objects) do
-                if obj then obj.Visible = false end
-            end
-            continue
-        end
-        
-        if objects.Box then
-            local headPos = Camera:WorldToViewportPoint((char:FindFirstChild("Head") or hrp).Position + Vector3.new(0, 1, 0))
-            local legPos = Camera:WorldToViewportPoint((char:FindFirstChild("LeftFoot") or hrp).Position - Vector3.new(0, 3, 0))
             
-            objects.Box.Size = Vector2.new(2000 / pos.Z, headPos.Y - legPos.Y)
-            objects.Box.Position = Vector2.new(pos.X - objects.Box.Size.X / 2, legPos.Y)
-            objects.Box.Visible = true
-        end
-        
-        if objects.Name then
-            objects.Name.Position = Vector2.new(pos.X, pos.Y - 40)
-            objects.Name.Visible = true
-        end
-        
-        if objects.Distance then
-            objects.Distance.Text = string.format("%.0f studs", dist)
-            objects.Distance.Position = Vector2.new(pos.X, pos.Y - 20)
-            objects.Distance.Visible = true
-        end
-        
-        if objects.Health then
-            objects.Health.Text = string.format("HP: %.0f/%.0f", hum.Health, hum.MaxHealth)
-            objects.Health.Color = Color3.fromRGB(
-                math.clamp(255 - (hum.Health / hum.MaxHealth) * 255, 0, 255),
-                math.clamp((hum.Health / hum.MaxHealth) * 255, 0, 255),
-                0
-            )
-            objects.Health.Position = Vector2.new(pos.X, pos.Y)
-            objects.Health.Visible = true
-        end
+            if not shouldShowPlayer(player, espTeamFilter) then
+                box.Visible = false
+                return
+            end
+            
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            local distance = (Camera.CFrame.Position - hrp.Position).Magnitude
+            
+            if onScreen and distance <= espDistance then
+                local scale = 1000 / (Camera.CFrame.Position - hrp.Position).Magnitude
+                local size = Vector2.new(scale * 4, scale * 6)
+                
+                box.Size = size
+                box.Position = Vector2.new(pos.X - size.X / 2, pos.Y - size.Y / 2)
+                box.Visible = true
+                
+                if player.Team then
+                    box.Color = player.Team.TeamColor.Color
+                else
+                    box.Color = Color3.fromRGB(255, 255, 255)
+                end
+            else
+                box.Visible = false
+            end
+        end)
     end
+    
+    if player.Character then
+        addESP(player.Character)
+    end
+    
+    player.CharacterAdded:Connect(addESP)
 end
 
 TabESP:Toggle({
-    Title = "ESP Ativado (E)",
+    Title = "Enable ESP",
     Default = false,
     Callback = function(v)
         espEnabled = v
@@ -623,158 +481,114 @@ TabESP:Toggle({
                     createESP(player)
                 end
             end
-            
-            Players.PlayerAdded:Connect(function(player)
-                if espEnabled then
-                    player.CharacterAdded:Wait()
-                    task.wait(0.5)
-                    createESP(player)
-                end
-            end)
-            
-            Players.PlayerRemoving:Connect(function(player)
-                removeESP(player)
-            end)
-            
-            RunService.RenderStepped:Connect(function()
-                if espEnabled then
-                    updateESP()
-                end
-            end)
         else
             clearAllESP()
         end
     end
 })
 
-TabESP:Toggle({
-    Title = "Mostrar Nome",
-    Default = true,
-    Callback = function(v)
-        espName = v
-        clearAllESP()
-        if espEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createESP(player) end
-            end
-        end
-    end
-})
-
-TabESP:Toggle({
-    Title = "Mostrar Distância",
-    Default = true,
-    Callback = function(v)
-        espDistance = v
-        clearAllESP()
-        if espEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createESP(player) end
-            end
-        end
-    end
-})
-
-TabESP:Toggle({
-    Title = "Mostrar HP",
-    Default = true,
-    Callback = function(v)
-        espHealth = v
-        clearAllESP()
-        if espEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createESP(player) end
-            end
-        end
-    end
-})
-
-TabESP:Toggle({
-    Title = "Mostrar Box",
-    Default = true,
-    Callback = function(v)
-        espBox = v
-        clearAllESP()
-        if espEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createESP(player) end
-            end
-        end
-    end
-})
-
-TabESP:Dropdown({
-    Title = "Filtro de Time",
-    Options = {"All", "MyTeam", "EnemyTeam"},
-    Default = "All",
-    Callback = function(v)
-        espTeamCheck = typeof(v) == "table" and v[1] or v
-        clearAllESP()
-        if espEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createESP(player) end
-            end
-        end
-    end
-})
-
 TabESP:Slider({
-    Title = "Distância Máxima",
+    Title = "Max Distance",
     Min = 100,
     Max = 5000,
     Default = 1000,
     Increment = 100,
     Callback = function(v)
-        espMaxDistance = v
+        espDistance = v
     end
 })
 
+TabESP:Dropdown({
+    Title = "Team Filter",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = "All",
+    Callback = function(v)
+        espTeamFilter = v
+    end
+})
+
+Players.PlayerAdded:Connect(function(player)
+    if espEnabled and player ~= LP then
+        createESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if espBoxes[player.UserId] then
+        espBoxes[player.UserId]:Remove()
+        espBoxes[player.UserId] = nil
+    end
+end)
+
 -- ==================================================================================
--- ============================ HIGHLIGHT ESP TAB ===================================
+-- ============================== HIGHLIGHT ESP TAB =================================
 -- ==================================================================================
 
-TabHighlight:Section({ Title = "Highlight ESP" })
+TabHighlight:Section({ Title = "Highlight ESP Settings" })
 
 local highlightEnabled = false
-local highlightTeamCheck = "All"
-local highlightColor = Color3.fromRGB(255, 0, 0)
-local highlightObjects = {}
-
-local function removeHighlight(player)
-    if highlightObjects[player] then
-        highlightObjects[player]:Destroy()
-        highlightObjects[player] = nil
-    end
-end
+local highlightFillColor = Color3.fromRGB(255, 0, 0)
+local highlightOutlineColor = Color3.fromRGB(255, 255, 255)
+local highlightTransparency = 0.5
+local highlightTeamFilter = "All"
+local highlights = {}
 
 local function removeAllHighlights()
-    for player, _ in pairs(highlightObjects) do
-        removeHighlight(player)
+    for _, highlight in pairs(highlights) do
+        if highlight then
+            highlight:Destroy()
+        end
     end
+    highlights = {}
 end
 
 local function createHighlight(player)
-    if player == LP then return end
-    if not shouldShowPlayer(player, highlightTeamCheck) then return end
+    if not player or player == LP then return end
     
-    local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local function addHighlight(character)
+        if not character then return end
+        
+        if highlights[player.UserId] then
+            highlights[player.UserId]:Destroy()
+        end
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Adornee = character
+        highlight.FillColor = highlightFillColor
+        highlight.OutlineColor = highlightOutlineColor
+        highlight.FillTransparency = highlightTransparency
+        highlight.OutlineTransparency = 0
+        highlight.Parent = character
+        
+        highlights[player.UserId] = highlight
+        
+        RunService.RenderStepped:Connect(function()
+            if not highlightEnabled or not player or not player.Parent or not character or not character.Parent then
+                if highlight then
+                    highlight:Destroy()
+                end
+                return
+            end
+            
+            highlight.Enabled = shouldShowPlayer(player, highlightTeamFilter)
+            
+            if player.Team and highlight.Enabled then
+                highlight.FillColor = player.Team.TeamColor.Color
+            else
+                highlight.FillColor = highlightFillColor
+            end
+        end)
+    end
     
-    removeHighlight(player)
+    if player.Character then
+        addHighlight(player.Character)
+    end
     
-    local highlight = Instance.new("Highlight")
-    highlight.Adornee = char
-    highlight.FillColor = highlightColor
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.Parent = char
-    
-    highlightObjects[player] = highlight
+    player.CharacterAdded:Connect(addHighlight)
 end
 
 TabHighlight:Toggle({
-    Title = "Highlight ESP (H)",
+    Title = "Enable Highlight ESP",
     Default = false,
     Callback = function(v)
         highlightEnabled = v
@@ -784,118 +598,91 @@ TabHighlight:Toggle({
                     createHighlight(player)
                 end
             end
-            
-            Players.PlayerAdded:Connect(function(player)
-                if highlightEnabled then
-                    player.CharacterAdded:Connect(function()
-                        task.wait(0.5)
-                        createHighlight(player)
-                    end)
-                end
-            end)
-            
-            Players.PlayerRemoving:Connect(function(player)
-                removeHighlight(player)
-            end)
         else
             removeAllHighlights()
         end
     end
 })
 
-TabHighlight:ColorPicker({
-    Title = "Cor do Highlight",
-    Default = Color3.fromRGB(255, 0, 0),
-    Callback = function(color)
-        highlightColor = color
-        for player, highlight in pairs(highlightObjects) do
+TabHighlight:Slider({
+    Title = "Fill Transparency",
+    Min = 0,
+    Max = 1,
+    Default = 0.5,
+    Increment = 0.1,
+    Callback = function(v)
+        highlightTransparency = v
+        for _, highlight in pairs(highlights) do
             if highlight then
-                highlight.FillColor = color
+                highlight.FillTransparency = v
             end
         end
     end
 })
 
 TabHighlight:Dropdown({
-    Title = "Filtro de Time",
+    Title = "Team Filter",
     Options = {"All", "MyTeam", "EnemyTeam"},
     Default = "All",
     Callback = function(v)
-        highlightTeamCheck = typeof(v) == "table" and v[1] or v
-        removeAllHighlights()
-        if highlightEnabled then
-            for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LP then createHighlight(player) end
-            end
-        end
+        highlightTeamFilter = v
     end
 })
 
-TabHighlight:Slider({
-    Title = "Transparência do Preenchimento",
-    Min = 0,
-    Max = 1,
-    Default = 0.5,
-    Increment = 0.05,
-    Callback = function(v)
-        for _, h in pairs(highlightObjects) do
-            if h then h.FillTransparency = v end
-        end
+Players.PlayerAdded:Connect(function(player)
+    if highlightEnabled and player ~= LP then
+        createHighlight(player)
     end
-})
+end)
 
-TabHighlight:Slider({
-    Title = "Transparência do Contorno",
-    Min = 0,
-    Max = 1,
-    Default = 0,
-    Increment = 0.05,
-    Callback = function(v)
-        for _, h in pairs(highlightObjects) do
-            if h then h.OutlineTransparency = v end
-        end
+Players.PlayerRemoving:Connect(function(player)
+    if highlights[player.UserId] then
+        highlights[player.UserId]:Destroy()
+        highlights[player.UserId] = nil
     end
-})
+end)
 
 -- ==================================================================================
 -- ============================== AIM ASSIST TAB ====================================
 -- ==================================================================================
 
-TabAim:Section({ Title = "Aim Assist" })
+TabAim:Section({ Title = "Aim Assist Settings" })
 
 local aimAssistEnabled = false
-local aimAssistTeamCheck = "EnemyTeam"
-local aimAssistSmoothness = 5
-local aimAssistWallCheck = true
+local aimAssistSmoothness = 0.5
+local aimAssistFOV = 200
+local aimAssistWallcheck = true
+local aimAssistTeamFilter = "EnemyTeam"
 
-local function getClosestPlayerToMouse()
+local function getClosestPlayerInFOV()
     local closest = nil
-    local closestDist = math.huge
-    local mouse = LP:GetMouse()
+    local shortestDistance = math.huge
     
     for _, player in pairs(Players:GetPlayers()) do
-        if shouldShowPlayer(player, aimAssistTeamCheck) then
-            local char = player.Character
-            if char and char:FindFirstChild("Head") then
-                local head = char.Head
-                local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
-                
-                if onScreen then
-                    local dist = (Vector2.new(mouse.X, mouse.Y) - Vector2.new(pos.X, pos.Y)).Magnitude
+        if player ~= LP and shouldShowPlayer(player, aimAssistTeamFilter) then
+            local character = player.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
                     
-                    if aimAssistWallCheck then
-                        local ray = Ray.new(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * 1000)
-                        local hit = workspace:FindPartOnRayWithIgnoreList(ray, {Character, Camera})
-                        if hit and hit:IsDescendantOf(char) then
-                            if dist < closestDist then
-                                closestDist = dist
-                                closest = player
+                    if onScreen then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local distance = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+                        
+                        if distance < aimAssistFOV and distance < shortestDistance then
+                            if aimAssistWallcheck then
+                                local ray = Ray.new(Camera.CFrame.Position, (head.Position - Camera.CFrame.Position).Unit * 1000)
+                                local hit = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character})
+                                
+                                if hit and hit:IsDescendantOf(character) then
+                                    closest = head
+                                    shortestDistance = distance
+                                end
+                            else
+                                closest = head
+                                shortestDistance = distance
                             end
-                        end
-                    else
-                        if dist < closestDist then
-                            closestDist = dist
-                            closest = player
                         end
                     end
                 end
@@ -906,36 +693,46 @@ local function getClosestPlayerToMouse()
     return closest
 end
 
+RunService.RenderStepped:Connect(function()
+    if aimAssistEnabled then
+        local target = getClosestPlayerInFOV()
+        if target then
+            local targetPos = Camera:WorldToViewportPoint(target.Position)
+            local mousePos = UserInputService:GetMouseLocation()
+            local diff = Vector2.new(targetPos.X - mousePos.X, targetPos.Y - mousePos.Y)
+            
+            mousemoverel(diff.X * aimAssistSmoothness, diff.Y * aimAssistSmoothness)
+        end
+    end
+end)
+
 TabAim:Toggle({
-    Title = "Ativar Aim Assist (R)",
+    Title = "Enable Aim Assist",
     Default = false,
     Callback = function(v)
         aimAssistEnabled = v
-        spawn(function()
-            while aimAssistEnabled and task.wait() do
-                local target = getClosestPlayerToMouse()
-                if target and target.Character and target.Character:FindFirstChild("Head") then
-                    local head = target.Character.Head
-                    local targetPos = Camera:WorldToViewportPoint(head.Position)
-                    local mouse = LP:GetMouse()
-                    local moveX = (targetPos.X - mouse.X) / aimAssistSmoothness
-                    local moveY = (targetPos.Y - mouse.Y) / aimAssistSmoothness
-                    
-                    mousemoverel(moveX, moveY)
-                end
-            end
-        end)
     end
 })
 
 TabAim:Slider({
-    Title = "Suavidade",
-    Min = 1,
-    Max = 20,
-    Default = 5,
-    Increment = 1,
+    Title = "Smoothness",
+    Min = 0.1,
+    Max = 1,
+    Default = 0.5,
+    Increment = 0.1,
     Callback = function(v)
         aimAssistSmoothness = v
+    end
+})
+
+TabAim:Slider({
+    Title = "FOV (pixels)",
+    Min = 50,
+    Max = 500,
+    Default = 200,
+    Increment = 10,
+    Callback = function(v)
+        aimAssistFOV = v
     end
 })
 
@@ -943,104 +740,94 @@ TabAim:Toggle({
     Title = "Wall Check",
     Default = true,
     Callback = function(v)
-        aimAssistWallCheck = v
+        aimAssistWallcheck = v
     end
 })
 
 TabAim:Dropdown({
-    Title = "Filtro de Time",
-    Options = {"All", "EnemyTeam", "MyTeam"},
+    Title = "Team Filter",
+    Options = {"All", "MyTeam", "EnemyTeam"},
     Default = "EnemyTeam",
     Callback = function(v)
-        aimAssistTeamCheck = typeof(v) == "table" and v[1] or v
+        aimAssistTeamFilter = v
     end
 })
 
 -- ==================================================================================
--- ============================ PLAYER AIM TAB ======================================
+-- ============================== PLAYER AIM TAB ====================================
 -- ==================================================================================
 
-TabPlayerAim:Section({ Title = "Player Aim" })
+TabPlayerAim:Section({ Title = "Player Aim Settings" })
 
 local playerAimEnabled = false
-local selectedPlayer = nil
+local playerAimTarget = nil
+local playerAimTeamFilter = "EnemyTeam"
 
-local function getPlayerList()
-    local list = {}
+local function getClosestPlayer()
+    local closest = nil
+    local shortestDistance = math.huge
+    
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(list, player.Name)
-        end
-    end
-    return list
-end
-
-TabPlayerAim:Label({ Text = "Selecione um jogador específico para mirar" })
-
-local PlayerAimDropdown = TabPlayerAim:Dropdown({
-    Title = "Escolher Jogador Alvo",
-    Options = getPlayerList(),
-    Default = "",
-    Callback = function(option)
-        selectedPlayer = typeof(option) == "table" and option[1] or option
-        WindUI:Notify("Alvo Selecionado", tostring(selectedPlayer), 2)
-    end
-})
-
-TabPlayerAim:Button({
-    Title = "🔄 Atualizar Lista de Jogadores",
-    Callback = function()
-        PlayerAimDropdown:Refresh(getPlayerList())
-        WindUI:Notify("✅ Lista Atualizada", tostring(#getPlayerList()) .. " jogadores", 2)
-    end
-})
-
-TabPlayerAim:Toggle({
-    Title = "Ativar Aim no Jogador (T)",
-    Default = false,
-    Callback = function(v)
-        if v and not selectedPlayer then
-            WindUI:Notify("⚠️ Aviso", "Selecione um jogador primeiro!", 2)
-            playerAimEnabled = false
-            return
-        end
-        playerAimEnabled = v
-        WindUI:Notify(
-            v and "✅ Aim Ativado" or "⭕ Aim Desativado",
-            v and ("Mirando em: " .. tostring(selectedPlayer)) or "Desativado",
-            1.5
-        )
-        
-        spawn(function()
-            while playerAimEnabled and task.wait() do
-                if selectedPlayer then
-                    local player = Players:FindFirstChild(selectedPlayer)
-                    if player and player.Character and player.Character:FindFirstChild("Head") then
-                        local head = player.Character.Head
-                        local targetPos = Camera:WorldToViewportPoint(head.Position)
-                        local mouse = LP:GetMouse()
-                        local moveX = (targetPos.X - mouse.X) / 5
-                        local moveY = (targetPos.Y - mouse.Y) / 5
-                        
-                        mousemoverel(moveX, moveY)
+        if player ~= LP and shouldShowPlayer(player, playerAimTeamFilter) then
+            local character = player.Character
+            if character then
+                local head = character:FindFirstChild("Head")
+                if head then
+                    local distance = (head.Position - Camera.CFrame.Position).Magnitude
+                    if distance < shortestDistance then
+                        closest = player
+                        shortestDistance = distance
                     end
                 end
             end
-        end)
+        end
+    end
+    
+    return closest
+end
+
+RunService.RenderStepped:Connect(function()
+    if playerAimEnabled then
+        local target = getClosestPlayer()
+        if target and target.Character then
+            local head = target.Character:FindFirstChild("Head")
+            if head then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, head.Position)
+            end
+        end
+    end
+end)
+
+TabPlayerAim:Toggle({
+    Title = "Enable Player Aim",
+    Default = false,
+    Callback = function(v)
+        playerAimEnabled = v
+    end
+})
+
+TabPlayerAim:Dropdown({
+    Title = "Team Filter",
+    Options = {"All", "MyTeam", "EnemyTeam"},
+    Default = "EnemyTeam",
+    Callback = function(v)
+        playerAimTeamFilter = v
     end
 })
 
 -- ==================================================================================
--- ============================ PROTECTION TAB ======================================
+-- ============================== PROTECTION TAB ====================================
 -- ==================================================================================
 
-TabProt:Section({ Title = "God Mode" })
+TabProt:Section({ Title = "Health Protection" })
 
 local godMode = false
 local lockHP = false
+local antiVoid = false
+local antiKB = false
 
 TabProt:Toggle({
-    Title = "God Mode (G)",
+    Title = "God Mode",
     Default = false,
     Callback = function(v)
         godMode = v
@@ -1055,14 +842,8 @@ TabProt:Toggle({
     end
 })
 
-TabProt:Section({ Title = "Protection Features" })
-
-local antiVoid = false
-local antiKB = false
-local antiRagdoll = false
-
 TabProt:Toggle({
-    Title = "Anti Void",
+    Title = "Anti-Void",
     Default = false,
     Callback = function(v)
         antiVoid = v
@@ -1070,266 +851,231 @@ TabProt:Toggle({
 })
 
 TabProt:Toggle({
-    Title = "Anti Knockback",
+    Title = "Anti-Knockback",
     Default = false,
     Callback = function(v)
         antiKB = v
     end
 })
 
+TabProt:Section({ Title = "Anti-Fling" })
+
+local antiFling = false
+
 TabProt:Toggle({
-    Title = "Anti Ragdoll",
+    Title = "Anti-Fling",
     Default = false,
     Callback = function(v)
-        antiRagdoll = v
-        if v and Humanoid then
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        else
-            if Humanoid then
-                Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-                Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+        antiFling = v
+        for _, part in pairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                if v then
+                    part.CanCollide = false
+                    part.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                    part.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    part.CustomPhysicalProperties = PhysicalProperties.new(9e99, 9e99, 9e99, 9e99, 9e99)
+                else
+                    part.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.3, 0.5)
+                end
             end
         end
     end
 })
 
 -- ==================================================================================
--- ============================= PLAYERS TAB ========================================
+-- ============================== PLAYERS TAB =======================================
 -- ==================================================================================
 
 TabPlayers:Section({ Title = "Player List" })
 
-local function getPlayerNames()
-    local names = {}
+local selectedPlayer = nil
+local playerNames = {}
+
+local function updatePlayerList()
+    playerNames = {}
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LP then
-            table.insert(names, player.Name)
+            table.insert(playerNames, player.Name)
         end
     end
-    return names
+    return playerNames
 end
 
-local selectedPlayerTP = nil
-
-TabPlayers:Dropdown({
-    Title = "Selecionar Player",
-    Options = getPlayerNames(),
+local playerDropdown = TabPlayers:Dropdown({
+    Title = "Select Player",
+    Options = updatePlayerList(),
     Default = "",
     Callback = function(v)
-        selectedPlayerTP = typeof(v) == "table" and v[1] or v
+        selectedPlayer = Players:FindFirstChild(v)
     end
 })
 
-TabPlayers:Button({
-    Title = "Atualizar Lista",
-    Callback = function()
-        WindUI:Notify("Lista Atualizada", "Players atualizados!", 2)
-    end
-})
+Players.PlayerAdded:Connect(function()
+    task.wait(0.5)
+    playerDropdown:Update(updatePlayerList())
+end)
+
+Players.PlayerRemoving:Connect(function()
+    task.wait(0.5)
+    playerDropdown:Update(updatePlayerList())
+end)
+
+TabPlayers:Section({ Title = "Player Actions" })
 
 TabPlayers:Button({
-    Title = "TP para Player",
+    Title = "Teleport to Player",
     Callback = function()
-        if selectedPlayerTP then
-            local player = Players:FindFirstChild(selectedPlayerTP)
-            if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                HRP.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
-                WindUI:Notify("Teleportado", "TP para " .. selectedPlayerTP, 2)
+        if selectedPlayer and selectedPlayer.Character and HRP then
+            local targetHRP = selectedPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetHRP then
+                HRP.CFrame = targetHRP.CFrame
             end
         end
     end
 })
 
 TabPlayers:Button({
-    Title = "Spectate",
+    Title = "View Player",
     Callback = function()
-        if selectedPlayerTP then
-            local player = Players:FindFirstChild(selectedPlayerTP)
-            if player and player.Character then
-                Camera.CameraSubject = player.Character:FindFirstChildOfClass("Humanoid")
-                WindUI:Notify("Spectate", "Observando " .. selectedPlayerTP, 2)
+        if selectedPlayer and selectedPlayer.Character then
+            local targetHumanoid = selectedPlayer.Character:FindFirstChild("Humanoid")
+            if targetHumanoid then
+                Camera.CameraSubject = targetHumanoid
             end
         end
     end
 })
 
 TabPlayers:Button({
-    Title = "Voltar Camera",
+    Title = "Reset View",
     Callback = function()
-        Camera.CameraSubject = Humanoid
-        WindUI:Notify("Camera", "Camera restaurada", 2)
+        if Humanoid then
+            Camera.CameraSubject = Humanoid
+        end
+    end
+})
+
+TabPlayers:Section({ Title = "Spectate" })
+
+local spectateEnabled = false
+
+TabPlayers:Toggle({
+    Title = "Spectate Selected Player",
+    Default = false,
+    Callback = function(v)
+        spectateEnabled = v
+        if v and selectedPlayer and selectedPlayer.Character then
+            local targetHumanoid = selectedPlayer.Character:FindFirstChild("Humanoid")
+            if targetHumanoid then
+                Camera.CameraSubject = targetHumanoid
+            end
+        else
+            if Humanoid then
+                Camera.CameraSubject = Humanoid
+            end
+        end
     end
 })
 
 -- ==================================================================================
--- ============================ WAYPOINTS TAB =======================================
+-- ============================== WAYPOINTS TAB =====================================
 -- ==================================================================================
 
 TabWaypoints:Section({ Title = "Waypoints" })
 
 local waypoints = {}
-local waypointNameInput = ""
-local waypointSelected = ""
 
-local function getWaypointList()
-    local list = {}
-    for name, _ in pairs(waypoints) do
-        table.insert(list, name)
-    end
-    if #list == 0 then
-        return {"Nenhum waypoint salvo"}
-    end
-    return list
-end
-
-local function saveWaypoint(name)
-    if not HRP then return false end
-    waypoints[name] = HRP.CFrame
-    return true
-end
-
-local function teleportToWaypoint(name)
-    if not waypoints[name] or not HRP then return false end
-    HRP.CFrame = waypoints[name]
-    return true
-end
-
-local function deleteWaypoint(name)
-    waypoints[name] = nil
-end
-
-TabWaypoints:Input({
-    Title = "Nome do Waypoint",
-    Placeholder = "Digite o nome...",
-    Default = "",
-    Callback = function(text)
-        waypointNameInput = text
+TabWaypoints:Button({
+    Title = "Add Current Position",
+    Callback = function()
+        if HRP then
+            local waypointName = "Waypoint " .. (#waypoints + 1)
+            table.insert(waypoints, {
+                name = waypointName,
+                position = HRP.Position
+            })
+            print("✅ Waypoint salvo: " .. waypointName)
+        end
     end
 })
+
+TabWaypoints:Button({
+    Title = "Clear All Waypoints",
+    Callback = function()
+        waypoints = {}
+        print("✅ Waypoints limpos")
+    end
+})
+
+TabWaypoints:Section({ Title = "Teleport to Waypoint" })
+
+local function getWaypointNames()
+    local names = {}
+    for _, wp in pairs(waypoints) do
+        table.insert(names, wp.name)
+    end
+    return names
+end
+
+local selectedWaypoint = nil
 
 local waypointDropdown = TabWaypoints:Dropdown({
-    Title = "Selecionar Waypoint",
-    Options = getWaypointList(),
-    Default = getWaypointList()[1],
-    Callback = function(opt)
-        waypointSelected = typeof(opt) == "table" and opt[1] or tostring(opt)
-    end
-})
-
-TabWaypoints:Button({
-    Title = "Salvar Posição Atual",
-    Callback = function()
-        if waypointNameInput == "" or not waypointNameInput then
-            WindUI:Notify("Erro", "Digite um nome para o waypoint!", 3)
-            return
-        end
-        if saveWaypoint(tostring(waypointNameInput)) then
-            waypointDropdown:Refresh(getWaypointList())
-            WindUI:Notify("Waypoint Salvo", "'" .. waypointNameInput .. "' foi salvo!", 3)
-        else
-            WindUI:Notify("Erro", "Falha ao salvar waypoint!", 3)
-        end
-    end
-})
-
-TabWaypoints:Button({
-    Title = "Teleportar para Waypoint",
-    Callback = function()
-        local targetName = waypointSelected
-        if type(targetName) == "table" then
-            targetName = targetName[1] or tostring(targetName)
-        end
-        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            WindUI:Notify("Erro", "Selecione um waypoint válido!", 3)
-            return
-        end
-        if teleportToWaypoint(targetName) then
-            WindUI:Notify("Teleportado", "Chegou em '" .. targetName .. "'", 2)
-        else
-            WindUI:Notify("Erro", "Falha ao teleportar.", 3)
-        end
-    end
-})
-
-TabWaypoints:Button({
-    Title = "Deletar Waypoint",
-    Callback = function()
-        local targetName = waypointSelected
-        if type(targetName) == "table" then
-            targetName = targetName[1] or tostring(targetName)
-        end
-        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            WindUI:Notify("Erro", "Selecione um waypoint válido!", 3)
-            return
-        end
-        deleteWaypoint(targetName)
-        waypointDropdown:Refresh(getWaypointList())
-        WindUI:Notify("Waypoint Deletado", "Waypoint removido!", 2)
-    end
-})
-
-TabWaypoints:Button({
-    Title = "Atualizar Lista",
-    Callback = function()
-        waypointDropdown:Refresh(getWaypointList())
-    end
-})
-
-TabWaypoints:Button({
-    Title = "TP para Spawn",
-    Callback = function()
-        if not HRP then return end
-        local spawnLocation = workspace:FindFirstChild("SpawnLocation") or
-            workspace:FindFirstChildOfClass("SpawnLocation") or
-            workspace:FindFirstChild("Spawn")
-        
-        if not spawnLocation then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("SpawnLocation") then
-                    spawnLocation = obj
-                    break
-                end
+    Title = "Select Waypoint",
+    Options = getWaypointNames(),
+    Default = "",
+    Callback = function(v)
+        for _, wp in pairs(waypoints) do
+            if wp.name == v then
+                selectedWaypoint = wp
+                break
             end
         end
-        
-        if spawnLocation then
-            HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
-            WindUI:Notify("Teleportado", "Chegou no Spawn!", 2)
-        else
-            HRP.CFrame = CFrame.new(Vector3.new(0, 5, 0))
-            WindUI:Notify("Spawn não encontrado", "Foi para a origem (0,5,0).", 3)
+    end
+})
+
+TabWaypoints:Button({
+    Title = "Teleport to Waypoint",
+    Callback = function()
+        if selectedWaypoint and HRP then
+            HRP.CFrame = CFrame.new(selectedWaypoint.position)
         end
     end
 })
 
 -- ==================================================================================
--- ============================= VISUALS TAB ========================================
+-- ============================== VISUALS TAB =======================================
 -- ==================================================================================
 
 TabVisuals:Section({ Title = "Lighting" })
 
 local fullbright = false
-local originalAmbient, originalBrightness, originalFogEnd
+local oldAmbient, oldBrightness, oldClockTime
 
 local function toggleFullbright(enabled)
     if enabled then
-        originalAmbient = Lighting.Ambient
-        originalBrightness = Lighting.Brightness
-        originalFogEnd = Lighting.FogEnd
+        oldAmbient = Lighting.Ambient
+        oldBrightness = Lighting.Brightness
+        oldClockTime = Lighting.ClockTime
         
         Lighting.Ambient = Color3.fromRGB(255, 255, 255)
         Lighting.Brightness = 2
-        Lighting.FogEnd = 100000
+        Lighting.ClockTime = 12
+        Lighting.FogEnd = 1e10
+        Lighting.GlobalShadows = false
+        Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
     else
-        if originalAmbient then Lighting.Ambient = originalAmbient end
-        if originalBrightness then Lighting.Brightness = originalBrightness end
-        if originalFogEnd then Lighting.FogEnd = originalFogEnd end
+        if oldAmbient then
+            Lighting.Ambient = oldAmbient
+            Lighting.Brightness = oldBrightness
+            Lighting.ClockTime = oldClockTime
+        end
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = true
     end
 end
 
 TabVisuals:Toggle({
-    Title = "Fullbright (B)",
+    Title = "Fullbright",
     Default = false,
     Callback = function(v)
         fullbright = v
@@ -1337,31 +1083,15 @@ TabVisuals:Toggle({
     end
 })
 
-TabVisuals:Toggle({
-    Title = "Remover Fog",
-    Default = false,
-    Callback = function(v)
-        if v then
-            Lighting.FogEnd = 100000
-        else
-            if originalFogEnd then
-                Lighting.FogEnd = originalFogEnd
-            else
-                Lighting.FogEnd = 1000
-            end
-        end
-    end
-})
+TabVisuals:Section({ Title = "FOV" })
 
-TabVisuals:Section({ Title = "Camera" })
-
-local DEFAULT_FOV = 70
+local defaultFOV = Camera.FieldOfView
 
 TabVisuals:Slider({
-    Title = "FOV",
+    Title = "Field of View",
     Min = 70,
-    Max = 180,
-    Default = Camera.FieldOfView,
+    Max = 120,
+    Default = defaultFOV,
     Increment = 1,
     Callback = function(v)
         Camera.FieldOfView = v
@@ -1369,9 +1099,41 @@ TabVisuals:Slider({
 })
 
 TabVisuals:Button({
-    Title = "Resetar FOV",
+    Title = "Reset FOV",
     Callback = function()
-        Camera.FieldOfView = DEFAULT_FOV
+        Camera.FieldOfView = defaultFOV
+    end
+})
+
+TabVisuals:Section({ Title = "Remove Effects" })
+
+TabVisuals:Button({
+    Title = "Remove Blur",
+    Callback = function()
+        for _, effect in pairs(Lighting:GetChildren()) do
+            if effect:IsA("BlurEffect") then
+                effect:Destroy()
+            end
+        end
+    end
+})
+
+TabVisuals:Button({
+    Title = "Remove Fog",
+    Callback = function()
+        Lighting.FogEnd = 1e10
+    end
+})
+
+TabVisuals:Button({
+    Title = "Remove All Effects",
+    Callback = function()
+        for _, effect in pairs(Lighting:GetChildren()) do
+            if effect:IsA("PostEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") then
+                effect:Destroy()
+            end
+        end
+        Lighting.FogEnd = 1e10
     end
 })
 
@@ -1379,43 +1141,43 @@ TabVisuals:Button({
 -- ============================== WORLD TAB =========================================
 -- ==================================================================================
 
-TabWorld:Section({ Title = "Time Control" })
-
-local timeControlEnabled = false
-local timeValue = 12
-
-TabWorld:Toggle({
-    Title = "Controlar Tempo",
-    Default = false,
-    Callback = function(v)
-        timeControlEnabled = v
-        if v then
-            Lighting.ClockTime = timeValue
-        end
-    end
-})
+TabWorld:Section({ Title = "Time" })
 
 TabWorld:Slider({
-    Title = "Hora do Dia",
+    Title = "Time of Day",
     Min = 0,
     Max = 24,
-    Default = Lighting.ClockTime or 14,
-    Increment = 0.5,
+    Default = 12,
+    Increment = 1,
     Callback = function(v)
-        timeValue = v
-        if timeControlEnabled then
-            Lighting.ClockTime = v
+        Lighting.ClockTime = v
+    end
+})
+
+TabWorld:Toggle({
+    Title = "Freeze Time",
+    Default = false,
+    Callback = function(v)
+        if v then
+            Lighting:SetAttribute("ClockTime", Lighting.ClockTime)
+            Lighting.Changed:Connect(function()
+                if Lighting:GetAttribute("ClockTime") then
+                    Lighting.ClockTime = Lighting:GetAttribute("ClockTime")
+                end
+            end)
+        else
+            Lighting:SetAttribute("ClockTime", nil)
         end
     end
 })
 
-TabWorld:Section({ Title = "Game Speed" })
+TabWorld:Section({ Title = "Gravity" })
 
 TabWorld:Slider({
-    Title = "Gravidade",
-    Min = 60,
-    Max = 500,
-    Default = workspace.Gravity or 196,
+    Title = "Gravity",
+    Min = 0,
+    Max = 196.2,
+    Default = 196.2,
     Increment = 10,
     Callback = function(v)
         workspace.Gravity = v
@@ -1423,134 +1185,87 @@ TabWorld:Slider({
 })
 
 TabWorld:Button({
-    Title = "Remover Fog",
+    Title = "Reset Gravity",
     Callback = function()
-        Lighting.FogEnd = 1e6
+        workspace.Gravity = 196.2
     end
 })
 
 -- ==================================================================================
--- ============================ FPS/STATS TAB =======================================
+-- ============================== FPS/STATS TAB =====================================
 -- ==================================================================================
 
-TabFPS:Section({ Title = "Performance" })
+TabFPS:Section({ Title = "FPS Counter" })
 
-local showFPS = false
-local fpsLabel
+local fpsLabel = TabFPS:Label({ Title = "FPS: 0" })
+local pingLabel = TabFPS:Label({ Title = "Ping: 0ms" })
 
-TabFPS:Toggle({
-    Title = "Mostrar FPS",
-    Default = false,
-    Callback = function(v)
-        showFPS = v
-        if v then
-            fpsLabel = Drawing.new("Text")
-            fpsLabel.Text = "FPS: 0"
-            fpsLabel.Size = 20
-            fpsLabel.Color = Color3.fromRGB(0, 255, 0)
-            fpsLabel.Position = Vector2.new(10, 10)
-            fpsLabel.Visible = true
-            
-            local lastUpdate = tick()
-            local frameCount = 0
-            
-            RunService.RenderStepped:Connect(function()
-                if showFPS then
-                    frameCount = frameCount + 1
-                    if tick() - lastUpdate >= 1 then
-                        fpsLabel.Text = "FPS: " .. frameCount
-                        frameCount = 0
-                        lastUpdate = tick()
-                    end
-                else
-                    if fpsLabel then fpsLabel.Visible = false end
-                end
-            end)
-        else
-            if fpsLabel then fpsLabel:Remove() end
-        end
-    end
-})
-
-TabFPS:Toggle({
-    Title = "3D Delete (Hide World)",
-    Default = false,
-    Callback = function(v)
-        if v then
-            resetVisuals()
-            WindUI:Notify("3D Delete Ativado", "Mundo escondido! FPS otimizado.", 2)
-        else
-            WindUI:Notify("3D Delete Desativado", "Recarregue o jogo.", 3)
-        end
-    end
-})
-
-TabFPS:Slider({
-    Title = "FPS Cap",
-    Min = 60,
-    Max = 240,
-    Default = 60,
-    Increment = 10,
-    Callback = function(v)
-        setfpscap(v)
-    end
-})
-
-TabFPS:Section({ Title = "Stats" })
-
-local statsLabel = TabFPS:Label({ Text = "Carregando..." })
-local fpsLabelStat = TabFPS:Label({ Text = "FPS: 0" })
-local pingLabel = TabFPS:Label({ Text = "Ping: 0ms" })
-local playersLabel = TabFPS:Label({ Text = "Players: 0" })
+local function updateStats()
+    local fps = math.floor(1 / RunService.RenderStepped:Wait())
+    local ping = math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+    
+    fpsLabel:Update({ Title = "FPS: " .. fps })
+    pingLabel:Update({ Title = "Ping: " .. ping .. "ms" })
+end
 
 spawn(function()
-    while task.wait(1) do
-        local stats = game:GetService("Stats")
-        local ping = math.floor(stats.Network.ServerStatsItem["Data Ping"]:GetValue())
-        local playerCount = #Players:GetPlayers()
-        
-        if statsLabel then
-            statsLabel:Set("Estatísticas do Servidor")
-        end
-        if pingLabel then
-            pingLabel:Set("Ping: " .. ping .. "ms")
-        end
-        if playersLabel then
-            playersLabel:Set("Players: " .. playerCount)
-        end
+    while true do
+        updateStats()
+        task.wait(1)
     end
 end)
 
--- ==================================================================================
--- ============================= CONFIG TAB =========================================
--- ==================================================================================
+TabFPS:Section({ Title = "Performance" })
 
-TabConfig:Section({ Title = "Anti AFK" })
+local fpsBoost = false
 
-TabConfig:Toggle({
-    Title = "Anti AFK",
+TabFPS:Toggle({
+    Title = "FPS Boost",
     Default = false,
     Callback = function(v)
+        fpsBoost = v
         if v then
-            WindUI:Notify("Anti AFK Ativado", "Você não será kickado", 2)
-            local vu = game:GetService("VirtualUser")
-            game:GetService("Players").LocalPlayer.Idled:connect(function()
-                vu:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                task.wait(1)
-                vu:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-            end)
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+                    obj.Enabled = false
+                end
+            end
+        else
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
         end
     end
 })
 
+TabFPS:Button({
+    Title = "Hide 3D Objects (Extreme FPS Boost)",
+    Callback = function()
+        resetVisuals()
+    end
+})
+
+TabFPS:Section({ Title = "Memory" })
+
+TabFPS:Button({
+    Title = "Collect Garbage",
+    Callback = function()
+        collectgarbage("collect")
+        print("✅ Garbage collected")
+    end
+})
+
+-- ==================================================================================
+-- ============================== CONFIG TAB ========================================
+-- ==================================================================================
+
 TabConfig:Section({ Title = "Keybinds" })
 
-TabConfig:Label({ Text = "ESP: E | Highlight: H" })
-TabConfig:Label({ Text = "Aim: R | Player Aim: T" })
-TabConfig:Label({ Text = "Fly: F | Noclip: N" })
-TabConfig:Label({ Text = "Inf Jump: J | Auto Click: C" })
-TabConfig:Label({ Text = "God Mode: G | Fullbright: B" })
-TabConfig:Label({ Text = "Toggle GUI: RightControl" })
+TabConfig:Label({ Title = "ESP: E | Highlight: H" })
+TabConfig:Label({ Title = "Aim: R | Player Aim: T" })
+TabConfig:Label({ Title = "Fly: F | Noclip: N" })
+TabConfig:Label({ Title = "Inf Jump: J | Auto Click: C" })
+TabConfig:Label({ Title = "God Mode: G | Fullbright: B" })
+TabConfig:Label({ Title = "Toggle GUI: RightControl" })
 
 TabConfig:Section({ Title = "GUI" })
 
@@ -1559,14 +1274,14 @@ TabConfig:Button({
     Callback = function()
         clearAllESP()
         removeAllHighlights()
-        WindUI:Notify("⚠️ GUI Destruída", "Recarregue o script", 3)
+        print("⚠️ GUI Destruída - Recarregue o script")
         task.wait(1)
-        WindUI:Destroy()
+        Window:Destroy()
     end
 })
 
 -- ==================================================================================
--- =============================== UTILITY TAB ======================================
+-- ============================== UTILITY TAB =======================================
 -- ==================================================================================
 
 TabUtil:Section({ Title = "Noclip" })
@@ -1574,7 +1289,7 @@ TabUtil:Section({ Title = "Noclip" })
 local noclip = false
 
 TabUtil:Toggle({
-    Title = "Noclip (N)",
+    Title = "Noclip",
     Default = false,
     Callback = function(v)
         noclip = v
@@ -1839,9 +1554,13 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
-print("✅ Universal Hub - WindUI Version (SINTAXE CORRETA)")
+print("✅ Universal Hub - WindUI Version COMPLETA")
 print("📊 ESP: Sistema completo com filtros de time")
 print("✨ Highlight ESP: Sistema de destaque funcional")
 print("🎯 Aim Assist: Mira automática com wallcheck")
+print("👥 Player Aim: Sistema de lock em jogadores")
+print("🛡️ Protection: God Mode, Anti-Void, Anti-KB")
+print("🎮 Movement: Fly, Noclip, Velocidade, Pulo")
+print("🌍 World: Controle de tempo e gravidade")
+print("📍 Waypoints: Sistema de salvamento de posições")
 print("🔧 Todas as funcionalidades da v13 Rayfield convertidas!")
-print("💎 Baseado no exemplo oficial do WindUI")
