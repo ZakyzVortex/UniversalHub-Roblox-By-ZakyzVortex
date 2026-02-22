@@ -103,15 +103,18 @@ end
 local function shouldShowPlayer(player, filterMode)
     if not player or player == LP then return false end
     
-    if filterMode == "All" then
+    -- Normaliza o filterMode removendo espaços e convertendo para minúsculas
+    local mode = filterMode and filterMode:lower():gsub("%s+", "") or "all"
+    
+    if mode == "all" then
         return true
-    elseif filterMode == "MyTeam" or filterMode == "Team" then
+    elseif mode == "myteam" or mode == "team" then
         -- Só mostra se AMBOS tiverem time E forem do mesmo time
         local myTeam = getPlayerTeam(LP)
         local theirTeam = getPlayerTeam(player)
         if not myTeam or not theirTeam then return false end
         return myTeam == theirTeam
-    elseif filterMode == "EnemyTeam" or filterMode == "Enemy" then
+    elseif mode == "enemyteam" or mode == "enemy" then
         local myTeam = getPlayerTeam(LP)
         local theirTeam = getPlayerTeam(player)
         
