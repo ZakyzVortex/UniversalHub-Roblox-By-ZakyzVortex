@@ -1436,7 +1436,7 @@ TabAim:CreateDropdown({
     CurrentOption = "Enemy Team",
     Flag = "AimTeamFilter",
     Callback = function(option)
-        AIM_TEAM_FILTER = option
+        AIM_TEAM_FILTER = typeof(option) == "table" and option[1] or option
         currentTarget = nil
     end
 })
@@ -1530,7 +1530,7 @@ RunService.RenderStepped:Connect(function()
         if not targetPart then continue end
         
         -- WALLCHECK APLICADO COM MAIS VERIFICAÇÕES
-        if not isVisible(targetPart) then continue end
+        if AIM_WALLCHECK and not isVisible(targetPart) then continue end
         
         local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
         if not onScreen or screenPos.Z <= 0 then continue end
@@ -3195,8 +3195,4 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
-print("✅ Universal Hub - Versão Beta Atualizada com Funções Corrigidas!")
-print("📊 ESP: Sistema corrigido com filtros de time funcionais")
-print("✨ Highlight ESP: Sistema corrigido com cores e filtros funcionais")
-print("🎯 Aim Assist: Wallcheck melhorado + SEM FOV Circle + Filtros de time")
-print("🔧 Arsenal e jogos com times: Totalmente funcional")
+print("✅ Universal Hub Carregado - By ZakyzVortex!")
