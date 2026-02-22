@@ -709,7 +709,7 @@ local OUTLINE_ENABLED = true
 local ESP_COLOR = Color3.fromRGB(255, 0, 0)
 local LINE_COLOR = Color3.fromRGB(255, 255, 255)
 local ESP_OBJECTS = {}
-local ESP_TEAM_FILTER = "All"  -- All, Team, Enemy
+local ESP_TEAM_FILTER = "All"  -- All, My Team, Enemy Team
 
 local function removeESP(player)
     local espData = ESP_OBJECTS[player]
@@ -1430,7 +1430,7 @@ TabAim:CreateToggle({
 TabAim:CreateDropdown({
     Name = "Filtro de Time",
     Options = {"All", "My Team", "Enemy Team"},
-    CurrentOption = "Enemy",
+    CurrentOption = "Enemy Team",
     Flag = "AimTeamFilter",
     Callback = function(option)
         AIM_TEAM_FILTER = option
