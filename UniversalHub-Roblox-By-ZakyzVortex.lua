@@ -1014,7 +1014,7 @@ TabESP:CreateToggle({
 
 TabESP:CreateDropdown({
     Name = "Filtro de Time",
-    Options = {"All", "Team", "Enemy"},
+    Options = {"All", "My Team", "Enemy Team"},
     CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "ESPTeamFilter",
