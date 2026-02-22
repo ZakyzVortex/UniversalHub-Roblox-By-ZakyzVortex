@@ -1265,7 +1265,7 @@ TabHighlight:CreateToggle({
 
 TabHighlight:CreateDropdown({
     Name = "Filtro de Time",
-    Options = {"All", "Team", "Enemy"},
+    Options = {"All", "My Team", "Enemy Team"},
     CurrentOption = {"All"},
     MultipleOptions = false,
     Flag = "HighlightTeamFilter",
@@ -1360,7 +1360,7 @@ local AIM_FOV = 100
 local AIM_SMOOTH = 0.2
 local AIM_TARGET_PART = "Head"
 local AIM_WALLCHECK = true
-local AIM_TEAM_FILTER = "Enemy"
+local AIM_TEAM_FILTER = "Enemy Team"
 local currentTarget = nil
 
 -- Função para verificar se o jogador está visível
@@ -1429,7 +1429,7 @@ TabAim:CreateToggle({
 
 TabAim:CreateDropdown({
     Name = "Filtro de Time",
-    Options = {"All", "MyTeam", "Enemy"},
+    Options = {"All", "My Team", "Enemy Team"},
     CurrentOption = "Enemy",
     Flag = "AimTeamFilter",
     Callback = function(option)
@@ -1758,7 +1758,7 @@ TabPlayerAim:CreateToggle({
 TabPlayerAim:CreateSection("🎛️ Configurações")
 
 TabPlayerAim:CreateSlider({
-    Name = "FOV Radius (pixels)",
+    Name = "FOV (Campo de Visão)",
     Range = {10, 800},
     Increment = 10,
     CurrentValue = 100,
@@ -1768,7 +1768,7 @@ TabPlayerAim:CreateSlider({
 })
 
 TabPlayerAim:CreateSlider({
-    Name = "Suavidade (menor = mais rápido)",
+    Name = "Suavidade",
     Range = {0.01, 1},
     Increment = 0.01,
     CurrentValue = 0.15,
