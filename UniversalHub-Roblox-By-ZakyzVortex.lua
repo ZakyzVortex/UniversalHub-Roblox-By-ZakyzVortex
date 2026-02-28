@@ -1,27 +1,57 @@
--- ================== UNIVERSAL HUB - ORGANIZED VERSION (FIXED) ==================
--- Universal Hub Rayfield By ZakyzVortex (Mobile Optimized & Organized)
-
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- ================== UNIVERSAL HUB v15 - WINDUI VERSION ==================
+-- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
 
 -- ================== SERVICES ==================
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
+local Players         = game:GetService("Players")
+local RunService      = game:GetService("RunService")
+local Lighting        = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local HttpService = game:GetService("HttpService")
+local UserInputService= game:GetService("UserInputService")
+local HttpService     = game:GetService("HttpService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
-local LP = Players.LocalPlayer
+local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- ================== CHARACTER REFS ==================
+-- ================== CARREGAR WINDUI ==================
+local success, WindUI = pcall(function()
+    return loadstring(game:HttpGet(
+        "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"
+    ))()
+end)
+
+if not success then
+    warn("❌ Falha ao carregar WindUI: " .. tostring(WindUI))
+    return
+end
+
+-- ================== NOTIFY OVERRIDE ==================
+WindUI._notifDisabled = false
+local _originalNotify = WindUI.Notify
+WindUI.Notify = function(self, data)
+    if WindUI._notifDisabled then return end
+    return _originalNotify(self, data)
+end
+
+-- ================== CAPTURE WINDOW CANVASGROUP (para toggle transparência) ==================
+local _windowCGs = {}  -- todos os CGs transparentes da janela
+task.spawn(function()
+    task.wait(2) -- garante que a janela já renderizou
+    pcall(function()
+        local guiRoot = (gethui and gethui()) or game:GetService("CoreGui")
+        for _, obj in pairs(guiRoot:GetDescendants()) do
+            if obj:IsA("CanvasGroup") and obj.GroupTransparency > 0 then
+                table.insert(_windowCGs, { cg = obj, original = obj.GroupTransparency })
+            end
+        end
+    end)
+end)
 local Character, Humanoid, HRP
 local function BindCharacter(char)
     Character = char
-    Humanoid = char:WaitForChild("Humanoid")
-    HRP = char:WaitForChild("HumanoidRootPart")
-    Humanoid.UseJumpPower = true
+    Humanoid  = char:WaitForChild("Humanoid")
+    HRP       = char:WaitForChild("HumanoidRootPart")
+    pcall(function() Humanoid.UseJumpPower = true end)
 end
 
 if LP.Character then
@@ -30,160 +60,130 @@ else
     LP.CharacterAdded:Wait()
     BindCharacter(LP.Character)
 end
-
 LP.CharacterAdded:Connect(BindCharacter)
 
--- ================== FUNÇÃO PARA ESCONDER OBJETOS 3D DO JOGO ==================
--- Esconde TUDO do workspace exceto seu personagem (para reduzir lag visual)
-
-local function resetVisuals()
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    
-    local hiddenCount = 0
-    
-    local function hide(obj)
-        -- NÃO esconder se for parte do seu personagem
-        if LocalPlayer.Character and obj:IsDescendantOf(LocalPlayer.Character) then 
-            return 
-        end
-        
-        -- Esconde partes 3D (mantém colisão)
-        if obj:IsA("BasePart") then
-            obj.Transparency = 1
-            hiddenCount = hiddenCount + 1
-            
-        -- Esconde decals e texturas
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-            hiddenCount = hiddenCount + 1
-            
-        -- Desabilita efeitos de partículas
-        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-            obj.Enabled = false
-            hiddenCount = hiddenCount + 1
-            
-        -- Desabilita outros efeitos visuais
-        elseif obj:IsA("Beam") or obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
-            obj.Enabled = false
-            hiddenCount = hiddenCount + 1
-        end
-    end
-    
-    -- Esconde tudo que já existe
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        hide(obj)
-    end
-    
-    -- Auto-esconde novos objetos que aparecerem
-    workspace.DescendantAdded:Connect(hide)
-    
-    print("✅ " .. hiddenCount .. " objetos 3D escondidos!")
-    print("✅ FPS otimizado para AFK farm!")
-end
-
--- ================== TEAM DETECTION SYSTEM (CORRIGIDO) ==================
+-- ================== TEAM DETECTION ==================
 local function getPlayerTeam(player)
     if not player then return nil end
     return player.Team
 end
 
-local function isPlayerOnSameTeam(player)
-    if not player or player == LP then return false end
-    local myTeam = getPlayerTeam(LP)
-    local theirTeam = getPlayerTeam(player)
-    
-    -- Se nenhum dos dois tem time, não são do mesmo time
-    if not myTeam or not theirTeam then return false end
-    
-    -- Verifica se são do mesmo time
-    return myTeam == theirTeam
+-- Helper para normalizar valor que vem do Dropdown WindUI
+-- Multi=false → retorna string direta
+-- Multi=true  → retorna tabela { [1] = "val", ... }
+local function parseDropdownValue(opt)
+    if type(opt) == "table" then
+        -- Multi=true: pega o primeiro valor selecionado
+        for k, v in pairs(opt) do
+            return tostring(k)   -- WindUI Multi retorna {["Key"] = true}
+        end
+        return ""
+    end
+    return tostring(opt or "")
 end
 
 local function shouldShowPlayer(player, filterMode)
     if not player or player == LP then return false end
-    
-    -- Normaliza o filterMode removendo espaços e convertendo para minúsculas
-    local mode = filterMode and filterMode:lower():gsub("%s+", "") or "all"
-    
+    -- Normaliza: minúsculas, remove espaços e hífens
+    local mode = filterMode and filterMode:lower():gsub("[%s%-]+", "") or "all"
     if mode == "all" then
         return true
     elseif mode == "myteam" or mode == "team" then
-        -- Só mostra se AMBOS tiverem time E forem do mesmo time
-        local myTeam = getPlayerTeam(LP)
+        local myTeam    = getPlayerTeam(LP)
         local theirTeam = getPlayerTeam(player)
         if not myTeam or not theirTeam then return false end
         return myTeam == theirTeam
-    elseif mode == "enemyteam" or mode == "enemy" then
-        local myTeam = getPlayerTeam(LP)
+    elseif mode == "enemyteam" or mode == "enemy" or mode == "enemies" then
+        local myTeam    = getPlayerTeam(LP)
         local theirTeam = getPlayerTeam(player)
-        
-        -- Se não houver sistema de times, mostra todos (exceto si mesmo)
+        -- Jogo sem times → mostra todos
         if not myTeam or not theirTeam then return true end
-        
-        -- Se houver times, só mostra se forem de times DIFERENTES
         return myTeam ~= theirTeam
     end
-    
     return true
 end
 
 -- ================== WINDOW ==================
-local Window = Rayfield:CreateWindow({
-    Name = "Universal Hub",
-    LoadingTitle = "Universal Hub",
-    LoadingSubtitle = "By ZakyzVortex",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "UniversalHub",
-        FileName = "Config"
-    }
+local Window = WindUI:CreateWindow({
+    Title          = "Universal Hub",
+    Icon           = "earth",
+    IconThemed = true,
+    Author         = "By ZakyzVortex",
+    Folder         = "UniversalHub",
+    Size           = UDim2.fromOffset(580, 460),
+    Transparent    = false,
+    HasPadding     = true,
+    HideSearchBar  = false,
+    Resizable      = true,
+    SideBarWidth   = 200,
+
+    -- Foto do personagem anônima no topbar
+    User = {
+        Enabled   = true,
+        Anonymous = false,
+        Callback  = function() end,
+    },
 })
 
--- ================== CREATE TABS ==================
-local TabMove = Window:CreateTab("Movement")
-local TabCombat = Window:CreateTab("Auto Farm")
-local TabESP = Window:CreateTab("ESP")
-local TabHighlight = Window:CreateTab("Highlight ESP")
-local TabAim = Window:CreateTab("Aim Assist")
-local TabPlayerAim = Window:CreateTab("Player Aim")
-local TabProt = Window:CreateTab("Protection")
-local TabPlayers = Window:CreateTab("Players")
-local TabWaypoints = Window:CreateTab("Waypoints")
-local TabVisuals = Window:CreateTab("Visuals")
-local TabWorld = Window:CreateTab("World")
-local TabFPS = Window:CreateTab("FPS/Stats")
-local TabConfig = Window:CreateTab("Config")
-local TabUtil = Window:CreateTab("Utility")
+-- ================== CONFIG MANAGER ==================
+local ConfigManager = Window.ConfigManager
+local hubConfig     = ConfigManager:CreateConfig("HubConfig")
+
+-- Open Button: ícone "earth", contorno verde claro
+Window:EditOpenButton({
+    Title           = "Universal Hub",
+    Icon            = "earth",
+    CornerRadius    = UDim.new(0, 16),
+    StrokeThickness = 2,
+    Color           = ColorSequence.new(
+        Color3.fromHex("#ffffff"),
+        Color3.fromHex("#2b2b2b")
+    ),
+    OnlyMobile = false,
+    Enabled    = true,
+    Draggable  = true,
+})
+
+-- ================== TABS ==================
+local TabMove      = Window:Tab({ Title = "Movement",   Icon = "footprints"     })
+local TabCombat    = Window:Tab({ Title = "Combat",     Icon = "sword"          })
+local TabESP       = Window:Tab({ Title = "ESP",        Icon = "eye"            })
+local TabHighlight = Window:Tab({ Title = "Highlight",  Icon = "sparkles"       })
+local TabAim       = Window:Tab({ Title = "Aim Assist", Icon = "crosshair"      })
+local TabPlayerAim = Window:Tab({ Title = "Player Aim", Icon = "target"         })
+local TabProt      = Window:Tab({ Title = "Protection", Icon = "shield"         })
+local TabPlayers   = Window:Tab({ Title = "Players",    Icon = "users"          })
+local TabWaypoints = Window:Tab({ Title = "Waypoints",  Icon = "map-pin"        })
+local TabVisuals   = Window:Tab({ Title = "Visuals",    Icon = "sun"            })
+local TabWorld     = Window:Tab({ Title = "World",      Icon = "globe"          })
+local TabFPS       = Window:Tab({ Title = "FPS/Stats",  Icon = "activity"       })
+local TabConfig    = Window:Tab({ Title = "Config",     Icon = "settings"       })
+local TabUtil      = Window:Tab({ Title = "Utility",    Icon = "wrench"         })
 
 -- ==================================================================================
 -- ============================== MOVEMENT TAB ======================================
 -- ==================================================================================
 
-TabMove:CreateSection("Velocidade e Pulo")
+TabMove:Section({ Title = "Velocidade e Pulo" })
 
--- Estados
-local infJump, antiFall = false, false
+local infJump = false
+local antiFall = false
 
--- Velocidade
-TabMove:CreateSlider({
-    Name = "Velocidade de Caminhada",
-    Range = {16, 300},
-    Increment = 5,
-    CurrentValue = 16,
+TabMove:Slider({
+    Title = "Velocidade de Caminhada",
+    Flag     = "WalkSpeed",
+    Step  = 5,
+    Value = { Min = 16, Max = 300, Default = 16 },
     Callback = function(v)
-        if Humanoid then
-            Humanoid.WalkSpeed = v
-        end
+        if Humanoid then Humanoid.WalkSpeed = v end
     end
 })
 
--- Pulo
-TabMove:CreateSlider({
-    Name = "Poder de Pulo",
-    Range = {50, 300},
-    Increment = 10,
-    CurrentValue = 50,
+TabMove:Slider({
+    Title = "Poder de Pulo",
+    Flag     = "JumpPower",
+    Step  = 10,
+    Value = { Min = 50, Max = 300, Default = 50 },
     Callback = function(v)
         if Humanoid then
             Humanoid.UseJumpPower = true
@@ -192,317 +192,187 @@ TabMove:CreateSlider({
     end
 })
 
-TabMove:CreateSection("Fly System")
+TabMove:Section({ Title = "Fly System" })
 
--- ================== FLY SYSTEM INTEGRADO ==================
+-- ================== FLY SYSTEM ==================
 local flyEnabled = false
-local flySpeed = 1
-local tpwalking = false
-local ctrl = {f = 0, b = 0, l = 0, r = 0}
-local lastctrl = {f = 0, b = 0, l = 0, r = 0}
+local flySpeed   = 1
+local tpwalking  = false
+local ctrl       = { f = 0, b = 0, l = 0, r = 0 }
+local lastctrl   = { f = 0, b = 0, l = 0, r = 0 }
 
--- Função para ativar/desativar fly
 local function toggleFly(enabled)
     flyEnabled = enabled
-    local speaker = LP
-    local chr = speaker.Character
+    local chr = LP.Character
     local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
-    
     if not chr or not hum then return end
-    
+
     if enabled then
-        -- Desabilita animações e estados
-        chr.Animate.Disabled = true
-        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
-        for i,v in next, AnimController:GetPlayingAnimationTracks() do
-            v:AdjustSpeed(0)
-        end
-        
-        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Running, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, false)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+        pcall(function() chr.Animate.Disabled = true end)
+        pcall(function()
+            for _, v in next, hum:GetPlayingAnimationTracks() do v:AdjustSpeed(0) end
+        end)
+        local states = {
+            Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.FallingDown,
+            Enum.HumanoidStateType.Flying,   Enum.HumanoidStateType.Freefall,
+            Enum.HumanoidStateType.GettingUp,Enum.HumanoidStateType.Jumping,
+            Enum.HumanoidStateType.Landed,   Enum.HumanoidStateType.Physics,
+            Enum.HumanoidStateType.PlatformStanding, Enum.HumanoidStateType.Ragdoll,
+            Enum.HumanoidStateType.Running,  Enum.HumanoidStateType.RunningNoPhysics,
+            Enum.HumanoidStateType.Seated,   Enum.HumanoidStateType.StrafingNoPhysics,
+            Enum.HumanoidStateType.Swimming,
+        }
+        for _, s in ipairs(states) do hum:SetStateEnabled(s, false) end
         hum:ChangeState(Enum.HumanoidStateType.Swimming)
-        
-        -- Inicia teleport walking
+
         for i = 1, flySpeed do
             spawn(function()
-                local hb = game:GetService("RunService").Heartbeat
+                local hb = RunService.Heartbeat
                 tpwalking = true
-                local chr = LP.Character
-                local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
-                while tpwalking and hb:Wait() and chr and hum and hum.Parent do
-                    if hum.MoveDirection.Magnitude > 0 then
-                        chr:TranslateBy(hum.MoveDirection)
-                    end
+                local c = LP.Character
+                local h = c and c:FindFirstChildWhichIsA("Humanoid")
+                while tpwalking and hb:Wait() and c and h and h.Parent do
+                    if h.MoveDirection.Magnitude > 0 then c:TranslateBy(h.MoveDirection) end
                 end
             end)
         end
-        
-        -- Detecta tipo de rig e aplica BodyGyro/BodyVelocity
-        if hum.RigType == Enum.HumanoidRigType.R6 then
-            local torso = chr.Torso
-            local bg = Instance.new("BodyGyro", torso)
-            bg.P = 9e4
-            bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-            bg.cframe = torso.CFrame
-            local bv = Instance.new("BodyVelocity", torso)
-            bv.velocity = Vector3.new(0, 0.1, 0)
-            bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+
+        local part = hum.RigType == Enum.HumanoidRigType.R6
+            and chr:FindFirstChild("Torso")
+            or  chr:FindFirstChild("UpperTorso")
+        if part then
+            local bg = Instance.new("BodyGyro", part)
+            bg.P = 9e4; bg.maxTorque = Vector3.new(9e9,9e9,9e9); bg.cframe = part.CFrame
+            local bv = Instance.new("BodyVelocity", part)
+            bv.velocity = Vector3.new(0,0.1,0); bv.maxForce = Vector3.new(9e9,9e9,9e9)
             hum.PlatformStand = true
-            
+
             spawn(function()
-                local maxspeed = 50
-                local speed = 0
-                while flyEnabled and hum.Health > 0 do
-                    game:GetService("RunService").RenderStepped:Wait()
-                    
-                    if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
-                        speed = speed + 0.5 + (speed / maxspeed)
-                        if speed > maxspeed then
-                            speed = maxspeed
-                        end
-                    elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
-                        speed = speed - 1
-                        if speed < 0 then
-                            speed = 0
-                        end
-                    end
-                    
-                    if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
-                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f + ctrl.b)) + 
-                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).p) - 
-                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
-                        lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
-                    elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
-                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f + lastctrl.b)) + 
-                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l + lastctrl.r, (lastctrl.f + lastctrl.b) * 0.2, 0).p) - 
-                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
-                    else
-                        bv.velocity = Vector3.new(0, 0, 0)
-                    end
-                    
-                    bg.cframe = workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f + ctrl.b) * 50 * speed / maxspeed), 0, 0)
-                end
-                
-                ctrl = {f = 0, b = 0, l = 0, r = 0}
-                lastctrl = {f = 0, b = 0, l = 0, r = 0}
-                speed = 0
-                bg:Destroy()
-                bv:Destroy()
-                hum.PlatformStand = false
-            end)
-        else
-            local UpperTorso = chr.UpperTorso
-            local bg = Instance.new("BodyGyro", UpperTorso)
-            bg.P = 9e4
-            bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
-            bg.cframe = UpperTorso.CFrame
-            local bv = Instance.new("BodyVelocity", UpperTorso)
-            bv.velocity = Vector3.new(0, 0.1, 0)
-            bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
-            hum.PlatformStand = true
-            
-            spawn(function()
-                local maxspeed = 50
-                local speed = 0
+                local maxspeed, speed = 50, 0
                 while flyEnabled and hum.Health > 0 do
                     wait()
-                    
                     if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
-                        speed = speed + 0.5 + (speed / maxspeed)
-                        if speed > maxspeed then
-                            speed = maxspeed
-                        end
-                    elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and speed ~= 0 then
-                        speed = speed - 1
-                        if speed < 0 then
-                            speed = 0
-                        end
+                        speed = math.min(speed + 0.5 + speed / maxspeed, maxspeed)
+                    elseif speed ~= 0 then
+                        speed = math.max(speed - 1, 0)
                     end
-                    
+                    local cam = workspace.CurrentCamera
                     if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
-                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (ctrl.f + ctrl.b)) + 
-                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(ctrl.l + ctrl.r, (ctrl.f + ctrl.b) * 0.2, 0).p) - 
-                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
-                        lastctrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
-                    elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and speed ~= 0 then
-                        bv.velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (lastctrl.f + lastctrl.b)) + 
-                                      ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(lastctrl.l + lastctrl.r, (lastctrl.f + lastctrl.b) * 0.2, 0).p) - 
-                                       workspace.CurrentCamera.CoordinateFrame.p)) * speed
+                        bv.velocity = (cam.CoordinateFrame.lookVector * (ctrl.f+ctrl.b) +
+                            ((cam.CoordinateFrame * CFrame.new(ctrl.l+ctrl.r,(ctrl.f+ctrl.b)*0.2,0).p) - cam.CoordinateFrame.p)) * speed
+                        lastctrl = { f=ctrl.f, b=ctrl.b, l=ctrl.l, r=ctrl.r }
+                    elseif speed ~= 0 then
+                        bv.velocity = (cam.CoordinateFrame.lookVector * (lastctrl.f+lastctrl.b) +
+                            ((cam.CoordinateFrame * CFrame.new(lastctrl.l+lastctrl.r,(lastctrl.f+lastctrl.b)*0.2,0).p) - cam.CoordinateFrame.p)) * speed
                     else
-                        bv.velocity = Vector3.new(0, 0, 0)
+                        bv.velocity = Vector3.new(0,0,0)
                     end
-                    
-                    bg.cframe = workspace.CurrentCamera.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f + ctrl.b) * 50 * speed / maxspeed), 0, 0)
+                    bg.cframe = cam.CoordinateFrame * CFrame.Angles(-math.rad((ctrl.f+ctrl.b)*50*speed/maxspeed),0,0)
                 end
-                
-                ctrl = {f = 0, b = 0, l = 0, r = 0}
-                lastctrl = {f = 0, b = 0, l = 0, r = 0}
-                speed = 0
-                bg:Destroy()
-                bv:Destroy()
-                hum.PlatformStand = false
+                ctrl = {f=0,b=0,l=0,r=0}; lastctrl = {f=0,b=0,l=0,r=0}; speed = 0
+                bg:Destroy(); bv:Destroy(); hum.PlatformStand = false
             end)
         end
     else
-        -- Desativa fly
-        tpwalking = false
-        flyEnabled = false
-        
-        -- Remove BodyGyro e BodyVelocity que causam flutuação
+        tpwalking = false; flyEnabled = false
         for _, obj in pairs(chr:GetDescendants()) do
-            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then
-                obj:Destroy()
-            end
+            if obj:IsA("BodyGyro") or obj:IsA("BodyVelocity") then obj:Destroy() end
         end
-        
-        -- Reativa todos os estados do humanoid
-        hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Flying, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Landed, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Running, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.RunningNoPhysics, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.StrafingNoPhysics, true)
-        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
-        
-        -- Reseta estado e animações
+        local states = {
+            Enum.HumanoidStateType.Climbing, Enum.HumanoidStateType.FallingDown,
+            Enum.HumanoidStateType.Flying,   Enum.HumanoidStateType.Freefall,
+            Enum.HumanoidStateType.GettingUp,Enum.HumanoidStateType.Jumping,
+            Enum.HumanoidStateType.Landed,   Enum.HumanoidStateType.Physics,
+            Enum.HumanoidStateType.PlatformStanding, Enum.HumanoidStateType.Ragdoll,
+            Enum.HumanoidStateType.Running,  Enum.HumanoidStateType.RunningNoPhysics,
+            Enum.HumanoidStateType.Seated,   Enum.HumanoidStateType.StrafingNoPhysics,
+            Enum.HumanoidStateType.Swimming,
+        }
+        for _, s in ipairs(states) do hum:SetStateEnabled(s, true) end
         hum:ChangeState(Enum.HumanoidStateType.Freefall)
         hum.PlatformStand = false
-        chr.Animate.Disabled = false
-        
-        -- Reativa animações
-        local AnimController = chr:FindFirstChildOfClass("Humanoid") or chr:FindFirstChildOfClass("AnimationController")
-        if AnimController then
-            for i,v in next, AnimController:GetPlayingAnimationTracks() do
-                v:AdjustSpeed(1)
+        pcall(function() chr.Animate.Disabled = false end)
+        pcall(function()
+            for _, v in next, hum:GetPlayingAnimationTracks() do v:AdjustSpeed(1) end
+        end)
+    end
+end
+
+TabMove:Slider({
+    Title = "Velocidade de Voo",
+    Flag     = "FlySpeed",
+    Step  = 1,
+    Value = { Min = 1, Max = 50, Default = 1 },
+    Callback = function(v)
+        flySpeed = v
+        if flyEnabled then
+            tpwalking = false
+            task.wait(0.1)
+            for i = 1, flySpeed do
+                spawn(function()
+                    local hb = RunService.Heartbeat
+                    tpwalking = true
+                    local c = LP.Character
+                    local h = c and c:FindFirstChildWhichIsA("Humanoid")
+                    while tpwalking and hb:Wait() and c and h and h.Parent do
+                        if h.MoveDirection.Magnitude > 0 then c:TranslateBy(h.MoveDirection) end
+                    end
+                end)
             end
         end
     end
-end
-
--- Função para atualizar velocidade do fly
-local function updateFlySpeed(newSpeed)
-    flySpeed = newSpeed
-    if flyEnabled then
-        tpwalking = false
-        task.wait(0.1)
-        for i = 1, flySpeed do
-            spawn(function()
-                local hb = game:GetService("RunService").Heartbeat
-                tpwalking = true
-                local chr = LP.Character
-                local hum = chr and chr:FindFirstChildWhichIsA("Humanoid")
-                while tpwalking and hb:Wait() and chr and hum and hum.Parent do
-                    if hum.MoveDirection.Magnitude > 0 then
-                        chr:TranslateBy(hum.MoveDirection)
-                    end
-                end
-            end)
-        end
-    end
-end
-
--- Slider de velocidade do fly
-TabMove:CreateSlider({
-    Name = "Velocidade de Voo",
-    Range = {1, 50},
-    Increment = 1,
-    CurrentValue = 1,
-    Callback = function(v)
-        updateFlySpeed(v)
-    end
 })
 
--- Toggle do fly
-TabMove:CreateToggle({
-    Name = "Ativar Fly",
-    CurrentValue = false,
-    Callback = function(v)
-        toggleFly(v)
-    end
+TabMove:Toggle({
+    Title = "Ativar Fly",
+    Flag     = "FlyEnabled",
+    Value = false,
+    Callback = function(v) toggleFly(v) end
 })
 
--- Controles WASD para o fly
+-- WASD fly controls
 UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == Enum.KeyCode.W then
-            ctrl.f = 1
-        elseif input.KeyCode == Enum.KeyCode.S then
-            ctrl.b = -1
-        elseif input.KeyCode == Enum.KeyCode.A then
-            ctrl.l = -1
-        elseif input.KeyCode == Enum.KeyCode.D then
-            ctrl.r = 1
-        end
+        if     input.KeyCode == Enum.KeyCode.W then ctrl.f =  1
+        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = -1
+        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = -1
+        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r =  1 end
     end
 end)
-
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == Enum.KeyCode.W then
-            ctrl.f = 0
-        elseif input.KeyCode == Enum.KeyCode.S then
-            ctrl.b = 0
-        elseif input.KeyCode == Enum.KeyCode.A then
-            ctrl.l = 0
-        elseif input.KeyCode == Enum.KeyCode.D then
-            ctrl.r = 0
-        end
+        if     input.KeyCode == Enum.KeyCode.W then ctrl.f = 0
+        elseif input.KeyCode == Enum.KeyCode.S then ctrl.b = 0
+        elseif input.KeyCode == Enum.KeyCode.A then ctrl.l = 0
+        elseif input.KeyCode == Enum.KeyCode.D then ctrl.r = 0 end
     end
 end)
 
--- Reset ao morrer
+-- Reset ao morrer/respawn
 LP.CharacterAdded:Connect(function(char)
     wait(0.7)
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.PlatformStand = false
-    end
-    char.Animate.Disabled = false
+    if hum then hum.PlatformStand = false end
+    pcall(function() char.Animate.Disabled = false end)
     flyEnabled = false
 end)
 
-TabMove:CreateSection("Outros")
+TabMove:Section({ Title = "Outros" })
 
--- Infinite Jump
-TabMove:CreateToggle({
-    Name = "Pulo Infinito",
-    CurrentValue = false,
-    Callback = function(v)
-        infJump = v
-    end
+TabMove:Toggle({
+    Title = "Pulo Infinito",
+    Flag     = "InfJump",
+    Value = false,
+    Callback = function(v) infJump = v end
 })
 
--- Anti Fall
-TabMove:CreateToggle({
-    Name = "Anti Queda",
-    CurrentValue = false,
-    Callback = function(v)
-        antiFall = v
-    end
+TabMove:Toggle({
+    Title = "Anti Queda",
+    Flag     = "AntiFall",
+    Value = false,
+    Callback = function(v) antiFall = v end
 })
 
--- Jump Request Handler
 UserInputService.JumpRequest:Connect(function()
     if infJump and Humanoid then
         Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
@@ -510,100 +380,76 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 -- ==================================================================================
--- ================================ COMBAT TAB ======================================
+-- ============================== COMBAT TAB ========================================
 -- ==================================================================================
 
--- SERVIÇOS
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local ProximityPromptService = game:GetService("ProximityPromptService")
-
-local LP = Players.LocalPlayer
-local Mouse = LP:GetMouse()
-
--- ==================================================================================
--- AUTO CLICKER
--- ==================================================================================
-
-TabCombat:CreateSection("Auto Clicker")
+TabCombat:Section({ Title = "Auto Clicker" })
 
 local AUTO_CLICKER_ENABLED = false
-local AUTO_CLICKER_CPS = 10
-local lastClick = 0
+local AUTO_CLICKER_CPS     = 10
+local lastClick            = 0
+
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
 local function performClick()
     if not AUTO_CLICKER_ENABLED then return end
-    
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
     task.wait(0.01)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 end
 
-TabCombat:CreateToggle({
-    Name = "Ativar Auto Clicker",
-    CurrentValue = false,
+TabCombat:Toggle({
+    Title = "Ativar Auto Clicker",
+    Flag     = "AutoClicker",
+    Value = false,
     Callback = function(v)
         AUTO_CLICKER_ENABLED = v
         if v then lastClick = tick() end
     end
 })
 
-TabCombat:CreateSlider({
-    Name = "CPS (Cliques por Segundo)",
-    Range = {1, 50},
-    Increment = 1,
-    CurrentValue = 10,
-    Callback = function(v)
-        AUTO_CLICKER_CPS = v
-    end
+TabCombat:Slider({
+    Title = "CPS (Cliques por Segundo)",
+    Flag     = "AutoClickerCPS",
+    Step  = 1,
+    Value = { Min = 1, Max = 50, Default = 10 },
+    Callback = function(v) AUTO_CLICKER_CPS = v end
 })
 
 RunService.Heartbeat:Connect(function()
     if not AUTO_CLICKER_ENABLED then return end
-    
     local now = tick()
-    local clickInterval = 1 / AUTO_CLICKER_CPS
-    
-    if now - lastClick >= clickInterval then
+    if now - lastClick >= (1 / AUTO_CLICKER_CPS) then
         performClick()
         lastClick = now
     end
 end)
 
--- ==================================================================================
--- HIT RANGE EXTENDER
--- ==================================================================================
-
-TabCombat:CreateSection("Hit Range Extender")
+TabCombat:Section({ Title = "Hit Range Extender" })
 
 local HIT_RANGE_ENABLED = false
-local HIT_RANGE_SIZE = 10
-local originalSizes = {}
-local originalTransparencies = {}
+local HIT_RANGE_SIZE    = 10
+local originalSizes, originalTransparencies = {}, {}
 
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            
             if hrp and hrp:IsA("BasePart") then
                 if not originalSizes[player.UserId] then
-                    originalSizes[player.UserId] = hrp.Size
+                    originalSizes[player.UserId]         = hrp.Size
                     originalTransparencies[player.UserId] = hrp.Transparency
                 end
-                
                 if HIT_RANGE_ENABLED then
-                    hrp.Size = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
+                    hrp.Size         = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
                     hrp.Transparency = 0.7
-                    hrp.CanCollide = false
-                    hrp.Massless = true
+                    hrp.CanCollide   = false
+                    hrp.Massless     = true
                 else
-                    hrp.Size = originalSizes[player.UserId] or Vector3.new(2, 2, 1)
+                    hrp.Size         = originalSizes[player.UserId] or Vector3.new(2,2,1)
                     hrp.Transparency = originalTransparencies[player.UserId] or 1
-                    hrp.CanCollide = false
-                    hrp.Massless = false
+                    hrp.CanCollide   = false
+                    hrp.Massless     = false
                 end
             end
         end
@@ -611,34 +457,35 @@ local function extendHitboxes()
 end
 
 Players.PlayerRemoving:Connect(function(player)
-    originalSizes[player.UserId] = nil
+    originalSizes[player.UserId]         = nil
     originalTransparencies[player.UserId] = nil
 end)
 
-TabCombat:CreateToggle({
-    Name = "Ativar Hit Range Extender",
-    CurrentValue = false,
-    Callback = function(v)
-        HIT_RANGE_ENABLED = v
-        if not v then extendHitboxes() end
-    end
+TabCombat:Toggle({
+    Title = "Ativar Hit Range Extender",
+    Flag     = "HitRange",
+    Value = false,
+    Callback = function(v) HIT_RANGE_ENABLED = v extendHitboxes() end
 })
 
-TabCombat:CreateSlider({
-    Name = "Tamanho da Hitbox",
-    Range = {5, 30},
-    Increment = 1,
-    CurrentValue = 10,
+TabCombat:Slider({
+    Title = "Tamanho da Hitbox",
+    Flag     = "HitboxSize",
+    Step  = 1,
+    Value = { Min = 5, Max = 30, Default = 10 },
     Callback = function(v)
         HIT_RANGE_SIZE = v
         if HIT_RANGE_ENABLED then extendHitboxes() end
     end
 })
 
+local _lastHitboxUpdate = 0
 RunService.Heartbeat:Connect(function()
-    if HIT_RANGE_ENABLED then
-        extendHitboxes()
-    end
+    if not HIT_RANGE_ENABLED then return end
+    local now = tick()
+    if now - _lastHitboxUpdate < 0.5 then return end
+    _lastHitboxUpdate = now
+    extendHitboxes()
 end)
 
 Players.PlayerAdded:Connect(function(player)
@@ -648,166 +495,120 @@ Players.PlayerAdded:Connect(function(player)
     end)
 end)
 
--- ==================================================================================
--- AUTO PRESS (PROXIMITY PROMPT)
--- ==================================================================================
+TabCombat:Section({ Title = "Auto Press" })
 
-TabCombat:CreateSection("Auto Press")
-
-local AUTO_PRESS_ENABLED = false
+local AUTO_PRESS_ENABLED  = false
 local AUTO_PRESS_INTERVAL = 0.25
-local promptAtual = nil
+local promptAtual         = nil
 
-ProximityPromptService.PromptShown:Connect(function(prompt)
-    promptAtual = prompt
-end)
+ProximityPromptService.PromptShown:Connect(function(p)  promptAtual = p end)
+ProximityPromptService.PromptHidden:Connect(function(p) if promptAtual == p then promptAtual = nil end end)
 
-ProximityPromptService.PromptHidden:Connect(function(prompt)
-    if promptAtual == prompt then
-        promptAtual = nil
-    end
-end)
-
-TabCombat:CreateToggle({
-    Name = "Ativar Auto Press",
-    CurrentValue = false,
-    Callback = function(v)
-        AUTO_PRESS_ENABLED = v
-    end
+TabCombat:Toggle({
+    Title = "Ativar Auto Press",
+    Flag     = "AutoPress",
+    Value = false,
+    Callback = function(v) AUTO_PRESS_ENABLED = v end
 })
 
-TabCombat:CreateSlider({
-    Name = "Intervalo (segundos)",
-    Range = {0.1, 2},
-    Increment = 0.05,
-    CurrentValue = 0.25,
-    Callback = function(v)
-        AUTO_PRESS_INTERVAL = v
-    end
+TabCombat:Slider({
+    Title = "Intervalo (segundos)",
+    Flag     = "AutoPressInterval",
+    Step  = 0.05,
+    Value = { Min = 0.1, Max = 2, Default = 0.25 },
+    Callback = function(v) AUTO_PRESS_INTERVAL = v end
 })
 
--- Loop Auto Press
 task.spawn(function()
     while true do
         if AUTO_PRESS_ENABLED and promptAtual and promptAtual.Enabled then
-            pcall(function()
-                fireproximityprompt(promptAtual, promptAtual.HoldDuration or 0)
-            end)
+            pcall(function() fireproximityprompt(promptAtual, promptAtual.HoldDuration or 0) end)
         end
         task.wait(AUTO_PRESS_INTERVAL)
     end
 end)
 
 -- ==================================================================================
--- FIM DO COMBAT TAB
+-- ============================== ESP TAB ===========================================
 -- ==================================================================================
 
--- ==================== ESP COM SISTEMA DE TIMES (CORRIGIDO) ====================
-local ESP_ENABLED = false
-local NAME_ENABLED = true
-local DISTANCE_ENABLED = true
-local LINE_ENABLED = true
-local HEALTH_ENABLED = true
-local OUTLINE_ENABLED = true
-local ESP_COLOR = Color3.fromRGB(255, 0, 0)
-local LINE_COLOR = Color3.fromRGB(255, 255, 255)
-local ESP_OBJECTS = {}
-local ESP_TEAM_FILTER = "All"  -- All, My Team, Enemy Team
+local ESP_ENABLED        = false
+local NAME_ENABLED       = true
+local DISTANCE_ENABLED   = true
+local LINE_ENABLED       = true
+local HEALTH_ENABLED     = true
+local OUTLINE_ENABLED    = true
+local ESP_COLOR          = Color3.fromRGB(255, 255, 255)
+local LINE_COLOR         = Color3.fromRGB(255, 255, 255)
+local ESP_OBJECTS        = {}
+local ESP_TEAM_FILTER    = "All"
 
 local function removeESP(player)
     local espData = ESP_OBJECTS[player]
     if not espData then return end
-    
     espData.active = false
-    if espData.billboard then 
-        pcall(function() espData.billboard:Destroy() end)
-    end
-    if espData.line then 
-        pcall(function() espData.line:Remove() end)
-    end
-    if espData.outline then
-        for _, l in ipairs(espData.outline) do 
-            pcall(function() l:Remove() end)
-        end
+    if espData.billboard then pcall(function() espData.billboard:Destroy() end) end
+    if espData.line      then pcall(function() espData.line:Remove()      end) end
+    if espData.outline   then
+        for _, l in ipairs(espData.outline) do pcall(function() l:Remove() end) end
     end
     if espData.connections then
-        for _, conn in ipairs(espData.connections) do
-            pcall(function() conn:Disconnect() end)
-        end
+        for _, conn in ipairs(espData.connections) do pcall(function() conn:Disconnect() end) end
     end
     ESP_OBJECTS[player] = nil
 end
 
 local function createESP(player)
     if player == LP then return end
-    
-    -- FILTRO DE TIME APLICADO
-    if not shouldShowPlayer(player, ESP_TEAM_FILTER) then
-        removeESP(player)
-        return
-    end
-    
+    if not shouldShowPlayer(player, ESP_TEAM_FILTER) then removeESP(player) return end
     if ESP_OBJECTS[player] then removeESP(player) end
-    
+
     local char = player.Character
     if not char then return end
-
     local hrp = char:FindFirstChild("HumanoidRootPart")
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum then return end
-    if hum.Health <= 0 then return end
+    if not hrp or not hum or hum.Health <= 0 then return end
 
-    local espData = {
-        active = true,
-        player = player,
-        character = char
-    }
+    local espData = { active = true, player = player, character = char }
 
     if NAME_ENABLED or DISTANCE_ENABLED or HEALTH_ENABLED then
         local billboard = Instance.new("BillboardGui")
-        billboard.Name = "ESPName"
-        billboard.Adornee = hrp
-        billboard.Size = UDim2.new(0, 200, 0, 50)
+        billboard.Adornee    = hrp
+        billboard.Size       = UDim2.new(0, 200, 0, 50)
         billboard.StudsOffset = Vector3.new(0, 3, 0)
         billboard.AlwaysOnTop = true
         billboard.MaxDistance = 2000
-
         local txt = Instance.new("TextLabel")
-        txt.Size = UDim2.new(1, 0, 1, 0)
+        txt.Size                 = UDim2.new(1,0,1,0)
         txt.BackgroundTransparency = 1
-        txt.TextColor3 = ESP_COLOR
+        txt.TextColor3           = ESP_COLOR
         txt.TextStrokeTransparency = 0
-        txt.TextStrokeColor3 = Color3.new(0, 0, 0)
-        txt.TextSize = 16
-        txt.Font = Enum.Font.SourceSansBold
-        txt.TextXAlignment = Enum.TextXAlignment.Center
-        txt.TextYAlignment = Enum.TextYAlignment.Center
-        txt.Parent = billboard
-        billboard.Parent = hrp
-
-        espData.billboard = billboard
-        espData.txt = txt
+        txt.TextStrokeColor3     = Color3.new(0,0,0)
+        txt.TextSize             = 16
+        txt.Font                 = Enum.Font.SourceSansBold
+        txt.Parent               = billboard
+        billboard.Parent         = hrp
+        espData.billboard        = billboard
+        espData.txt              = txt
     end
 
     if LINE_ENABLED then
-        local line = Drawing.new("Line")
-        line.Color = LINE_COLOR
-        line.Thickness = 2
+        local line        = Drawing.new("Line")
+        line.Color        = LINE_COLOR
+        line.Thickness    = 2
         line.Transparency = 1
-        line.Visible = false
-        line.ZIndex = 1
-        espData.line = line
+        line.Visible      = false
+        espData.line      = line
     end
 
     if OUTLINE_ENABLED then
         espData.outline = {}
         for i = 1, 4 do
-            local l = Drawing.new("Line")
-            l.Color = ESP_COLOR
-            l.Thickness = 2
+            local l        = Drawing.new("Line")
+            l.Color        = ESP_COLOR
+            l.Thickness    = 2
             l.Transparency = 1
-            l.Visible = false
-            l.ZIndex = 2
+            l.Visible      = false
             table.insert(espData.outline, l)
         end
     end
@@ -816,8 +617,7 @@ local function createESP(player)
 
     local connections = {}
     table.insert(connections, hum.Died:Connect(function()
-        task.wait(0.1)
-        removeESP(player)
+        task.wait(0.1); removeESP(player)
     end))
     table.insert(connections, char.AncestryChanged:Connect(function(_, parent)
         if not parent then removeESP(player) end
@@ -826,9 +626,7 @@ local function createESP(player)
 end
 
 local function clearAllESP()
-    for player, _ in pairs(ESP_OBJECTS) do
-        removeESP(player)
-    end
+    for player, _ in pairs(ESP_OBJECTS) do removeESP(player) end
     ESP_OBJECTS = {}
 end
 
@@ -836,82 +634,67 @@ local function refreshESP()
     clearAllESP()
     if ESP_ENABLED then
         for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LP then
-                createESP(p)
-            end
+            if p ~= LP then createESP(p) end
         end
     end
 end
 
+-- ESP render loop
 local lastESPUpdate = 0
 RunService.RenderStepped:Connect(function()
     local now = tick()
     if now - lastESPUpdate < 1/60 then return end
     lastESPUpdate = now
-    
+
     if not ESP_ENABLED or not HRP then
         for _, espData in pairs(ESP_OBJECTS) do
             if espData.line then espData.line.Visible = false end
-            if espData.outline then
-                for _, l in ipairs(espData.outline) do l.Visible = false end
-            end
+            if espData.outline then for _, l in ipairs(espData.outline) do l.Visible = false end end
         end
         return
     end
 
     local cam = Camera
-    local viewportSize = cam.ViewportSize
+    local viewportSize   = cam.ViewportSize
     local viewportCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 
     for player, espData in pairs(ESP_OBJECTS) do
         if not espData.active then continue end
-        
-        -- Verifica se player ainda existe
-        if not player or not Players:FindFirstChild(player.Name) then
-            removeESP(player)
-            continue
-        end
-        
-        -- Verifica filtro de time continuamente
-        if not shouldShowPlayer(player, ESP_TEAM_FILTER) then
-            removeESP(player)
-            continue
-        end
+        if not player or not Players:FindFirstChild(player.Name) then removeESP(player) continue end
+        if not shouldShowPlayer(player, ESP_TEAM_FILTER) then removeESP(player) continue end
 
         local char = player.Character
-        if not char or char ~= espData.character then
-            removeESP(player)
-            continue
-        end
+        if not char or char ~= espData.character then removeESP(player) continue end
 
         local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
-
         if not hrp or not hum or hum.Health <= 0 then
             if espData.line then espData.line.Visible = false end
-            if espData.outline then
-                for _, l in ipairs(espData.outline) do l.Visible = false end
-            end
+            if espData.outline then for _, l in ipairs(espData.outline) do l.Visible = false end end
             continue
         end
 
-        local hrpPos = hrp.Position
-        local distance = (hrpPos - HRP.Position).Magnitude
+        local hrpPos     = hrp.Position
+        local distance   = (hrpPos - HRP.Position).Magnitude
         local screenPos, onScreen = cam:WorldToViewportPoint(hrpPos)
-        local inFrontOfCamera = screenPos.Z > 0
+
+        -- Atualiza cor do ESP em tempo real
+        if espData.txt     then espData.txt.TextColor3 = ESP_COLOR end
+        if espData.outline then for _, l in ipairs(espData.outline) do l.Color = ESP_COLOR end end
+        if espData.line    then espData.line.Color = LINE_COLOR end
 
         if espData.txt then
             local parts = {}
-            if NAME_ENABLED then table.insert(parts, player.Name) end
+            if NAME_ENABLED     then table.insert(parts, player.Name) end
             if DISTANCE_ENABLED then table.insert(parts, string.format("[%dm]", math.floor(distance))) end
-            if HEALTH_ENABLED then table.insert(parts, string.format("HP:%d", math.floor(hum.Health))) end
+            if HEALTH_ENABLED   then table.insert(parts, string.format("HP:%d", math.floor(hum.Health))) end
             espData.txt.Text = table.concat(parts, " | ")
         end
 
         if espData.line and LINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                espData.line.From = viewportCenter
-                espData.line.To = Vector2.new(screenPos.X, screenPos.Y)
+            if onScreen and screenPos.Z > 0 then
+                espData.line.From    = viewportCenter
+                espData.line.To      = Vector2.new(screenPos.X, screenPos.Y)
                 espData.line.Visible = true
             else
                 espData.line.Visible = false
@@ -920,40 +703,27 @@ RunService.RenderStepped:Connect(function()
             espData.line.Visible = false
         end
 
-        if espData.outline and OUTLINE_ENABLED then
-            if onScreen and inFrontOfCamera then
-                local height = 2.5
-                local width = 1.5
-                local rightVector = cam.CFrame.RightVector
-
-                local corners = {
-                    hrpPos + rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, height, 0),
-                    hrpPos - rightVector * width + Vector3.new(0, -height, 0),
-                    hrpPos + rightVector * width + Vector3.new(0, -height, 0)
-                }
-
-                local screenCorners = {}
-                local allVisible = true
-
-                for i, corner in ipairs(corners) do
-                    local pos, visible = cam:WorldToViewportPoint(corner)
-                    if not visible or pos.Z <= 0 then
-                        allVisible = false
-                        break
-                    end
-                    screenCorners[i] = Vector2.new(pos.X, pos.Y)
-                end
-
-                if allVisible then
-                    for i = 1, 4 do
-                        local nextIndex = (i % 4) + 1
-                        espData.outline[i].From = screenCorners[i]
-                        espData.outline[i].To = screenCorners[nextIndex]
-                        espData.outline[i].Visible = true
-                    end
-                else
-                    for _, l in ipairs(espData.outline) do l.Visible = false end
+        if espData.outline and OUTLINE_ENABLED and onScreen and screenPos.Z > 0 then
+            local height, width = 2.5, 1.5
+            local rightVector   = cam.CFrame.RightVector
+            local corners = {
+                hrpPos + rightVector * width + Vector3.new(0,  height, 0),
+                hrpPos - rightVector * width + Vector3.new(0,  height, 0),
+                hrpPos - rightVector * width + Vector3.new(0, -height, 0),
+                hrpPos + rightVector * width + Vector3.new(0, -height, 0),
+            }
+            local screenCorners, allVisible = {}, true
+            for i, corner in ipairs(corners) do
+                local pos, visible = cam:WorldToViewportPoint(corner)
+                if not visible or pos.Z <= 0 then allVisible = false break end
+                screenCorners[i] = Vector2.new(pos.X, pos.Y)
+            end
+            if allVisible then
+                for i = 1, 4 do
+                    local ni = (i % 4) + 1
+                    espData.outline[i].From    = screenCorners[i]
+                    espData.outline[i].To      = screenCorners[ni]
+                    espData.outline[i].Visible = true
                 end
             else
                 for _, l in ipairs(espData.outline) do l.Visible = false end
@@ -964,150 +734,87 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-local function initializeExistingPlayers()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP then
-            if player.Character and ESP_ENABLED then
-                createESP(player)
-            end
-            player.CharacterAdded:Connect(function(char)
-                char:WaitForChild("HumanoidRootPart", 5)
-                task.wait(0.5)
-                if ESP_ENABLED then 
-                    createESP(player) 
-                end
-            end)
-        end
-    end
-end
-
-Players.PlayerAdded:Connect(function(player)
+-- Init ESP hooks
+local function hookPlayerForESP(player)
     player.CharacterAdded:Connect(function(char)
         char:WaitForChild("HumanoidRootPart", 5)
         task.wait(0.5)
-        if ESP_ENABLED then 
-            createESP(player) 
-        end
+        if ESP_ENABLED then createESP(player) end
     end)
-    if player.Character then
-        task.wait(0.5)
-        if ESP_ENABLED then 
-            createESP(player) 
-        end
-    end
-end)
+    if player.Character and ESP_ENABLED then createESP(player) end
+end
 
-Players.PlayerRemoving:Connect(function(player)
-    removeESP(player)
-end)
+for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then hookPlayerForESP(p) end end
+Players.PlayerAdded:Connect(hookPlayerForESP)
+Players.PlayerRemoving:Connect(removeESP)
 
-initializeExistingPlayers()
+-- ---- ESP UI ----
+TabESP:Section({ Title = "ESP Settings" })
 
-TabESP:CreateSection("ESP Settings")
+TabESP:Toggle({
+    Title = "Ativar ESP",
+    Flag     = "ESPEnabled",
+    Value = false,
+    Callback = function(v) ESP_ENABLED = v refreshESP() end
+})
 
-TabESP:CreateToggle({
-    Name = "Ativar ESP",
-    CurrentValue = false,
-    Flag = "ESP",
-    Callback = function(v)
-        ESP_ENABLED = v
+-- Pre-definição das opções (evita dropdown vazio no WindUI)
+local ESP_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
+TabESP:Dropdown({
+    Title   = "Filtro de Time",
+    Values  = ESP_TEAM_OPTIONS,
+    Flag     = "ESPTeamFilter",
+    Multi   = false,
+    Default = 1,   -- "All"
+    Callback = function(opt)
+        ESP_TEAM_FILTER = parseDropdownValue(opt)
         refreshESP()
     end
 })
 
-TabESP:CreateDropdown({
-    Name = "Filtro de Time",
-    Options = {"All", "My Team", "Enemy Team"},
-    CurrentOption = {"All"},
-    MultipleOptions = false,
-    Flag = "ESPTeamFilter",
-    Callback = function(option)
-        ESP_TEAM_FILTER = typeof(option) == "table" and option[1] or option
-        refreshESP()
-    end
-})
+TabESP:Section({ Title = "Componentes do ESP" })
 
-TabESP:CreateSection("ESP Components")
+TabESP:Toggle({ Title = "Nome",            Flag = "ESPName",     Value = true, Callback = function(v) NAME_ENABLED     = v end })
+TabESP:Toggle({ Title = "Distância",       Flag = "ESPDistance", Value = true, Callback = function(v) DISTANCE_ENABLED = v end })
+TabESP:Toggle({ Title = "Vida",            Flag = "ESPHealth",   Value = true, Callback = function(v) HEALTH_ENABLED   = v end })
+TabESP:Toggle({ Title = "Linha Única",     Flag = "ESPLine",     Value = true, Callback = function(v) LINE_ENABLED     = v end })
+TabESP:Toggle({ Title = "Contorno 4 Linhas", Flag = "ESPOutline", Value = true, Callback = function(v) OUTLINE_ENABLED = v end })
 
-TabESP:CreateToggle({
-    Name = "Nome",
-    CurrentValue = true,
-    Flag = "ESPName",
-    Callback = function(v)
-        NAME_ENABLED = v
-    end
-})
+TabESP:Section({ Title = "Cores" })
 
-TabESP:CreateToggle({
-    Name = "Distância",
-    CurrentValue = true,
-    Flag = "ESPDistance",
-    Callback = function(v)
-        DISTANCE_ENABLED = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Vida",
-    CurrentValue = true,
-    Flag = "ESPHealth",
-    Callback = function(v)
-        HEALTH_ENABLED = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Linha Única",
-    CurrentValue = true,
-    Flag = "ESPLine",
-    Callback = function(v)
-        LINE_ENABLED = v
-    end
-})
-
-TabESP:CreateToggle({
-    Name = "Contorno 4 Linhas",
-    CurrentValue = true,
-    Flag = "ESPOutline",
-    Callback = function(v)
-        OUTLINE_ENABLED = v
-    end
-})
-
-TabESP:CreateSection("Cores")
-
-TabESP:CreateColorPicker({
-    Name = "Cor do ESP",
+TabESP:Colorpicker({
+    Title = "Cor do ESP",
+    Flag     = "ESPColor",
     Color = Color3.fromRGB(255, 0, 0),
-    Flag = "ESPColor",
     Callback = function(color)
         ESP_COLOR = color
     end
 })
 
-TabESP:CreateColorPicker({
-    Name = "Cor da Linha",
+TabESP:Colorpicker({
+    Title = "Cor da Linha",
+    Flag     = "ESPLineColor",
     Color = Color3.fromRGB(255, 255, 255),
-    Flag = "LineColor",
     Callback = function(color)
         LINE_COLOR = color
     end
 })
 
--- ==================== HIGHLIGHT ESP (CORRIGIDO) ====================
-local HIGHLIGHT_ENABLED = false
+-- ==================================================================================
+-- ============================== HIGHLIGHT TAB =====================================
+-- ==================================================================================
+
+local HIGHLIGHT_ENABLED     = false
 local HIGHLIGHT_TEAM_FILTER = "All"
-local teamColor = Color3.fromRGB(0, 255, 0)
-local enemyColor = Color3.fromRGB(255, 0, 0)
-local highlightCache = {}
-local highlightFillTrans = 0.5
+local teamColor             = Color3.fromRGB(255, 255, 255)
+local enemyColor            = Color3.fromRGB(255, 255, 255)
+local highlightFillTrans    = 0.5
 local highlightOutlineTrans = 0
-local highlightDepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+local highlightDepthMode    = Enum.HighlightDepthMode.AlwaysOnTop
+local highlightCache        = {}
 
 local function addHighlight(player)
     if player == LP then return end
-    
-    -- FILTRO DE TIME APLICADO
     if not shouldShowPlayer(player, HIGHLIGHT_TEAM_FILTER) then
         if highlightCache[player] then
             pcall(function() highlightCache[player]:Destroy() end)
@@ -1115,44 +822,31 @@ local function addHighlight(player)
         end
         return
     end
-    
     local char = player.Character
     if not char then return end
-    
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health <= 0 then return end
-    
+
     if highlightCache[player] then
         pcall(function() highlightCache[player]:Destroy() end)
         highlightCache[player] = nil
     end
 
     local highlight = Instance.new("Highlight")
-    highlight.Name = "UniversalHighlight"
-    highlight.Adornee = char
-    highlight.DepthMode = highlightDepthMode
-    
-    -- Determina cor baseada no time
-    local myTeam = getPlayerTeam(LP)
+    highlight.Adornee            = char
+    highlight.DepthMode          = highlightDepthMode
+    local myTeam    = getPlayerTeam(LP)
     local theirTeam = getPlayerTeam(player)
-    
-    if myTeam and theirTeam and myTeam == theirTeam then
-        highlight.FillColor = teamColor
-        highlight.OutlineColor = teamColor
-    else
-        highlight.FillColor = enemyColor
-        highlight.OutlineColor = enemyColor
-    end
-    
-    highlight.FillTransparency = highlightFillTrans
+    local color     = (myTeam and theirTeam and myTeam == theirTeam) and teamColor or enemyColor
+    highlight.FillColor          = color
+    highlight.OutlineColor       = color
+    highlight.FillTransparency   = highlightFillTrans
     highlight.OutlineTransparency = highlightOutlineTrans
-    highlight.Parent = hrp
-    
-    highlightCache[player] = highlight
-    
+    highlight.Parent             = hrp
+    highlightCache[player]       = highlight
+
     if hum then
         hum.Died:Connect(function()
             task.wait(0.1)
@@ -1172,9 +866,7 @@ local function removeHighlight(player)
 end
 
 local function removeAllHighlights()
-    for player, highlight in pairs(highlightCache) do
-        pcall(function() highlight:Destroy() end)
-    end
+    for _, h in pairs(highlightCache) do pcall(function() h:Destroy() end) end
     highlightCache = {}
 end
 
@@ -1182,71 +874,41 @@ local function updateAllHighlights()
     removeAllHighlights()
     if HIGHLIGHT_ENABLED then
         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LP and player.Character then
-                addHighlight(player)
-            end
+            if player ~= LP and player.Character then addHighlight(player) end
         end
     end
 end
 
-local function initializeExistingPlayersHighlight()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP then
-            if player.Character and HIGHLIGHT_ENABLED then
-                addHighlight(player)
-            end
-            player.CharacterAdded:Connect(function(char)
-                char:WaitForChild("HumanoidRootPart", 5)
-                task.wait(0.3)
-                if HIGHLIGHT_ENABLED then 
-                    addHighlight(player) 
-                end
-            end)
-        end
+-- Hooks de highlight para novos jogadores
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LP then
+        p.CharacterAdded:Connect(function(char)
+            char:WaitForChild("HumanoidRootPart", 5) task.wait(0.3)
+            if HIGHLIGHT_ENABLED then addHighlight(p) end
+        end)
     end
 end
-
 Players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Connect(function(char)
-        char:WaitForChild("HumanoidRootPart", 5)
-        task.wait(0.3)
-        if HIGHLIGHT_ENABLED then 
-            addHighlight(player) 
-        end
+        char:WaitForChild("HumanoidRootPart", 5) task.wait(0.3)
+        if HIGHLIGHT_ENABLED then addHighlight(player) end
     end)
-    if player.Character then
-        task.wait(0.3)
-        if HIGHLIGHT_ENABLED then 
-            addHighlight(player) 
-        end
-    end
 end)
+Players.PlayerRemoving:Connect(removeHighlight)
 
-Players.PlayerRemoving:Connect(function(player)
-    removeHighlight(player)
-end)
-
-initializeExistingPlayersHighlight()
-
+-- Check periódico do highlight (time filter)
 local lastHighlightCheck = 0
 RunService.RenderStepped:Connect(function()
     if not HIGHLIGHT_ENABLED then return end
-    
     local now = tick()
     if now - lastHighlightCheck < 2 then return end
     lastHighlightCheck = now
-    
-    -- Verifica filtros de time e validade continuamente
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
-            local char = player.Character
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            
+            local hum = player.Character:FindFirstChildOfClass("Humanoid")
             if shouldShowPlayer(player, HIGHLIGHT_TEAM_FILTER) and hum and hum.Health > 0 then
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                if hrp and not highlightCache[player] then
-                    addHighlight(player)
-                end
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and not highlightCache[player] then addHighlight(player) end
             else
                 removeHighlight(player)
             end
@@ -1254,373 +916,269 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-TabHighlight:CreateSection("Highlight ESP")
+-- ---- HIGHLIGHT UI ----
+TabHighlight:Section({ Title = "Highlight ESP" })
 
-TabHighlight:CreateToggle({
-    Name = "Ativar Highlight ESP",
-    CurrentValue = false,
-    Flag = "Highlight",
-    Callback = function(v)
-        HIGHLIGHT_ENABLED = v
+TabHighlight:Toggle({
+    Title = "Ativar Highlight ESP",
+    Flag     = "HighlightEnabled",
+    Value = false,
+    Callback = function(v) HIGHLIGHT_ENABLED = v updateAllHighlights() end
+})
+
+local HIGHLIGHT_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
+TabHighlight:Dropdown({
+    Title   = "Filtro de Time",
+    Values  = HIGHLIGHT_TEAM_OPTIONS,
+    Flag     = "HighlightTeamFilter",
+    Multi   = false,
+    Default = 1,   -- "All"
+    Callback = function(opt)
+        HIGHLIGHT_TEAM_FILTER = parseDropdownValue(opt)
         updateAllHighlights()
     end
 })
 
-TabHighlight:CreateDropdown({
-    Name = "Filtro de Time",
-    Options = {"All", "My Team", "Enemy Team"},
-    CurrentOption = {"All"},
-    MultipleOptions = false,
-    Flag = "HighlightTeamFilter",
-    Callback = function(option)
-        HIGHLIGHT_TEAM_FILTER = typeof(option) == "table" and option[1] or option
-        updateAllHighlights()
-    end
-})
+TabHighlight:Section({ Title = "Cores" })
 
-TabHighlight:CreateSection("Cores")
-
-TabHighlight:CreateColorPicker({
-    Name = "Cor do Time",
+TabHighlight:Colorpicker({
+    Title = "Cor do Time",
+    Flag     = "HighlightTeamColor",
     Color = Color3.fromRGB(0, 255, 0),
-    Flag = "TeamColor",
-    Callback = function(color)
-        teamColor = color
-        updateAllHighlights()
-    end
+    Callback = function(color) teamColor = color updateAllHighlights() end
 })
 
-TabHighlight:CreateColorPicker({
-    Name = "Cor dos Inimigos",
+TabHighlight:Colorpicker({
+    Title = "Cor dos Inimigos",
+    Flag     = "HighlightEnemyColor",
     Color = Color3.fromRGB(255, 0, 0),
-    Flag = "EnemyColor",
-    Callback = function(color)
-        enemyColor = color
-        updateAllHighlights()
-    end
+    Callback = function(color) enemyColor = color updateAllHighlights() end
 })
 
-TabHighlight:CreateSection("Configurações")
+TabHighlight:Section({ Title = "Configurações" })
 
-TabHighlight:CreateSlider({
-    Name = "Transparência do Preenchimento",
-    Range = {0, 1},
-    Increment = 0.05,
-    CurrentValue = 0.5,
-    Flag = "HighlightFillTrans",
+TabHighlight:Slider({
+    Title = "Transparência do Preenchimento",
+    Flag     = "HighlightFillTrans",
+    Step  = 0.05,
+    Value = { Min = 0, Max = 1, Default = 0.5 },
     Callback = function(v)
         highlightFillTrans = v
-        for _, highlight in pairs(highlightCache) do
-            if highlight then highlight.FillTransparency = v end
-        end
+        for _, h in pairs(highlightCache) do if h then h.FillTransparency = v end end
     end
 })
 
-TabHighlight:CreateSlider({
-    Name = "Transparência do Contorno",
-    Range = {0, 1},
-    Increment = 0.05,
-    CurrentValue = 0,
-    Flag = "HighlightOutlineTrans",
+TabHighlight:Slider({
+    Title = "Transparência do Contorno",
+    Flag     = "HighlightOutlineTrans",
+    Step  = 0.05,
+    Value = { Min = 0, Max = 1, Default = 0 },
     Callback = function(v)
         highlightOutlineTrans = v
-        for _, highlight in pairs(highlightCache) do
-            if highlight then highlight.OutlineTransparency = v end
-        end
+        for _, h in pairs(highlightCache) do if h then h.OutlineTransparency = v end end
     end
 })
 
-TabHighlight:CreateDropdown({
-    Name = "Modo de Profundidade",
-    Options = {"AlwaysOnTop", "Occluded"},
-    CurrentOption = "AlwaysOnTop",
-    Flag = "HighlightDepthMode",
-    Callback = function(option)
-        highlightDepthMode = option == "AlwaysOnTop" and Enum.HighlightDepthMode.AlwaysOnTop or Enum.HighlightDepthMode.Occluded
-        for _, highlight in pairs(highlightCache) do
-            if highlight then highlight.DepthMode = highlightDepthMode end
-        end
+TabHighlight:Dropdown({
+    Title   = "Modo de Profundidade",
+    Flag     = "HighlightDepthMode",
+    Values  = { "AlwaysOnTop", "Occluded" },
+    Multi   = false,
+    Default = 1,   -- "AlwaysOnTop"
+    Callback = function(opt)
+        local o = parseDropdownValue(opt)
+        highlightDepthMode = o == "Occluded"
+            and Enum.HighlightDepthMode.Occluded
+            or  Enum.HighlightDepthMode.AlwaysOnTop
+        for _, h in pairs(highlightCache) do if h then h.DepthMode = highlightDepthMode end end
     end
 })
 
-TabHighlight:CreateButton({
-    Name = "Atualizar Highlights",
+TabHighlight:Button({
+    Title = "Atualizar Highlights",
     Callback = function()
         updateAllHighlights()
-        Rayfield:Notify({
-            Title = "Highlights Atualizados",
-            Content = "Recarregado!",
-            Duration = 2
-        })
+        WindUI:Notify({ Title = "Highlights", Content = "Atualizado!", Duration = 2 })
     end
 })
 
--- ==================== AIM ASSIST (CORRIGIDO - SEM FOV CIRCLE) ====================
-TabAim:CreateSection("Aim Assist")
+-- ==================================================================================
+-- ============================== AIM ASSIST TAB ====================================
+-- ==================================================================================
 
-local AIM_ENABLED = false
-local AIM_FOV = 100
-local AIM_SMOOTH = 0.2
+local AIM_ENABLED     = false
+local AIM_FOV         = 100
+local AIM_SMOOTH      = 0.2
 local AIM_TARGET_PART = "Head"
-local AIM_WALLCHECK = true
+local AIM_WALLCHECK   = true
 local AIM_TEAM_FILTER = "Enemy Team"
-local currentTarget = nil
+local currentTarget   = nil
 
--- Função para verificar se o jogador está visível
 local function isVisible(targetPart)
     if not targetPart or not HRP then return false end
-    
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {Character, targetPart.Parent}
-    
-    local ray = workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position), raycastParams)
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Blacklist
+    rp.FilterDescendantsInstances = { Character, targetPart.Parent }
+    local ray = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, rp)
     return ray == nil
 end
 
 local function getTargetPart(character, partName)
     if not character then return nil end
-    
-    local part = character:FindFirstChild(partName)
-    if part and part:IsA("BasePart") then return part end
-    
-    -- Fallback para Arsenal e jogos similares
-    if partName == "Head" then
-        local head = character:FindFirstChild("Head")
-        if head then return head end
-    elseif partName == "HumanoidRootPart" then
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then return hrp end
-        local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
-        if torso then return torso end
-    elseif partName == "UpperTorso" then
-        local upper = character:FindFirstChild("UpperTorso")
-        if upper then return upper end
-        local torso = character:FindFirstChild("Torso")
-        if torso then return torso end
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then return hrp end
-    elseif partName == "LowerTorso" then
-        local lower = character:FindFirstChild("LowerTorso")
-        if lower then return lower end
-        local torso = character:FindFirstChild("Torso")
-        if torso then return torso end
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then return hrp end
-    end
-    
-    -- Último fallback
-    return character:FindFirstChild("HumanoidRootPart")
+    return character:FindFirstChild(partName)
+        or character:FindFirstChild("HumanoidRootPart")
 end
 
-TabAim:CreateToggle({
-    Name = "🎯 Ativar Aim Assist",
-    CurrentValue = false,
-    Flag = "AimEnabled",
+TabAim:Section({ Title = "Aim Assist" })
+
+TabAim:Toggle({
+    Title = "Ativar Aim Assist",
+    Flag     = "AimEnabled",
+    Value = false,
     Callback = function(v)
         AIM_ENABLED = v
         currentTarget = nil
-        if v then
-            Rayfield:Notify({
-                Title = "Aim Assist Ativado",
-                Content = "Mirando apenas em inimigos",
-                Duration = 2
-            })
-        end
+        if v then WindUI:Notify({ Title = "Aim Assist", Content = "Ativado — mirando inimigos", Duration = 2 }) end
     end
 })
 
-TabAim:CreateDropdown({
-    Name = "Filtro de Time",
-    Options = {"All", "My Team", "Enemy Team"},
-    CurrentOption = "Enemy Team",
-    Flag = "AimTeamFilter",
-    Callback = function(option)
-        AIM_TEAM_FILTER = typeof(option) == "table" and option[1] or option
+local AIM_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
+TabAim:Dropdown({
+    Title   = "Filtro de Time",
+    Values  = AIM_TEAM_OPTIONS,
+    Flag     = "AimTeamFilter",
+    Multi   = false,
+    Default = 3,   -- "Enemy Team"
+    Callback = function(opt)
+        AIM_TEAM_FILTER = parseDropdownValue(opt)
         currentTarget = nil
     end
 })
 
-TabAim:CreateSection("Configurações")
+TabAim:Section({ Title = "Configurações" })
 
-TabAim:CreateToggle({
-    Name = "Wallcheck (Não atirar através de paredes)",
-    CurrentValue = true,
-    Flag = "AimWallcheck",
-    Callback = function(v)
-        AIM_WALLCHECK = v
+TabAim:Toggle({ Title = "Wallcheck (não atirar por paredes)", Flag = "AimWallcheck", Value = true,
+    Callback = function(v) AIM_WALLCHECK = v currentTarget = nil end })
+
+TabAim:Slider({
+    Title = "FOV (Campo de Visão)",
+    Flag     = "AimFOV",
+    Step  = 10,
+    Value = { Min = 10, Max = 800, Default = 100 },
+    Callback = function(v) AIM_FOV = v end
+})
+
+TabAim:Slider({
+    Title = "Suavidade",
+    Step  = 0.05,
+    Flag     = "AimSmooth",
+    Value = { Min = 0.05, Max = 1, Default = 0.2 },
+    Callback = function(v) AIM_SMOOTH = v end
+})
+
+local AIM_PART_OPTIONS = { "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso" }
+TabAim:Dropdown({
+    Title   = "Parte do Corpo",
+    Values  = AIM_PART_OPTIONS,
+    Flag     = "AimPart",
+    Multi   = false,
+    Default = 1,   -- "Head"
+    Callback = function(opt)
+        AIM_TARGET_PART = parseDropdownValue(opt)
+        if AIM_TARGET_PART == "" then AIM_TARGET_PART = "Head" end
         currentTarget = nil
     end
 })
 
-TabAim:CreateSlider({
-    Name = "FOV (Campo de Visão)",
-    Range = {10, 800},
-    Increment = 10,
-    CurrentValue = 100,
-    Flag = "AimFOV",
-    Callback = function(v)
-        AIM_FOV = v
-    end
-})
-
-TabAim:CreateSlider({
-    Name = "Suavidade",
-    Range = {0.05, 1},
-    Increment = 0.05,
-    CurrentValue = 0.2,
-    Flag = "AimSmoothness",
-    Callback = function(v)
-        AIM_SMOOTH = v
-    end
-})
-
-TabAim:CreateDropdown({
-    Name = "Parte do Corpo",
-    Options = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
-    CurrentOption = "Head",
-    Flag = "AimTargetPart",
-    Callback = function(option)
-        AIM_TARGET_PART = option
-        currentTarget = nil
-    end
-})
-
-TabAim:CreateButton({
-    Name = "🔄 Resetar Alvo",
+TabAim:Button({
+    Title = "Resetar Alvo",
     Callback = function()
         currentTarget = nil
-        Rayfield:Notify({
-            Title = "Aim Assist",
-            Content = "Alvo resetado!",
-            Duration = 1.5
-        })
+        WindUI:Notify({ Title = "Aim Assist", Content = "Alvo resetado!", Duration = 1.5 })
     end
 })
 
--- Runtime do Aim (MELHORADO com mais verificações)
 local lastTargetCheck = 0
+-- Aim Assist loop (target selection + camera steering em um único RenderStepped)
 RunService.RenderStepped:Connect(function()
-    if not AIM_ENABLED or not HRP or not Character then
-        return
-    end
+    if not AIM_ENABLED or not HRP or not Character then return end
 
+    -- Seleciona alvo a cada 0.05s
     local now = tick()
-    if now - lastTargetCheck < 0.1 then return end
-    lastTargetCheck = now
+    if now - lastTargetCheck >= 0.05 then
+        lastTargetCheck = now
+        local closestTarget, closestDistance = nil, AIM_FOV
+        local viewportSize = Camera.ViewportSize
+        local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+        local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+        local aimPoint = isMobile and screenCenter or UserInputService:GetMouseLocation()
 
-    local closestTarget = nil
-    local closestDistance = AIM_FOV
-    local mousePos = UserInputService:GetMouseLocation()
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        -- Verificação básica
-        if player == LP then continue end
-        
-        -- FILTRO DE TIME APLICADO
-        if not shouldShowPlayer(player, AIM_TEAM_FILTER) then continue end
-        
-        local char = player.Character
-        if not char then continue end
-        
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
-        
-        local targetPart = getTargetPart(char, AIM_TARGET_PART)
-        if not targetPart then continue end
-        
-        -- WALLCHECK APLICADO COM MAIS VERIFICAÇÕES
-        if AIM_WALLCHECK and not isVisible(targetPart) then continue end
-        
-        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-        if not onScreen or screenPos.Z <= 0 then continue end
-        
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-        if dist < closestDistance then
-            closestDistance = dist
-            closestTarget = targetPart
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LP then continue end
+            if not shouldShowPlayer(player, AIM_TEAM_FILTER) then continue end
+            local char = player.Character
+            if not char then continue end
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then continue end
+            local targetPart = getTargetPart(char, AIM_TARGET_PART)
+            if not targetPart then continue end
+            if AIM_WALLCHECK and not isVisible(targetPart) then continue end
+            local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+            if not onScreen or screenPos.Z <= 0 then continue end
+            local dist = (Vector2.new(screenPos.X, screenPos.Y) - aimPoint).Magnitude
+            if dist < closestDistance then closestDistance = dist; closestTarget = targetPart end
         end
-    end
 
-    -- Valida o alvo antes de atribuir
-    if closestTarget and closestTarget.Parent then
-        local targetHum = closestTarget.Parent:FindFirstChildOfClass("Humanoid")
-        if targetHum and targetHum.Health > 0 then
-            currentTarget = closestTarget
+        if closestTarget and closestTarget.Parent then
+            local th = closestTarget.Parent:FindFirstChildOfClass("Humanoid")
+            currentTarget = (th and th.Health > 0) and closestTarget or nil
         else
             currentTarget = nil
         end
-    else
-        currentTarget = nil
+    end
+
+    -- Aplica câmera em todo frame
+    if currentTarget and currentTarget.Parent then
+        local th = currentTarget.Parent:FindFirstChildOfClass("Humanoid")
+        if not th or th.Health <= 0 then currentTarget = nil; return end
+        local camPos = Camera.CFrame.Position
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(camPos, currentTarget.Position), AIM_SMOOTH)
     end
 end)
 
--- Suavização da câmera (com verificações extras)
-RunService.RenderStepped:Connect(function()
-    if not AIM_ENABLED then return end
-    if not currentTarget or not currentTarget.Parent then 
-        currentTarget = nil
-        return 
-    end
-    
-    -- Verifica se o alvo ainda está vivo
-    local targetHum = currentTarget.Parent:FindFirstChildOfClass("Humanoid")
-    if not targetHum or targetHum.Health <= 0 then
-        currentTarget = nil
-        return
-    end
-    
-    local targetPos = currentTarget.Position
-    local camPos = Camera.CFrame.Position
-    local direction = (targetPos - camPos).Unit
-    local newLook = CFrame.new(camPos, camPos + direction)
-    Camera.CFrame = Camera.CFrame:Lerp(newLook, AIM_SMOOTH)
-end)
-
 -- ==================================================================================
--- ============================ PLAYER AIM TAB  ===================
+-- ============================== PLAYER AIM TAB ====================================
 -- ==================================================================================
 
-TabPlayerAim:CreateSection("🎯 Seleção de Jogador")
-
--- Variáveis do Player Aim
-local PlayerAimEnabled = false
+local PlayerAimEnabled    = false
 local PlayerAimSmoothness = 0.15
-local PlayerAimPart = "Head"
-local PlayerAimFOVRadius = 100
-local PlayerAimPrediction = 0.13
-local PlayerAimWallCheck = true
-local TargetPlayerName = nil
-local PlayerAimList = {}
+local PlayerAimPart       = "Head"
+local PlayerAimFOVRadius  = 100
+local PlayerAimPrediction = 0
+local PlayerAimWallCheck  = true
+local TargetPlayerName    = nil
 
--- Funções do Player Aim
 local function UpdatePlayerAimList()
-    PlayerAimList = {}
+    local list = { "-- Nenhum --" }
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LP then
-            table.insert(PlayerAimList, player.Name)
-        end
+        if player ~= LP then table.insert(list, player.Name) end
     end
-    return PlayerAimList
+    return list
 end
 
 local function GetTargetPlayer()
-    if not TargetPlayerName then return nil end
-    local playerName = tostring(TargetPlayerName)
-    return Players:FindFirstChild(playerName)
+    if not TargetPlayerName or TargetPlayerName == "" or TargetPlayerName == "-- Nenhum --" then return nil end
+    return Players:FindFirstChild(tostring(TargetPlayerName))
 end
 
 local function IsPlayerAimValid(player)
-    return player 
-        and player ~= LP 
-        and player.Character 
+    return player and player ~= LP and player.Character
         and player.Character:FindFirstChild("Humanoid")
         and player.Character.Humanoid.Health > 0
 end
 
 local function GetPlayerAimPart(player)
     if not player or not player.Character then return nil end
-    
     if PlayerAimPart == "Head" then
         return player.Character:FindFirstChild("Head")
     elseif PlayerAimPart == "Torso" then
@@ -1632,298 +1190,214 @@ end
 
 local function CheckPlayerAimFOV(part)
     if PlayerAimFOVRadius <= 0 then return true end
-    
-    local camera = workspace.CurrentCamera
-    local pos, onScreen = camera:WorldToViewportPoint(part.Position)
-    
+    local cam = workspace.CurrentCamera
+    local pos, onScreen = cam:WorldToViewportPoint(part.Position)
     if not onScreen then return false end
-    
-    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    local target = Vector2.new(pos.X, pos.Y)
-    
-    return (center - target).Magnitude <= PlayerAimFOVRadius
+    -- Mobile usa centro da tela, PC usa mouse
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local refPoint = isMobile
+        and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+        or  UserInputService:GetMouseLocation()
+    return (refPoint - Vector2.new(pos.X, pos.Y)).Magnitude <= PlayerAimFOVRadius
 end
 
 local function CheckPlayerAimWall(part)
     if not PlayerAimWallCheck then return true end
-    
-    local camera = workspace.CurrentCamera
-    local origin = camera.CFrame.Position
-    local direction = (part.Position - origin)
-    
-    local ray = RaycastParams.new()
-    ray.FilterDescendantsInstances = {LP.Character, part.Parent}
-    ray.FilterType = Enum.RaycastFilterType.Exclude
-    
-    local result = workspace:Raycast(origin, direction, ray)
+    local cam    = workspace.CurrentCamera
+    local origin = cam.CFrame.Position
+    local rp     = RaycastParams.new()
+    rp.FilterDescendantsInstances = { LP.Character, part.Parent }
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    local result = workspace:Raycast(origin, part.Position - origin, rp)
     return not result or result.Instance:IsDescendantOf(part.Parent)
 end
 
 local function GetPartVelocity(part)
-    if part.AssemblyLinearVelocity then
-        return part.AssemblyLinearVelocity
-    elseif part.Velocity then
-        return part.Velocity
-    elseif part.AssemblyVelocity then
-        return part.AssemblyVelocity
-    else
-        return Vector3.new(0, 0, 0)
-    end
+    if part.AssemblyLinearVelocity then return part.AssemblyLinearVelocity
+    elseif part.Velocity            then return part.Velocity
+    else return Vector3.new(0,0,0) end
 end
 
--- Player Aim Loop (SEM LOGS PESADOS)
-RunService.RenderStepped:Connect(function()
-    pcall(function()
-        if not PlayerAimEnabled then return end
-        
-        local player = GetTargetPlayer()
-        if not player or not IsPlayerAimValid(player) then return end
-        
-        local part = GetPlayerAimPart(player)
-        if not part then return end
-        
-        if not CheckPlayerAimFOV(part) then return end
-        if not CheckPlayerAimWall(part) then return end
-        
-        local targetPos = part.Position
-        if PlayerAimPrediction > 0 then
-            local velocity = GetPartVelocity(part)
-            targetPos = targetPos + (velocity * PlayerAimPrediction)
-        end
-        
-        local camera = workspace.CurrentCamera
-        local lookAt = CFrame.new(camera.CFrame.Position, targetPos)
-        camera.CFrame = camera.CFrame:Lerp(lookAt, PlayerAimSmoothness)
-    end)
-end)
+-- Flag para suprimir notificações durante o auto-refresh da lista
+local _isRefreshingAimList = false
 
--- Interface do Player Aim
-TabPlayerAim:CreateLabel("Selecione um jogador específico para mirar")
-
-local PlayerAimDropdown = TabPlayerAim:CreateDropdown({
-    Name = "Escolher Jogador Alvo",
-    Options = UpdatePlayerAimList(),
-    CurrentOption = "",
+local PlayerAimDropdown = TabPlayerAim:Dropdown({
+    Title   = "Escolher Jogador Alvo",
+    Values  = UpdatePlayerAimList(),
+    Multi   = false,
+    Default = 1,   -- "-- Nenhum --"
     Callback = function(option)
-        if type(option) == "table" then
-            TargetPlayerName = option[1] or option
+        -- Ignora callbacks disparados pelo Refresh automático
+        if _isRefreshingAimList then return end
+        local val = parseDropdownValue(option)
+        if val == "-- Nenhum --" or val == "" then
+            TargetPlayerName = nil
+            PlayerAimEnabled = false
+            WindUI:Notify({ Title = "Player Aim", Content = "Alvo removido.", Duration = 1.5 })
         else
-            TargetPlayerName = option
+            TargetPlayerName = val
+            WindUI:Notify({ Title = "Alvo Selecionado", Content = val, Duration = 2 })
         end
-        
-        Rayfield:Notify({
-            Title = "🎯 Alvo Selecionado",
-            Content = tostring(TargetPlayerName),
-            Duration = 2
-        })
     end
 })
 
-TabPlayerAim:CreateButton({
-    Name = "🔄 Atualizar Lista de Jogadores",
+TabPlayerAim:Button({
+    Title = "Atualizar Lista de Jogadores",
     Callback = function()
+        _isRefreshingAimList = true
         local list = UpdatePlayerAimList()
-        PlayerAimDropdown:Refresh(list)
-        Rayfield:Notify({
-            Title = "✅ Lista Atualizada",
-            Content = #list .. " jogadores",
-            Duration = 2
-        })
+        pcall(function() PlayerAimDropdown:Refresh(list) end)
+        _isRefreshingAimList = false
+        WindUI:Notify({ Title = "Lista Atualizada", Content = (# list - 1) .. " jogadores", Duration = 2 })
     end
 })
 
-TabPlayerAim:CreateSection("⚙️ Controle")
+TabPlayerAim:Section({ Title = "Controle" })
 
-TabPlayerAim:CreateToggle({
-    Name = "🎯 Ativar Aim no Jogador",
-    CurrentValue = false,
-    Callback = function(value)
-        if value and not TargetPlayerName then
-            Rayfield:Notify({
-                Title = "⚠️ Aviso",
-                Content = "Selecione um jogador primeiro!",
-                Duration = 2
-            })
+TabPlayerAim:Toggle({
+    Title = "Ativar Aim no Jogador",
+    Flag     = "PlayerAimEnabled",
+    Value = false,
+    Callback = function(v)
+        if v and not TargetPlayerName then
+            WindUI:Notify({ Title = "Aviso", Content = "Selecione um jogador primeiro!", Duration = 2 })
             PlayerAimEnabled = false
             return
         end
-        
-        PlayerAimEnabled = value
-        
-        Rayfield:Notify({
-            Title = value and "✅ Aim Ativado" or "⭕ Aim Desativado",
-            Content = value and ("Mirando em: " .. tostring(TargetPlayerName)) or "Desativado",
-            Duration = 2
-        })
-    end
-})
-
-TabPlayerAim:CreateSection("🎛️ Configurações")
-
-TabPlayerAim:CreateSlider({
-    Name = "FOV (Campo de Visão)",
-    Range = {10, 800},
-    Increment = 10,
-    CurrentValue = 100,
-    Callback = function(v)
-        PlayerAimFOVRadius = v
-    end
-})
-
-TabPlayerAim:CreateSlider({
-    Name = "Suavidade",
-    Range = {0.01, 1},
-    Increment = 0.01,
-    CurrentValue = 0.15,
-    Callback = function(v)
-        PlayerAimSmoothness = v
-    end
-})
-
-TabPlayerAim:CreateDropdown({
-    Name = "Parte do Corpo",
-    Options = {"Head", "Torso", "HumanoidRootPart"},
-    CurrentOption = "Head",
-    Callback = function(v)
-        if type(v) == "table" then
-            PlayerAimPart = v[1] or v
-        else
-            PlayerAimPart = v
+        PlayerAimEnabled = v
+        -- Notifica apenas ao ativar via toggle (o keybind T já exibe a própria notificação)
+        if v then
+            WindUI:Notify({
+                Title   = "Aim Ativado",
+                Content = "Mirando em: " .. tostring(TargetPlayerName),
+                Duration = 2
+            })
         end
     end
 })
 
-TabPlayerAim:CreateSlider({
-    Name = "Predição de Movimento",
-    Range = {0, 0.5},
-    Increment = 0.01,
-    CurrentValue = 0,
+TabPlayerAim:Section({ Title = "Configurações" })
+
+TabPlayerAim:Slider({
+    Title = "FOV (Campo de Visão)",
+    Flag     = "PlayerAimFOV",
+    Step  = 10,
+    Value = { Min = 10, Max = 800, Default = 100 },
+    Callback = function(v) PlayerAimFOVRadius = v end
+})
+
+TabPlayerAim:Slider({
+    Title = "Suavidade",
+    Step  = 0.01,
+    Flag     = "PlayerAimSmooth",
+    Value = { Min = 0.01, Max = 1, Default = 0.15 },
+    Callback = function(v) PlayerAimSmoothness = v end
+})
+
+local PLAYER_AIM_PART_OPTIONS = { "Head", "Torso", "HumanoidRootPart" }
+TabPlayerAim:Dropdown({
+    Title   = "Parte do Corpo",
+    Values  = PLAYER_AIM_PART_OPTIONS,
+    Flag     = "PlayerAimPart",
+    Multi   = false,
+    Default = 1,   -- "Head"
     Callback = function(v)
-        PlayerAimPrediction = v
+        local val = parseDropdownValue(v)
+        PlayerAimPart = (val ~= "") and val or "Head"
     end
 })
 
-TabPlayerAim:CreateToggle({
-    Name = "WallCheck (não mirar através de paredes)",
-    CurrentValue = true,
-    Callback = function(v)
-        PlayerAimWallCheck = v
-    end
+TabPlayerAim:Slider({
+    Title = "Predição de Movimento",
+    Flag     = "PlayerAimPrediction",
+    Step  = 0.01,
+    Value = { Min = 0, Max = 0.5, Default = 0 },
+    Callback = function(v) PlayerAimPrediction = v end
 })
 
-TabPlayerAim:CreateSection("📊 Status")
+TabPlayerAim:Toggle({
+    Title = "WallCheck (não mirar por paredes)",
+    Flag     = "PlayerAimWallCheck",
+    Value = true,
+    Callback = function(v) PlayerAimWallCheck = v end
+})
 
--- Status do Player Aim
-local PlayerAimStatus = TabPlayerAim:CreateLabel("Status: Aguardando...")
-
-task.spawn(function()
-    while wait(1) do
-        pcall(function()
-            if PlayerAimEnabled and TargetPlayerName then
-                local p = GetTargetPlayer()
-                if p and IsPlayerAimValid(p) then
-                    PlayerAimStatus:Set("✅ ATIVO - Mirando em " .. tostring(TargetPlayerName))
-                else
-                    PlayerAimStatus:Set("❌ Alvo inválido ou morto")
-                end
-            elseif TargetPlayerName then
-                PlayerAimStatus:Set("⏸️ Desativado - Alvo: " .. tostring(TargetPlayerName))
-            else
-                PlayerAimStatus:Set("⚠️ Nenhum jogador selecionado")
-            end
-        end)
-    end
+-- Player Aim loop
+RunService.RenderStepped:Connect(function()
+    pcall(function()
+        if not PlayerAimEnabled then return end
+        local player = GetTargetPlayer()
+        if not player or not IsPlayerAimValid(player) then return end
+        local part = GetPlayerAimPart(player)
+        if not part then return end
+        if not CheckPlayerAimFOV(part) then return end
+        if not CheckPlayerAimWall(part) then return end
+        local targetPos = part.Position
+        if PlayerAimPrediction > 0 then
+            targetPos = targetPos + GetPartVelocity(part) * PlayerAimPrediction
+        end
+        local cam    = workspace.CurrentCamera
+        local lookAt = CFrame.new(cam.CFrame.Position, targetPos)
+        cam.CFrame   = cam.CFrame:Lerp(lookAt, PlayerAimSmoothness)
+    end)
 end)
 
--- Auto-refresh da lista de jogadores a cada 5 segundos
+-- Auto-refresh da lista a cada 5s (silencioso – não dispara callback)
 task.spawn(function()
     while wait(5) do
         pcall(function()
+            _isRefreshingAimList = true
             PlayerAimDropdown:Refresh(UpdatePlayerAimList())
+            _isRefreshingAimList = false
         end)
     end
 end)
-
--- ==================================================================================
--- FIM DA ABA PLAYER AIM
--- ==================================================================================
 
 -- ==================================================================================
 -- ============================== PROTECTION TAB ====================================
 -- ==================================================================================
 
-TabProt:CreateSection("Proteções")
+local godMode, lockHP, antiKB, antiVoid = false, false, false, false
+local noclip = false  -- definido aqui, usado no runtime e no Utility Tab
 
-local godMode, lockHP, antiKB, antiVoid, noclip = false, false, false, false, false
-local flyUpImpulse = 0
+TabProt:Section({ Title = "Proteções" })
 
-TabProt:CreateToggle({
-    Name = "God Mode",
-    CurrentValue = false,
-    Callback = function(v)
-        godMode = v
-    end
-})
-
-TabProt:CreateToggle({
-    Name = "Lock HP",
-    CurrentValue = false,
-    Callback = function(v)
-        lockHP = v
-    end
-})
-
-TabProt:CreateToggle({
-    Name = "Anti Knockback",
-    CurrentValue = false,
-    Callback = function(v)
-        antiKB = v
-    end
-})
-
-TabProt:CreateToggle({
-    Name = "Anti Void",
-    CurrentValue = false,
-    Callback = function(v)
-        antiVoid = v
-    end
-})
+TabProt:Toggle({ Title = "God Mode",         Flag = "GodMode",  Value = false, Callback = function(v) godMode  = v end })
+TabProt:Toggle({ Title = "Lock HP",          Flag = "LockHP",   Value = false, Callback = function(v) lockHP   = v end })
+TabProt:Toggle({ Title = "Anti Knockback",   Flag = "AntiKB",   Value = false, Callback = function(v) antiKB   = v end })
+TabProt:Toggle({ Title = "Anti Void",        Flag = "AntiVoid", Value = false, Callback = function(v) antiVoid = v end })
 
 -- ==================================================================================
--- ================================ PLAYERS TAB =====================================
+-- ============================== PLAYERS TAB =======================================
 -- ==================================================================================
 
-TabPlayers:CreateSection("Teleporte e Spectate")
+TabPlayers:Section({ Title = "Teleporte e Spectate" })
 
 local selectedName = nil
 
 local function getPlayerNames()
     local t = {}
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LP then
-            table.insert(t, p.Name)
-        end
+        if p ~= LP then table.insert(t, p.Name) end
     end
     return t
 end
 
-local playerDropdown = TabPlayers:CreateDropdown({
-    Name = "Selecionar Player",
-    Options = getPlayerNames(),
-    Callback = function(v)
-        selectedName = typeof(v) == "table" and v[1] or v
-    end
+local playerDropdown = TabPlayers:Dropdown({
+    Title   = "Selecionar Player",
+    Values  = getPlayerNames(),
+    Multi   = false,
+    Default = 1,
+    Callback = function(v) selectedName = parseDropdownValue(v) end
 })
 
-TabPlayers:CreateButton({
-    Name = "Atualizar Lista",
-    Callback = function()
-        playerDropdown:Refresh(getPlayerNames())
-    end
+TabPlayers:Button({
+    Title = "Atualizar Lista",
+    Callback = function() playerDropdown:Refresh(getPlayerNames()) end
 })
 
-TabPlayers:CreateButton({
-    Name = "TP para Player",
+TabPlayers:Button({
+    Title = "TP para Player",
     Callback = function()
         local t = Players:FindFirstChild(selectedName)
         if t and t.Character and HRP then
@@ -1932,8 +1406,8 @@ TabPlayers:CreateButton({
     end
 })
 
-TabPlayers:CreateButton({
-    Name = "Spectate",
+TabPlayers:Button({
+    Title = "Spectate",
     Callback = function()
         local t = Players:FindFirstChild(selectedName)
         if t and t.Character then
@@ -1942,298 +1416,182 @@ TabPlayers:CreateButton({
     end
 })
 
-TabPlayers:CreateButton({
-    Name = "Voltar Camera",
-    Callback = function()
-        Camera.CameraSubject = Humanoid
-    end
+TabPlayers:Button({
+    Title = "Voltar Camera",
+    Callback = function() Camera.CameraSubject = Humanoid end
 })
 
 -- ==================================================================================
 -- ============================== WAYPOINTS TAB =====================================
 -- ==================================================================================
 
-TabWaypoints:CreateSection("Sistema de Waypoints")
+TabWaypoints:Section({ Title = "Sistema de Waypoints" })
 
-local savedWaypoints = {}
-local waypointSelected = nil       -- armazena o nome selecionado no dropdown
+local savedWaypoints  = {}
+local waypointSelected = nil
 local waypointNameInput = ""
 
--- ── helpers ──────────────────────────────────────────────────
 local function resolvePosition(pos)
-    if type(pos) == "userdata" then return pos end          -- Vector3 nativo
-    if type(pos) == "table" then                            -- table do JSON
-        return Vector3.new(pos.X or pos[1] or 0, pos.Y or pos[2] or 0, pos.Z or pos[3] or 0)
-    end
+    if type(pos) == "userdata" then return pos end
+    if type(pos) == "table" then return Vector3.new(pos.X or 0, pos.Y or 0, pos.Z or 0) end
     return nil
 end
 
 local function getWaypointList()
     local list = {}
-    for name, _ in pairs(savedWaypoints) do
-        table.insert(list, name)
-    end
+    for name, _ in pairs(savedWaypoints) do table.insert(list, name) end
     table.sort(list)
-    
-    if #list == 0 then
-        return {"Nenhum waypoint salvo"}
-    end
-    
-    return list
+    return #list > 0 and list or { "Nenhum waypoint salvo" }
 end
 
-local function saveWaypoint(name)
-    if not HRP then return false end
-    if not name or name == "" then return false end
-    local pos = HRP.CFrame.Position
-    -- Garante que cada waypoint é único e armazena corretamente
-    savedWaypoints[name] = {
-        Position = {X = pos.X, Y = pos.Y, Z = pos.Z},
-        Time = os.date("%H:%M:%S")
-    }
-    return true
-end
+TabWaypoints:Input({
+    Title       = "Nome do Waypoint",
+    Placeholder = "Digite o nome...",
+    Callback    = function(text) waypointNameInput = text end
+})
 
-local function teleportToWaypoint(name)
-    if not name or not savedWaypoints[name] then 
-        return false 
+local waypointDropdown = TabWaypoints:Dropdown({
+    Title   = "Selecionar Waypoint",
+    Values  = getWaypointList(),
+    Multi   = false,
+    Default = 1,
+    Callback = function(opt)
+        waypointSelected = parseDropdownValue(opt)
     end
-    if not HRP then 
-        return false 
-    end
-    
-    local wpData = savedWaypoints[name]
-    local pos = resolvePosition(wpData.Position)
-    
-    if not pos then 
-        return false 
-    end
-    
-    HRP.CFrame = CFrame.new(pos)
-    return true
-end
+})
 
-local function deleteWaypoint(name)
-    if savedWaypoints[name] then
+TabWaypoints:Button({
+    Title = "Salvar Posição Atual",
+    Callback = function()
+        if not waypointNameInput or waypointNameInput == "" then
+            WindUI:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
+            return
+        end
+        if not HRP then return end
+        local pos = HRP.CFrame.Position
+        savedWaypoints[waypointNameInput] = { Position = { X = pos.X, Y = pos.Y, Z = pos.Z }, Time = os.date("%H:%M:%S") }
+        waypointDropdown:Refresh(getWaypointList())
+        WindUI:Notify({ Title = "Waypoint Salvo", Content = "'" .. waypointNameInput .. "' salvo!", Duration = 3 })
+    end
+})
+
+TabWaypoints:Button({
+    Title = "Teleportar para Waypoint",
+    Callback = function()
+        local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
+        if not name or name == "" or name == "Nenhum waypoint salvo" then
+            WindUI:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
+            return
+        end
+        local wpData = savedWaypoints[name]
+        if not wpData or not HRP then WindUI:Notify({ Title = "Erro", Content = "Waypoint inválido!", Duration = 3 }) return end
+        local pos = resolvePosition(wpData.Position)
+        if pos then
+            HRP.CFrame = CFrame.new(pos)
+            WindUI:Notify({ Title = "Teleportado", Content = "Chegou em '" .. name .. "'!", Duration = 2 })
+        end
+    end
+})
+
+TabWaypoints:Button({
+    Title = "Deletar Waypoint",
+    Callback = function()
+        local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
+        if not name or name == "Nenhum waypoint salvo" then return end
         savedWaypoints[name] = nil
-    end
-end
-
--- ── UI ───────────────────────────────────────────────────────
--- Input de nome
-TabWaypoints:CreateInput({
-    Name = "Nome do Waypoint",
-    PlaceholderText = "Digite o nome...",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(text)
-        waypointNameInput = text
-    end
-})
-
--- Dropdown criado ANTES dos botões que o usam
-local waypointDropdown = TabWaypoints:CreateDropdown({
-    Name = "Selecionar Waypoint",
-    Options = getWaypointList(),
-    CurrentOption = getWaypointList()[1],
-    Callback = function(option)
-        -- FIX: Garante que sempre pega a string, não a tabela
-        if type(option) == "table" then
-            waypointSelected = option[1] or tostring(option)
-        else
-            waypointSelected = tostring(option)
-        end
-    end
-})
-
--- Salvar
-TabWaypoints:CreateButton({
-    Name = "Salvar Posição Atual",
-    Callback = function()
-        if waypointNameInput == "" or not waypointNameInput then
-            Rayfield:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
-            return
-        end
-        
-        local wpName = tostring(waypointNameInput)
-        
-        if saveWaypoint(wpName) then
-            waypointSelected = wpName
-            local newList = getWaypointList()
-            waypointDropdown:Refresh(newList)
-            Rayfield:Notify({ Title = "Waypoint Salvo", Content = "'"..wpName.."' foi salvo!", Duration = 3 })
-        else
-            Rayfield:Notify({ Title = "Erro", Content = "Falha ao salvar waypoint!", Duration = 3 })
-        end
-    end
-})
-
--- Teleportar
-TabWaypoints:CreateButton({
-    Name = "Teleportar para Waypoint",
-    Callback = function()
-        -- Converte para string se for tabela
-        local targetName = waypointSelected
-        if type(targetName) == "table" then
-            targetName = targetName[1] or tostring(targetName)
-        else
-            targetName = tostring(targetName)
-        end
-        
-        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
-            return
-        end
-        
-        if teleportToWaypoint(targetName) then
-            Rayfield:Notify({ Title = "Teleportado", Content = "Chegou em '"..targetName.."'!", Duration = 2 })
-        else
-            Rayfield:Notify({ Title = "Erro", Content = "Falha ao teleportar. Waypoint pode estar corrompido.", Duration = 3 })
-        end
-    end
-})
-
--- Deletar
-TabWaypoints:CreateButton({
-    Name = "Deletar Waypoint",
-    Callback = function()
-        -- Converte para string se for tabela
-        local targetName = waypointSelected
-        if type(targetName) == "table" then
-            targetName = targetName[1] or tostring(targetName)
-        else
-            targetName = tostring(targetName)
-        end
-        
-        if not targetName or targetName == "" or targetName == "Nenhum waypoint salvo" then
-            Rayfield:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
-            return
-        end
-        
-        deleteWaypoint(targetName)
-        waypointSelected = nil
+        waypointSelected     = nil
         waypointDropdown:Refresh(getWaypointList())
-        Rayfield:Notify({ Title = "Waypoint Deletado", Content = "Waypoint removido!", Duration = 2 })
+        WindUI:Notify({ Title = "Deletado", Content = "Waypoint removido!", Duration = 2 })
     end
 })
 
--- Atualizar lista manualmente (backup)
-TabWaypoints:CreateButton({
-    Name = "Atualizar Lista",
-    Callback = function()
-        waypointDropdown:Refresh(getWaypointList())
-    end
+TabWaypoints:Button({
+    Title = "Atualizar Lista",
+    Callback = function() waypointDropdown:Refresh(getWaypointList()) end
 })
 
-TabWaypoints:CreateSection("Teleporte Rápido")
+TabWaypoints:Section({ Title = "Teleporte Rápido" })
 
-TabWaypoints:CreateButton({
-    Name = "TP para Spawn",
+TabWaypoints:Button({
+    Title = "TP para Spawn",
     Callback = function()
         if not HRP then return end
-
-        -- 1) Tenta encontrar SpawnLocation direta no workspace
-        local spawnLocation = workspace:FindFirstChild("SpawnLocation")
-            or workspace:FindFirstChildOfClass("SpawnLocation")
-
-        -- 2) Alguns mapas chamam de "Spawn" (um BasePart comum)
-        if not spawnLocation then
-            spawnLocation = workspace:FindFirstChild("Spawn")
-        end
-
-        -- 3) Busca recursiva: pega qualquer SpawnLocation em qualquer lugar do workspace
+        local spawnLocation = workspace:FindFirstChildOfClass("SpawnLocation") or workspace:FindFirstChild("Spawn")
         if not spawnLocation then
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("SpawnLocation") then
-                    spawnLocation = obj
-                    break
-                end
+                if obj:IsA("SpawnLocation") then spawnLocation = obj break end
             end
         end
-
         if spawnLocation then
             HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
-            Rayfield:Notify({Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2})
+            WindUI:Notify({ Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2 })
         else
-            -- Fallback: vai para a origem do mapa (0, 5, 0)
-            HRP.CFrame = CFrame.new(Vector3.new(0, 5, 0))
-            Rayfield:Notify({
-                Title = "Spawn não encontrado",
-                Content = "Foi para a origem do mapa (0, 5, 0).",
-                Duration = 3
-            })
+            HRP.CFrame = CFrame.new(0, 5, 0)
+            WindUI:Notify({ Title = "Aviso", Content = "Spawn não encontrado. Foi para (0,5,0)", Duration = 3 })
         end
     end
 })
 
 -- ==================================================================================
--- =============================== VISUALS TAB ======================================
+-- ============================== VISUALS TAB =======================================
 -- ==================================================================================
 
-TabVisuals:CreateSection("Campo de Visão")
+TabVisuals:Section({ Title = "Campo de Visão" })
 
 local DEFAULT_FOV = Camera.FieldOfView
 
-TabVisuals:CreateSlider({
-    Name = "FOV",
-    Range = {70, 180},
-    Increment = 1,
-    CurrentValue = DEFAULT_FOV,
-    Callback = function(v)
-        Camera.FieldOfView = v
-    end
+TabVisuals:Slider({
+    Title = "FOV",
+    Step  = 1,
+    Flag     = "CameraFOV",
+    Value = { Min = 70, Max = 180, Default = DEFAULT_FOV },
+    Callback = function(v) Camera.FieldOfView = v end
 })
 
-TabVisuals:CreateButton({
-    Name = "Resetar FOV",
-    Callback = function()
-        Camera.FieldOfView = DEFAULT_FOV
-    end
+TabVisuals:Button({
+    Title = "Resetar FOV",
+    Callback = function() Camera.FieldOfView = DEFAULT_FOV end
 })
 
-TabVisuals:CreateSection("Iluminação")
+TabVisuals:Section({ Title = "Iluminação" })
 
 local FULLBRIGHT_ENABLED = false
 
 local function toggleFullbright(enabled)
     if enabled then
-        Lighting.Brightness = 2
-        Lighting.ClockTime = 14
-        Lighting.FogEnd = 100000
+        Lighting.Brightness    = 2
+        Lighting.ClockTime     = 14
+        Lighting.FogEnd        = 100000
         Lighting.GlobalShadows = false
         Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
     else
-        Lighting.Brightness = 1
+        Lighting.Brightness    = 1
         Lighting.GlobalShadows = true
     end
 end
 
-TabVisuals:CreateToggle({
-    Name = "Fullbright",
-    CurrentValue = false,
-    Callback = function(v)
-        FULLBRIGHT_ENABLED = v
-        toggleFullbright(v)
-    end
+TabVisuals:Toggle({
+    Title = "Fullbright",
+    Flag     = "Fullbright",
+    Value = false,
+    Callback = function(v) FULLBRIGHT_ENABLED = v toggleFullbright(v) end
 })
 
-TabVisuals:CreateSection("Câmera")
+TabVisuals:Section({ Title = "Câmera" })
 
 local NO_CAMERA_SHAKE = false
 
-TabVisuals:CreateToggle({
-    Name = "No Camera Shake",
-    CurrentValue = false,
-    Callback = function(v)
-        NO_CAMERA_SHAKE = v
-    end
+TabVisuals:Toggle({
+    Title = "No Camera Shake",
+    Flag     = "NoCamShake",
+    Value = false,
+    Callback = function(v) NO_CAMERA_SHAKE = v end
 })
 
 RunService.RenderStepped:Connect(function()
     if NO_CAMERA_SHAKE then
         local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.CameraOffset = Vector3.new(0, 0, 0)
-        end
+        if humanoid then humanoid.CameraOffset = Vector3.new(0, 0, 0) end
     end
 end)
 
@@ -2241,310 +1599,135 @@ end)
 -- ================================= WORLD TAB ======================================
 -- ==================================================================================
 
-TabWorld:CreateSection("Tempo e Ambiente")
+TabWorld:Section({ Title = "Tempo e Ambiente" })
 
-TabWorld:CreateSlider({
-    Name = "Hora do Dia",
-    Range = {0, 24},
-    Increment = 0.5,
-    CurrentValue = 14,
-    Callback = function(v)
-        Lighting.ClockTime = v
-    end
+TabWorld:Slider({
+    Title = "Hora do Dia",
+    Flag     = "WorldTime",
+    Step  = 0.5,
+    Value = { Min = 0, Max = 24, Default = 14 },
+    Callback = function(v) Lighting.ClockTime = v end
 })
 
-TabWorld:CreateSlider({
-    Name = "Gravidade",
-    Range = {60, 500},
-    Increment = 10,
-    CurrentValue = 196,
-    Callback = function(v)
-        workspace.Gravity = v
-    end
+TabWorld:Slider({
+    Title = "Gravidade",
+    Flag     = "WorldGravity",
+    Step  = 10,
+    Value = { Min = 60, Max = 500, Default = 196 },
+    Callback = function(v) workspace.Gravity = v end
 })
 
-TabWorld:CreateButton({
-    Name = "Remover Fog",
-    Callback = function()
-        Lighting.FogEnd = 1e6
-    end
+TabWorld:Button({
+    Title = "Remover Fog",
+    Callback = function() Lighting.FogEnd = 1e6 end
 })
 
 -- ==================================================================================
 -- =============================== FPS/STATS TAB ====================================
 -- ==================================================================================
 
-TabFPS:CreateSection("Anti-Lag")
+TabFPS:Section({ Title = "Anti-Lag" })
 
-local DELETE_3D_ENABLED = false
+local DELETE_3D_ENABLED        = false
 local descendantAddedConnection = nil
 
--- Advanced Anti-Lag System by RIP#6666
+-- Advanced Anti-Lag System
 local function setupAdvancedAntiLag()
-    if not _G.Ignore then
-        _G.Ignore = {}
-    end
-    if _G.SendNotifications == nil then
-        _G.SendNotifications = false -- Disabled notifications for cleaner experience
-    end
-    if _G.ConsoleLogs == nil then
-        _G.ConsoleLogs = false
-    end
-
-    if not game:IsLoaded() then
-        repeat task.wait() until game:IsLoaded()
-    end
+    if not _G.Ignore then _G.Ignore = {} end
+    if _G.SendNotifications == nil then _G.SendNotifications = false end
+    if _G.ConsoleLogs       == nil then _G.ConsoleLogs       = false end
+    if not game:IsLoaded()  then repeat task.wait() until game:IsLoaded() end
 
     _G.Settings = {
-        Players = {
-            ["Ignore Me"] = true,
-            ["Ignore Others"] = true,
-            ["Ignore Tools"] = true
-        },
-        Meshes = {
-            NoMesh = false,
-            NoTexture = true,
-            Destroy = false
-        },
-        Images = {
-            Invisible = false,
-            Destroy = false
-        },
-        Explosions = {
-            Smaller = true,
-            Invisible = false,
-            Destroy = false
-        },
-        Particles = {
-            Invisible = true,
-            Destroy = false
-        },
-        TextLabels = {
-            LowerQuality = true,
-            Invisible = false,
-            Destroy = false
-        },
-        MeshParts = {
-            LowerQuality = true,
-            Invisible = false,
-            NoTexture = false,
-            NoMesh = false,
-            Destroy = false
-        },
+        Players  = { ["Ignore Me"] = true, ["Ignore Others"] = true, ["Ignore Tools"] = true },
+        Meshes   = { NoMesh = false, NoTexture = true, Destroy = false },
+        Images   = { Invisible = false, Destroy = false },
+        Explosions = { Smaller = true, Invisible = false, Destroy = false },
+        Particles  = { Invisible = true, Destroy = false },
+        TextLabels = { LowerQuality = true, Invisible = false, Destroy = false },
+        MeshParts  = { LowerQuality = true, Invisible = false, NoTexture = false, NoMesh = false, Destroy = false },
         Other = {
-            ["FPS Cap"] = 60,
-            ["No Camera Effects"] = true,
-            ["No Clothes"] = false,
-            ["Low Water Graphics"] = true,
-            ["No Shadows"] = true,
-            ["Low Rendering"] = false,
-            ["Low Quality Parts"] = true,
-            ["Low Quality Models"] = true,
-            ["Reset Materials"] = true,
-            ["Lower Quality MeshParts"] = true,
-            ClearNilInstances = false
+            ["FPS Cap"] = 60, ["No Camera Effects"] = true, ["No Clothes"] = false,
+            ["Low Water Graphics"] = true, ["No Shadows"] = true, ["Low Rendering"] = false,
+            ["Low Quality Parts"] = true, ["Low Quality Models"] = true, ["Reset Materials"] = true,
+            ["Lower Quality MeshParts"] = true, ClearNilInstances = false
         }
     }
 
-    local Players, Lighting, StarterGui, MaterialService = game:GetService("Players"), game:GetService("Lighting"), game:GetService("StarterGui"), game:GetService("MaterialService")
-    local ME, CanBeEnabled = Players.LocalPlayer, {"ParticleEmitter", "Trail", "Smoke", "Fire", "Sparkles"}
-    
+    local ME        = LP
+    local CanBeEnabled = {"ParticleEmitter","Trail","Smoke","Fire","Sparkles"}
+
     local function PartOfCharacter(Inst)
-        for i, v in pairs(Players:GetPlayers()) do
-            if v ~= ME and v.Character and Inst:IsDescendantOf(v.Character) then
-                return true
-            end
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= ME and v.Character and Inst:IsDescendantOf(v.Character) then return true end
         end
         return false
     end
-    
     local function DescendantOfIgnore(Inst)
-        for i, v in pairs(_G.Ignore) do
-            if Inst:IsDescendantOf(v) then
-                return true
-            end
+        for _, v in pairs(_G.Ignore) do
+            if Inst:IsDescendantOf(v) then return true end
         end
         return false
     end
-    
     local function CheckIfBad(Inst)
-        if not Inst:IsDescendantOf(Players) and (_G.Settings.Players["Ignore Others"] and not PartOfCharacter(Inst) 
-        or not _G.Settings.Players["Ignore Others"]) and (_G.Settings.Players["Ignore Me"] and ME.Character and not Inst:IsDescendantOf(ME.Character) 
-        or not _G.Settings.Players["Ignore Me"]) and (_G.Settings.Players["Ignore Tools"] and not Inst:IsA("BackpackItem") and not Inst:FindFirstAncestorWhichIsA("BackpackItem") 
-        or not _G.Settings.Players["Ignore Tools"]) and (_G.Ignore and not table.find(_G.Ignore, Inst) and not DescendantOfIgnore(Inst) 
-        or (not _G.Ignore or type(_G.Ignore) ~= "table" or #_G.Ignore <= 0)) then
-            if Inst:IsA("DataModelMesh") then
-                if Inst:IsA("SpecialMesh") then
-                    if _G.Settings.Meshes.NoMesh then
-                        Inst.MeshId = ""
-                    end
-                    if _G.Settings.Meshes.NoTexture then
-                        Inst.TextureId = ""
-                    end
-                end
-                if _G.Settings.Meshes.Destroy then
-                    Inst:Destroy()
-                end
-            elseif Inst:IsA("FaceInstance") then
-                if _G.Settings.Images.Invisible then
-                    Inst.Transparency = 1
-                    Inst.Shiny = 1
-                end
-                if _G.Settings.Images.Destroy then
-                    Inst:Destroy()
-                end
-            elseif Inst:IsA("ShirtGraphic") then
-                if _G.Settings.Images.Invisible then
-                    Inst.Graphic = ""
-                end
-                if _G.Settings.Images.Destroy then
-                    Inst:Destroy()
-                end
+        if not Inst:IsDescendantOf(Players)
+        and (_G.Settings.Players["Ignore Others"] and not PartOfCharacter(Inst) or not _G.Settings.Players["Ignore Others"])
+        and (_G.Settings.Players["Ignore Me"]     and ME.Character and not Inst:IsDescendantOf(ME.Character) or not _G.Settings.Players["Ignore Me"])
+        and (_G.Settings.Players["Ignore Tools"]  and not Inst:IsA("BackpackItem") and not Inst:FindFirstAncestorWhichIsA("BackpackItem") or not _G.Settings.Players["Ignore Tools"])
+        and (_G.Ignore and not table.find(_G.Ignore, Inst) and not DescendantOfIgnore(Inst) or (not _G.Ignore or type(_G.Ignore) ~= "table" or #_G.Ignore <= 0)) then
+            if Inst:IsA("SpecialMesh") then
+                if _G.Settings.Meshes.NoMesh    then Inst.MeshId = "" end
+                if _G.Settings.Meshes.NoTexture then Inst.TextureId = "" end
+                if _G.Settings.Meshes.Destroy   then Inst:Destroy() end
+            elseif Inst:IsA("FaceInstance") or Inst:IsA("ShirtGraphic") then
+                if _G.Settings.Images.Invisible then pcall(function() Inst.Transparency = 1 end) end
+                if _G.Settings.Images.Destroy   then Inst:Destroy() end
             elseif table.find(CanBeEnabled, Inst.ClassName) then
-                if _G.Settings.Particles and _G.Settings.Particles.Invisible then
-                    Inst.Enabled = false
-                end
-                if _G.Settings.Particles and _G.Settings.Particles.Destroy then
-                    Inst:Destroy()
-                end
-            elseif Inst:IsA("PostEffect") and (_G.Settings.Other and _G.Settings.Other["No Camera Effects"]) then
+                if _G.Settings.Particles.Invisible then Inst.Enabled = false end
+                if _G.Settings.Particles.Destroy   then Inst:Destroy() end
+            elseif Inst:IsA("PostEffect") and _G.Settings.Other["No Camera Effects"] then
                 Inst.Enabled = false
-            elseif Inst:IsA("Explosion") then
-                if _G.Settings.Explosions and _G.Settings.Explosions.Smaller then
-                    Inst.BlastPressure = 1
-                    Inst.BlastRadius = 1
-                end
-                if _G.Settings.Explosions and _G.Settings.Explosions.Invisible then
-                    Inst.BlastPressure = 1
-                    Inst.BlastRadius = 1
-                    Inst.Visible = false
-                end
-                if _G.Settings.Explosions and _G.Settings.Explosions.Destroy then
-                    Inst:Destroy()
-                end
-            elseif Inst:IsA("Clothing") or Inst:IsA("SurfaceAppearance") or Inst:IsA("BaseWrap") then
-                if _G.Settings.Other and _G.Settings.Other["No Clothes"] then
-                    Inst:Destroy()
-                end
             elseif Inst:IsA("BasePart") and not Inst:IsA("MeshPart") then
-                if _G.Settings.Other and _G.Settings.Other["Low Quality Parts"] then
-                    Inst.Material = Enum.Material.Plastic
-                    Inst.Reflectance = 0
-                end
-            elseif Inst:IsA("TextLabel") and Inst:IsDescendantOf(workspace) then
-                if _G.Settings.TextLabels and _G.Settings.TextLabels.LowerQuality then
-                    Inst.Font = Enum.Font.SourceSans
-                    Inst.TextScaled = false
-                    Inst.RichText = false
-                    Inst.TextSize = 14
-                end
-                if _G.Settings.TextLabels and _G.Settings.TextLabels.Invisible then
-                    Inst.Visible = false
-                end
-                if _G.Settings.TextLabels and _G.Settings.TextLabels.Destroy then
-                    Inst:Destroy()
-                end
-            elseif Inst:IsA("Model") then
-                if _G.Settings.Other and _G.Settings.Other["Low Quality Models"] then
-                    Inst.LevelOfDetail = 1
+                if _G.Settings.Other["Low Quality Parts"] then
+                    Inst.Material = Enum.Material.Plastic; Inst.Reflectance = 0
                 end
             elseif Inst:IsA("MeshPart") then
-                if _G.Settings.MeshParts and _G.Settings.MeshParts.LowerQuality then
-                    Inst.RenderFidelity = 2
-                    Inst.Reflectance = 0
-                    Inst.Material = Enum.Material.Plastic
+                if _G.Settings.MeshParts.LowerQuality then
+                    Inst.RenderFidelity = 2; Inst.Reflectance = 0; Inst.Material = Enum.Material.Plastic
                 end
-                if _G.Settings.MeshParts and _G.Settings.MeshParts.Invisible then
-                    Inst.Transparency = 1
-                    Inst.RenderFidelity = 2
-                    Inst.Reflectance = 0
-                    Inst.Material = Enum.Material.Plastic
-                end
-                if _G.Settings.MeshParts and _G.Settings.MeshParts.NoTexture then
-                    Inst.TextureID = ""
-                end
-                if _G.Settings.MeshParts and _G.Settings.MeshParts.NoMesh then
-                    Inst.MeshId = ""
-                end
-                if _G.Settings.MeshParts and _G.Settings.MeshParts.Destroy then
-                    Inst:Destroy()
-                end
+            elseif Inst:IsA("Model") and _G.Settings.Other["Low Quality Models"] then
+                Inst.LevelOfDetail = 1
             end
         end
     end
 
-    -- Apply terrain settings
-    coroutine.wrap(pcall)(function()
-        if _G.Settings.Other and _G.Settings.Other["Low Water Graphics"] then
-            local terrain = workspace:FindFirstChildOfClass("Terrain")
-            if not terrain then
-                repeat task.wait() until workspace:FindFirstChildOfClass("Terrain")
-                terrain = workspace:FindFirstChildOfClass("Terrain")
-            end
-            terrain.WaterWaveSize = 0
-            terrain.WaterWaveSpeed = 0
-            terrain.WaterReflectance = 0
-            terrain.WaterTransparency = 0
-            if sethiddenproperty then
-                sethiddenproperty(terrain, "Decoration", false)
-            end
+    pcall(function()
+        if _G.Settings.Other["No Shadows"] then
+            Lighting.GlobalShadows = false; Lighting.FogEnd = 9e9; Lighting.ShadowSoftness = 0
         end
     end)
-
-    -- Apply lighting settings
-    coroutine.wrap(pcall)(function()
-        if _G.Settings.Other and _G.Settings.Other["No Shadows"] then
-            Lighting.GlobalShadows = false
-            Lighting.FogEnd = 9e9
-            Lighting.ShadowSoftness = 0
-            if sethiddenproperty then
-                sethiddenproperty(Lighting, "Technology", 2)
-            end
-        end
-    end)
-
-    -- Apply rendering settings
-    coroutine.wrap(pcall)(function()
-        if _G.Settings.Other and _G.Settings.Other["Low Rendering"] then
+    pcall(function()
+        if _G.Settings.Other["Low Rendering"] then
             settings().Rendering.QualityLevel = 1
-            settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
         end
     end)
-
-    -- Reset materials
-    coroutine.wrap(pcall)(function()
-        if _G.Settings.Other and _G.Settings.Other["Reset Materials"] then
-            for i, v in pairs(MaterialService:GetChildren()) do
-                v:Destroy()
-            end
+    pcall(function()
+        if _G.Settings.Other["Reset Materials"] then
+            for _, v in pairs(MaterialService:GetChildren()) do v:Destroy() end
             MaterialService.Use2022Materials = false
         end
     end)
 
-    -- Process existing descendants
-    local Descendants = game:GetDescendants()
-    for i, v in pairs(Descendants) do
-        CheckIfBad(v)
-    end
-
-    -- Monitor new descendants
-    game.DescendantAdded:Connect(function(value)
-        task.wait(_G.LoadedWait or 1)
-        CheckIfBad(value)
-    end)
+    for _, v in pairs(game:GetDescendants()) do CheckIfBad(v) end
+    game.DescendantAdded:Connect(function(value) task.wait(_G.LoadedWait or 1); CheckIfBad(value) end)
 end
 
--- ✅ FUNÇÃO CORRIGIDA: Usa LP em vez de LocalPlayer
 local function hide3D(obj)
     pcall(function()
-        -- ✅ CORRIGIDO: Usa "LP" em vez de "LocalPlayer"
-        if LP.Character and obj:IsDescendantOf(LP.Character) then 
-            return 
-        end
-        
+        if LP.Character and obj:IsDescendantOf(LP.Character) then return end
         if obj:IsA("BasePart") then
             obj.Transparency = 1
-        elseif obj:IsA("Decal") then
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
             obj.Transparency = 1
         elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
             obj.Enabled = false
@@ -2554,580 +1737,606 @@ local function hide3D(obj)
     end)
 end
 
-local function apply3DDelete()
-    if not DELETE_3D_ENABLED then return end
-    
-    pcall(function()
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            hide3D(obj)
-        end
-    end)
-end
-
-TabFPS:CreateToggle({
-    Name = "Advanced Anti-Lag (RIP)",
-    CurrentValue = false,
+TabFPS:Toggle({
+    Title = "Advanced Anti-Lag (RIP)",
+    Flag     = "AntiLag",
+    Value = false,
     Callback = function(v)
         if v then
             setupAdvancedAntiLag()
-            Rayfield:Notify({
-                Title = "Anti-Lag Ativado",
-                Content = "Sistema avançado de otimização ativado!",
-                Duration = 2
-            })
+            WindUI:Notify({ Title = "Anti-Lag", Content = "Sistema avançado ativado!", Duration = 2 })
         end
     end
 })
 
-TabFPS:CreateToggle({
-    Name = "3D Delete (Hide World)",
-    CurrentValue = false,
+TabFPS:Toggle({
+    Title = "3D Delete (Hide World)",
+    Flag     = "Delete3D",
+    Value = false,
     Callback = function(v)
         DELETE_3D_ENABLED = v
         if v then
-            apply3DDelete()
-            -- Auto-hide new objects
-            if descendantAddedConnection then
-                descendantAddedConnection:Disconnect()
-            end
+            for _, obj in ipairs(workspace:GetDescendants()) do hide3D(obj) end
+            if descendantAddedConnection then descendantAddedConnection:Disconnect() end
             descendantAddedConnection = workspace.DescendantAdded:Connect(hide3D)
-            
-            Rayfield:Notify({
-                Title = "3D Delete Ativado",
-                Content = "Mundo escondido! FPS otimizado.",
-                Duration = 2
-            })
+            WindUI:Notify({ Title = "3D Delete", Content = "Mundo escondido! FPS otimizado.", Duration = 2 })
         else
-            -- Disconnect listener when disabled
-            if descendantAddedConnection then
-                descendantAddedConnection:Disconnect()
-                descendantAddedConnection = nil
-            end
-            
-            Rayfield:Notify({
-                Title = "3D Delete Desativado",
-                Content = "Recarregue o jogo para ver o mundo novamente.",
-                Duration = 3
-            })
+            if descendantAddedConnection then descendantAddedConnection:Disconnect(); descendantAddedConnection = nil end
+            WindUI:Notify({ Title = "3D Delete", Content = "Desativado. Recarregue o jogo para restaurar.", Duration = 3 })
         end
     end
 })
 
-TabFPS:CreateSlider({
-    Name = "FPS Cap",
-    Range = {60, 240},
-    Increment = 10,
-    CurrentValue = 60,
+TabFPS:Toggle({
+    Title = "Remover Sombras",
+    Flag     = "RemoveShadows",
+    Value = false,
     Callback = function(v)
-        setfpscap(v)
+        Lighting.GlobalShadows = not v
+        if v then Lighting.ShadowSoftness = 0 end
     end
 })
 
-TabFPS:CreateSection("Stats")
-
-local statsLabel = TabFPS:CreateLabel("Carregando...")
-local fpsLabel = TabFPS:CreateLabel("FPS: 0")
-local pingLabel = TabFPS:CreateLabel("Ping: 0ms")
-local playersLabel = TabFPS:CreateLabel("Players: 0")
-
-task.spawn(function()
-    while task.wait(0.5) do
-        if Character and Humanoid and HRP then
-            statsLabel:Set(string.format("HP: %d/%d | Speed: %d | Jump: %d",
-                math.floor(Humanoid.Health),
-                math.floor(Humanoid.MaxHealth),
-                math.floor(Humanoid.WalkSpeed),
-                math.floor(Humanoid.JumpPower)
-            ))
-        end
+TabFPS:Slider({
+    Title = "FPS Cap",
+    Flag     = "FPSCap",
+    Step  = 10,
+    Value = { Min = 60, Max = 240, Default = 60 },
+    Callback = function(v)
+        pcall(function() setfpscap(v) end)
     end
-end)
+})
 
-local fpsCounter = 0
-local lastFPSUpdate = tick()
+-- ==================================================================================
+-- ================================= STATS HUD ======================================
+-- ==================================================================================
+
+TabFPS:Section({ Title = "📊 Stats em Tempo Real" })
+
+-- ScreenGui independente para exibir stats no canto da tela
+local statsGui = Instance.new("ScreenGui")
+statsGui.Name            = "HubStatsHUD"
+statsGui.ResetOnSpawn    = false
+statsGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
+statsGui.IgnoreGuiInset  = true
+pcall(function()
+    statsGui.Parent = game:GetService("CoreGui")
+end)
+if not statsGui.Parent then
+    statsGui.Parent = LP.PlayerGui
+end
+
+local statsFrame = Instance.new("Frame")
+statsFrame.Name                 = "StatsFrame"
+statsFrame.Size                 = UDim2.new(0, 210, 0, 110)
+statsFrame.Position             = UDim2.new(1, -218, 0, 70)   -- canto superior DIREITO, abaixo da barra FPS/CPU/GPU
+statsFrame.BackgroundColor3     = Color3.fromRGB(10, 10, 10)
+statsFrame.BackgroundTransparency = 0.35
+statsFrame.BorderSizePixel      = 0
+statsFrame.Visible              = false
+statsFrame.Parent               = statsGui
+
+local statsCorner = Instance.new("UICorner")
+statsCorner.CornerRadius = UDim.new(0, 6)
+statsCorner.Parent       = statsFrame
+
+local statsText = Instance.new("TextLabel")
+statsText.Name                   = "StatsText"
+statsText.Size                   = UDim2.new(1, -10, 1, -6)
+statsText.Position               = UDim2.new(0, 5, 0, 3)
+statsText.BackgroundTransparency = 1
+statsText.TextColor3             = Color3.fromRGB(220, 220, 220)
+statsText.TextSize               = 12
+statsText.Font                   = Enum.Font.Code
+statsText.TextXAlignment         = Enum.TextXAlignment.Left
+statsText.TextYAlignment         = Enum.TextYAlignment.Top
+statsText.RichText               = true
+statsText.Text                   = "Carregando stats..."
+statsText.Parent                 = statsFrame
+
+local STATS_HUD_ENABLED = false
+
+TabFPS:Toggle({
+    Title = "Mostrar Stats HUD (overlay)",
+    Flag     = "StatsHUD",
+    Value = false,
+    Callback = function(v)
+        STATS_HUD_ENABLED  = v
+        statsFrame.Visible = v
+    end
+})
+
+-- Contador de FPS
+local _fpsCount      = 0
+local _lastFpsUpdate = tick()
+local _currentFPS    = 0
 
 RunService.RenderStepped:Connect(function()
-    fpsCounter = fpsCounter + 1
-    if tick() - lastFPSUpdate >= 1 then
-        fpsLabel:Set("FPS: " .. fpsCounter)
-        fpsCounter = 0
-        lastFPSUpdate = tick()
+    _fpsCount = _fpsCount + 1
+    if tick() - _lastFpsUpdate >= 1 then
+        _currentFPS    = _fpsCount
+        _fpsCount      = 0
+        _lastFpsUpdate = tick()
     end
 end)
 
+-- Loop de atualização do HUD
 task.spawn(function()
-    while task.wait(2) do
-        local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-        pingLabel:Set(string.format("Ping: %.0f ms", ping))
-    end
-end)
+    while task.wait(0.5) do
+        if not STATS_HUD_ENABLED then continue end
+        pcall(function()
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+            local playerCount = #Players:GetPlayers()
+            local maxPlayers  = Players.MaxPlayers
 
-task.spawn(function()
-    while task.wait(1) do
-        playersLabel:Set(string.format("Players: %d/%d", #Players:GetPlayers(), Players.MaxPlayers))
+            local hp, maxhp, speed, jump = "?", "?", "?", "?"
+            if Character and Humanoid then
+                hp     = math.floor(Humanoid.Health)
+                maxhp  = math.floor(Humanoid.MaxHealth)
+                speed  = math.floor(Humanoid.WalkSpeed)
+                jump   = math.floor(Humanoid.JumpPower)
+            end
+
+            statsText.Text = string.format(
+                "<b>FPS:</b> %d\n<b>Ping:</b> %.0f ms\n<b>Players:</b> %d/%d\n<b>HP:</b> %s/%s\n<b>Speed:</b> %s  <b>Jump:</b> %s",
+                _currentFPS, ping, playerCount, maxPlayers, hp, maxhp, speed, jump
+            )
+        end)
     end
 end)
 
 -- ==================================================================================
--- ================================ CONFIG TAB ==========================
+-- ============================== CONFIG TAB ========================================
 -- ==================================================================================
 
-TabConfig:CreateSection("Anti AFK")
-
-local ANTI_AFK_ENABLED = false
-
-local VirtualUser = game:GetService("VirtualUser")
-LP.Idled:Connect(function()
-    if ANTI_AFK_ENABLED then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end)
-
-TabConfig:CreateToggle({
-    Name = "Anti AFK",
-    CurrentValue = false,
-    Callback = function(v)
-        ANTI_AFK_ENABLED = v
-        if v then
-            Rayfield:Notify({
-                Title = "Anti AFK Ativado",
-                Content = "Você não será kickado por inatividade",
-                Duration = 2
-            })
-        end
-    end
-})
-
-TabConfig:CreateSection("⌨️ Keybinds Principais")
-
--- ==================== VARIÁVEIS DE KEYBIND ====================
-local keybindESP = Enum.KeyCode.E
-local keybindHighlight = Enum.KeyCode.H
-local keybindAim = Enum.KeyCode.R
-local keybindPlayerAim = Enum.KeyCode.T
-local keybindFly = Enum.KeyCode.F
-local keybindNoclip = Enum.KeyCode.N
-local keybindGodMode = Enum.KeyCode.G
-local keybindInfJump = Enum.KeyCode.J
+-- Keybind variables
+local keybindESP        = Enum.KeyCode.E
+local keybindHighlight  = Enum.KeyCode.H
+local keybindAim        = Enum.KeyCode.R
+local keybindPlayerAim  = Enum.KeyCode.T
+local keybindFly        = Enum.KeyCode.F
+local keybindNoclip     = Enum.KeyCode.N
+local keybindInfJump    = Enum.KeyCode.J
 local keybindAutoClicker = Enum.KeyCode.C
-local keybindFullbright = Enum.KeyCode.B
-local keybindGUI = Enum.KeyCode.RightControl
+local keybindGodMode    = Enum.KeyCode.G
+local keybindFullbright  = Enum.KeyCode.B
+local keybindGUI        = Enum.KeyCode.RightControl  -- exibido como "RCtrl"
 
--- ==================== ESP KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle ESP",
-    CurrentKeybind = "E",
-    HoldToInteract = false,
-    Flag = "KeybindESP",
+TabConfig:Section({ Title = "Keybinds de Movimento" })
+
+TabConfig:Keybind({
+    Title    = "Fly",
+    Flag     = "KeyFly",
+    Value    = "F",
     Callback = function(key)
-        keybindESP = key
+        keybindFly = type(key) == "string" and (Enum.KeyCode[key] or keybindFly) or key
     end
 })
 
--- ==================== HIGHLIGHT ESP KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Highlight ESP",
-    CurrentKeybind = "H",
-    HoldToInteract = false,
-    Flag = "KeybindHighlight",
+TabConfig:Keybind({
+    Title    = "Noclip",
+    Flag     = "KeyNoclip",
+    Value    = "N",
     Callback = function(key)
-        keybindHighlight = key
+        keybindNoclip = type(key) == "string" and (Enum.KeyCode[key] or keybindNoclip) or key
     end
 })
 
--- ==================== AIM ASSIST KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Aim Assist",
-    CurrentKeybind = "R",
-    HoldToInteract = false,
-    Flag = "KeybindAim",
+TabConfig:Keybind({
+    Title    = "Infinite Jump",
+    Flag     = "KeyInfJump",
+    Value    = "J",
     Callback = function(key)
-        keybindAim = key
+        keybindInfJump = type(key) == "string" and (Enum.KeyCode[key] or keybindInfJump) or key
     end
 })
 
--- ==================== PLAYER AIM KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Player Aim",
-    CurrentKeybind = "T",
-    HoldToInteract = false,
-    Flag = "KeybindPlayerAim",
+TabConfig:Section({ Title = "Keybinds de ESP" })
+
+TabConfig:Keybind({
+    Title    = "ESP",
+    Flag     = "KeyESP",
+    Value    = "E",
     Callback = function(key)
-        keybindPlayerAim = key
+        keybindESP = type(key) == "string" and (Enum.KeyCode[key] or keybindESP) or key
     end
 })
 
-TabConfig:CreateSection("⌨️ Keybinds de Movimento")
-
--- ==================== FLY KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Fly",
-    CurrentKeybind = "F",
-    HoldToInteract = false,
-    Flag = "KeybindFly",
+TabConfig:Keybind({
+    Title    = "Highlight ESP",
+    Flag     = "KeyHighlight",
+    Value    = "H",
     Callback = function(key)
-        keybindFly = key
+        keybindHighlight = type(key) == "string" and (Enum.KeyCode[key] or keybindHighlight) or key
     end
 })
 
--- ==================== NOCLIP KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Noclip",
-    CurrentKeybind = "N",
-    HoldToInteract = false,
-    Flag = "KeybindNoclip",
+TabConfig:Section({ Title = "Keybinds de Aim" })
+
+TabConfig:Keybind({
+    Title    = "Aim Assist",
+    Flag     = "KeyAimAssist",
+    Value    = "R",
     Callback = function(key)
-        keybindNoclip = key
+        keybindAim = type(key) == "string" and (Enum.KeyCode[key] or keybindAim) or key
     end
 })
 
--- ==================== INFINITE JUMP KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Infinite Jump",
-    CurrentKeybind = "J",
-    HoldToInteract = false,
-    Flag = "KeybindInfJump",
+TabConfig:Keybind({
+    Title    = "Player Aim",
+    Flag     = "KeyPlayerAim",
+    Value    = "T",
     Callback = function(key)
-        keybindInfJump = key
+        keybindPlayerAim = type(key) == "string" and (Enum.KeyCode[key] or keybindPlayerAim) or key
     end
 })
 
-TabConfig:CreateSection("⌨️ Keybinds de Combat")
+TabConfig:Section({ Title = "Keybinds de Combat" })
 
--- ==================== AUTO CLICKER KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Auto Clicker",
-    CurrentKeybind = "C",
-    HoldToInteract = false,
-    Flag = "KeybindAutoClicker",
+TabConfig:Keybind({
+    Title    = "Auto Clicker",
+    Flag     = "KeyAutoClicker",
+    Value    = "C",
     Callback = function(key)
-        keybindAutoClicker = key
+        keybindAutoClicker = type(key) == "string" and (Enum.KeyCode[key] or keybindAutoClicker) or key
     end
 })
 
-TabConfig:CreateSection("⌨️ Keybinds de Proteção")
+TabConfig:Section({ Title = "Keybinds de Proteção" })
 
--- ==================== GOD MODE KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle God Mode",
-    CurrentKeybind = "G",
-    HoldToInteract = false,
-    Flag = "KeybindGodMode",
+TabConfig:Keybind({
+    Title    = "God Mode",
+    Flag     = "KeyGodMode",
+    Value    = "G",
     Callback = function(key)
-        keybindGodMode = key
+        keybindGodMode = type(key) == "string" and (Enum.KeyCode[key] or keybindGodMode) or key
     end
 })
 
-TabConfig:CreateSection("⌨️ Keybinds Visuais")
+TabConfig:Section({ Title = "Keybinds Visuais" })
 
--- ==================== FULLBRIGHT KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle Fullbright",
-    CurrentKeybind = "B",
-    HoldToInteract = false,
-    Flag = "KeybindFullbright",
+TabConfig:Keybind({
+    Title    = "Fullbright",
+    Flag     = "KeyFullbright",
+    Value    = "B",
     Callback = function(key)
-        keybindFullbright = key
+        keybindFullbright = type(key) == "string" and (Enum.KeyCode[key] or keybindFullbright) or key
     end
 })
 
-TabConfig:CreateSection("⌨️ Keybind da GUI")
+TabConfig:Section({ Title = "Keybind da GUI" })
 
--- ==================== GUI TOGGLE KEYBIND ====================
-TabConfig:CreateKeybind({
-    Name = "Toggle GUI",
-    CurrentKeybind = "RightControl",
-    HoldToInteract = false,
-    Flag = "KeybindGUI",
+TabConfig:Keybind({
+    Title    = "Toggle GUI",
+    Flag     = "KeyGUI",
+    Value    = "RCtrl",
     Callback = function(key)
-        keybindGUI = key
+        keybindGUI = type(key) == "string" and (Enum.KeyCode[key] or keybindGUI) or key
     end
 })
 
--- ==================================================================================
--- ===================== SISTEMA DE DETECÇÃO DE KEYBINDS ===========================
--- ==================================================================================
-
+-- Keybind detection
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    
-    -- ESP TOGGLE
+
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
         refreshESP()
-        Rayfield:Notify({
-            Title = "ESP",
-            Content = ESP_ENABLED and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- HIGHLIGHT ESP TOGGLE
+        WindUI:Notify({ Title = "ESP", Content = ESP_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindHighlight then
         HIGHLIGHT_ENABLED = not HIGHLIGHT_ENABLED
         updateAllHighlights()
-        Rayfield:Notify({
-            Title = "Highlight ESP",
-            Content = HIGHLIGHT_ENABLED and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- AIM ASSIST TOGGLE
+        WindUI:Notify({ Title = "Highlight ESP", Content = HIGHLIGHT_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindAim then
         AIM_ENABLED = not AIM_ENABLED
         currentTarget = nil
-        Rayfield:Notify({
-            Title = "Aim Assist",
-            Content = AIM_ENABLED and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- PLAYER AIM TOGGLE
+        WindUI:Notify({ Title = "Aim Assist", Content = AIM_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindPlayerAim then
         if not TargetPlayerName then
-            Rayfield:Notify({
-                Title = "⚠️ Player Aim",
-                Content = "Selecione um jogador primeiro!",
-                Duration = 2
-            })
+            WindUI:Notify({ Title = "Player Aim", Content = "Selecione um jogador primeiro!", Duration = 2 })
             return
         end
-        
         PlayerAimEnabled = not PlayerAimEnabled
-        Rayfield:Notify({
-            Title = "Player Aim",
+        WindUI:Notify({ Title = "Player Aim",
             Content = PlayerAimEnabled and ("✅ Mirando em " .. tostring(TargetPlayerName)) or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- FLY TOGGLE
+            Duration = 1.5 })
+
     elseif input.KeyCode == keybindFly then
         local newState = not flyEnabled
         toggleFly(newState)
-        Rayfield:Notify({
-            Title = "Fly",
-            Content = newState and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- NOCLIP TOGGLE
+        WindUI:Notify({ Title = "Fly", Content = newState and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindNoclip then
         noclip = not noclip
-        Rayfield:Notify({
-            Title = "Noclip",
-            Content = noclip and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- INFINITE JUMP TOGGLE
+        WindUI:Notify({ Title = "Noclip", Content = noclip and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindInfJump then
         infJump = not infJump
-        Rayfield:Notify({
-            Title = "Infinite Jump",
-            Content = infJump and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- AUTO CLICKER TOGGLE
+        WindUI:Notify({ Title = "Infinite Jump", Content = infJump and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindAutoClicker then
         AUTO_CLICKER_ENABLED = not AUTO_CLICKER_ENABLED
-        if AUTO_CLICKER_ENABLED then 
-            lastClick = tick() 
-        end
-        Rayfield:Notify({
-            Title = "Auto Clicker",
-            Content = AUTO_CLICKER_ENABLED and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- GOD MODE TOGGLE
+        if AUTO_CLICKER_ENABLED then lastClick = tick() end
+        WindUI:Notify({ Title = "Auto Clicker", Content = AUTO_CLICKER_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindGodMode then
         godMode = not godMode
-        Rayfield:Notify({
-            Title = "God Mode",
-            Content = godMode and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- FULLBRIGHT TOGGLE
+        WindUI:Notify({ Title = "God Mode", Content = godMode and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindFullbright then
         FULLBRIGHT_ENABLED = not FULLBRIGHT_ENABLED
         toggleFullbright(FULLBRIGHT_ENABLED)
-        Rayfield:Notify({
-            Title = "Fullbright",
-            Content = FULLBRIGHT_ENABLED and "✅ Ativado" or "❌ Desativado",
-            Duration = 1.5
-        })
-    
-    -- GUI TOGGLE
+        WindUI:Notify({ Title = "Fullbright", Content = FULLBRIGHT_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
+
     elseif input.KeyCode == keybindGUI then
-        Rayfield:Toggle()
+        Window:Toggle()
     end
 end)
 
-TabConfig:CreateSection("🗑️ GUI")
+-- ==================================================================================
+-- ============================== CONFIG TAB - TEMA & CONFIG ========================
+-- ==================================================================================
 
-TabConfig:CreateButton({
-    Name = "Destruir GUI (Irreversível)",
+-- ===== SEÇÃO: PERSONALIZAÇÃO DE TEMA =====
+TabConfig:Section({ Title = "Personalização de Tema" })
+
+-- Cores padrão (Dark)
+local TC = {
+    Accent           = Color3.fromHex("#18181b"),
+    Background       = Color3.fromHex("#101010"),
+    Outline          = Color3.fromHex("#FFFFFF"),
+    Text             = Color3.fromHex("#FFFFFF"),
+    Placeholder      = Color3.fromHex("#7a7a7a"),
+    Button           = Color3.fromHex("#00ff00"),
+    Icon             = Color3.fromHex("#a1a1aa"),
+    Toggle           = Color3.fromHex("#52525b"),
+    Slider           = Color3.fromHex("#52525b"),
+    GradStart        = Color3.fromHex("#1f1f23"),
+    GradEnd          = Color3.fromHex("#18181b"),
+}
+
+local function applyTheme()
+    pcall(function()
+        WindUI:AddTheme({
+            Name = "CustomHub",
+            Accent                       = TC.Accent,
+            Background                   = TC.Background,
+            BackgroundTransparency       = 0,
+            Outline                      = TC.Outline,
+            Text                         = TC.Text,
+            Placeholder                  = TC.Placeholder,
+            Button                       = TC.Button,
+            Icon                         = TC.Icon,
+            Hover                        = TC.Text,
+            WindowBackground             = TC.Background,
+            WindowShadow                 = Color3.fromHex("#000000"),
+            DialogBackground             = TC.Background,
+            DialogBackgroundTransparency = 0,
+            DialogTitle                  = TC.Text,
+            DialogContent                = TC.Text,
+            DialogIcon                   = TC.Icon,
+            WindowTopbarButtonIcon       = TC.Icon,
+            WindowTopbarTitle            = TC.Text,
+            WindowTopbarAuthor           = TC.Text,
+            WindowTopbarIcon             = TC.Icon,
+            TabBackground                = TC.Text,
+            TabTitle                     = TC.Text,
+            TabIcon                      = TC.Icon,
+            ElementBackground            = TC.Text,
+            ElementTitle                 = TC.Text,
+            ElementDesc                  = TC.Text,
+            ElementIcon                  = TC.Icon,
+            PopupBackground              = TC.Background,
+            PopupBackgroundTransparency  = 0,
+            PopupTitle                   = TC.Text,
+            PopupContent                 = TC.Text,
+            PopupIcon                    = TC.Icon,
+            Toggle                       = TC.Toggle,
+            ToggleBar                    = Color3.fromHex("#FFFFFF"),
+            Checkbox                     = TC.Button,
+            CheckboxIcon                 = Color3.fromHex("#FFFFFF"),
+            Slider                       = TC.Slider,
+            SliderThumb                  = Color3.fromHex("#FFFFFF"),
+        })
+        WindUI:SetTheme("CustomHub")
+        WindUI:Gradient({
+            ["0"]   = { Color = TC.GradStart, Transparency = 0 },
+            ["100"] = { Color = TC.GradEnd,   Transparency = 0 },
+        }, { Rotation = 0 })
+    end)
+end
+
+TabConfig:Colorpicker({
+    Title    = "Background Color",
+    Flag     = "ThemeBG",
+    Value    = TC.Background,
+    Callback = function(c) TC.Background = c TC.WindowBackground = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Accent Color",
+    Flag     = "ThemeAccent",
+    Value    = TC.Accent,
+    Callback = function(c) TC.Accent = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Outline Color",
+    Flag     = "ThemeOutline",
+    Value    = TC.Outline,
+    Callback = function(c) TC.Outline = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Text Color",
+    Flag     = "ThemeText",
+    Value    = TC.Text,
+    Callback = function(c) TC.Text = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Placeholder Text Color",
+    Flag     = "ThemePlaceholder",
+    Value    = TC.Placeholder,
+    Callback = function(c) TC.Placeholder = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Button Color",
+    Flag     = "ThemeButton",
+    Value    = TC.Button,
+    Callback = function(c) TC.Button = c TC.Toggle = c TC.Slider = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Icon Color",
+    Flag     = "ThemeIcon",
+    Value    = TC.Icon,
+    Callback = function(c) TC.Icon = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Gradient Início",
+    Flag     = "ThemeGradStart",
+    Value    = TC.GradStart,
+    Callback = function(c) TC.GradStart = c end,
+})
+
+TabConfig:Colorpicker({
+    Title    = "Gradient Fim",
+    Flag     = "ThemeGradEnd",
+    Value    = TC.GradEnd,
+    Callback = function(c) TC.GradEnd = c end,
+})
+
+TabConfig:Button({
+    Title    = "Atualizar Tema",
+    Icon     = "sparkles",
+    Callback = function()
+        applyTheme()
+        WindUI:Notify({ Title = "Tema", Content = "✅ Tema aplicado!", Duration = 2 })
+    end,
+})
+
+-- ===== SEÇÃO: JANELA =====
+TabConfig:Section({ Title = "Janela" })
+
+TabConfig:Toggle({
+    Title    = "Desativar Notificações",
+    Flag     = "DisableNotif",
+    Value    = false,
+    Callback = function(v)
+        WindUI._notifDisabled = v
+    end,
+})
+
+-- Destruir GUI
+TabConfig:Button({
+    Title    = "Destruir GUI (Irreversível)",
+    Icon     = "trash-2",
     Callback = function()
         clearAllESP()
         removeAllHighlights()
-        Rayfield:Notify({
-            Title = "⚠️ GUI Destruída",
-            Content = "Recarregue o script para usar novamente",
-            Duration = 3
-        })
-        task.wait(1)
-        Rayfield:Destroy()
-    end
+        WindUI:Notify({ Title = "GUI", Content = "Recarregue o script para usar novamente", Duration = 3 })
+        task.wait(1.5)
+        Window:Destroy()
+    end,
 })
 
-TabConfig:CreateSection("📋 Lista de Keybinds")
-
-TabConfig:CreateLabel("ESP: E | Highlight: H")
-TabConfig:CreateLabel("Aim: R | Player Aim: T")
-TabConfig:CreateLabel("Fly: F | Noclip: N")
-TabConfig:CreateLabel("Inf Jump: J | Auto Click: C")
-TabConfig:CreateLabel("God Mode: G | Fullbright: B")
-TabConfig:CreateLabel("Toggle GUI: RightControl")
-
 -- ==================================================================================
--- FIM DA CONFIG TAB
+-- ============================== UTILITY TAB =======================================
 -- ==================================================================================
 
--- ==================================================================================
--- =============================== UTILITY TAB ======================================
--- ==================================================================================
+TabUtil:Section({ Title = "Noclip & ShiftLock" })
 
-TabUtil:CreateSection("Noclip")
-
-TabUtil:CreateToggle({
-    Name = "Noclip",
-    CurrentValue = false,
-    Callback = function(v)
-        noclip = v
-    end
+TabUtil:Toggle({
+    Title    = "Noclip",
+    Flag     = "UtilNoclip",
+    Value    = false,
+    Callback = function(v) noclip = v end
 })
 
--- ================== SHIFT LOCK SYSTEM (COMPLETO - SEM UI) ==================
-local shiftLockEnabled = false
-local shiftLockRotConnection
-local oldAutoRotate
+-- Shift Lock
+local shiftLockEnabled     = false
+local shiftLockRotConnection = nil
+local oldAutoRotate        = nil
 
-local function lockMouse(enabled)
+local function applyShiftLock(enabled)
+    if not Character or not Humanoid or not HRP then return end
+    shiftLockEnabled = enabled
     if UserInputService.MouseEnabled then
-        UserInputService.MouseBehavior = enabled and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+        UserInputService.MouseBehavior = enabled
+            and Enum.MouseBehavior.LockCenter
+            or  Enum.MouseBehavior.Default
     end
-end
-
-local function faceCameraDirection(humanoid, rootPart, enabled)
-    -- Desconecta conexão anterior se existir
-    if shiftLockRotConnection then
-        shiftLockRotConnection:Disconnect()
-        shiftLockRotConnection = nil
-    end
-    
+    if shiftLockRotConnection then shiftLockRotConnection:Disconnect(); shiftLockRotConnection = nil end
     if enabled then
-        -- Salva configuração original
-        oldAutoRotate = humanoid.AutoRotate
-        humanoid.AutoRotate = false
-        
-        -- Conecta sistema de rotação
+        oldAutoRotate = Humanoid.AutoRotate
+        Humanoid.AutoRotate = false
         shiftLockRotConnection = RunService.RenderStepped:Connect(function()
-            local camera = Workspace.CurrentCamera
-            if not rootPart or not camera then return end
-            
-            local lookVector = camera.CFrame.LookVector
+            local lookVector = Camera.CFrame.LookVector
             local flatVector = Vector3.new(lookVector.X, 0, lookVector.Z)
-            
             if flatVector.Magnitude > 0.0001 then
-                rootPart.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + flatVector.Unit, Vector3.yAxis)
+                HRP.CFrame = CFrame.lookAt(HRP.Position, HRP.Position + flatVector.Unit, Vector3.yAxis)
             end
         end)
     else
-        -- Restaura configuração original
-        if oldAutoRotate ~= nil then
-            humanoid.AutoRotate = oldAutoRotate
-        end
+        if oldAutoRotate ~= nil then Humanoid.AutoRotate = oldAutoRotate end
     end
 end
 
-local function applyShiftLock(enabled)
-    if not Character or not Humanoid or not HRP then 
-        task.wait(0.5)
-        if LP.Character then
-            BindCharacter(LP.Character)
-        end
-        return 
-    end
-    
-    shiftLockEnabled = enabled
-    lockMouse(enabled)
-    faceCameraDirection(Humanoid, HRP, enabled)
-end
-
--- Reaplica shift lock quando o personagem respawna
 LP.CharacterAdded:Connect(function()
     task.defer(function()
         task.wait(0.5)
-        if shiftLockEnabled then
-            applyShiftLock(true)
-        end
+        if shiftLockEnabled then applyShiftLock(true) end
     end)
 end)
 
--- Reaplica quando a câmera muda
-local lastCamera = Workspace.CurrentCamera
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-    local currentCamera = Workspace.CurrentCamera
-    if currentCamera ~= lastCamera then
-        lastCamera = currentCamera
-        if shiftLockEnabled then
-            task.defer(function()
-                applyShiftLock(true)
-            end)
-        end
-    end
-end)
-
-TabUtil:CreateToggle({
-    Name = "Shift Lock",
-    CurrentValue = false,
-    Callback = function(v)
-        applyShiftLock(v)
-    end
+TabUtil:Toggle({
+    Title = "Shift Lock",
+    Flag     = "ShiftLock",
+    Value = false,
+    Callback = function(v) applyShiftLock(v) end
 })
 
-TabUtil:CreateToggle({
-    Name = "Insta Interact",
-    CurrentValue = false,
+TabUtil:Toggle({
+    Title = "Insta Interact",
+    Flag     = "InstaInteract",
+    Value = false,
     Callback = function(v)
         _G.InstaInteract = v
-        if _G.InstaInteract then
-            _G.InstaInteractConnection = game:GetService("ProximityPromptService").PromptButtonHoldBegan:Connect(function(prompt)
+        if v then
+            _G.InstaInteractConnection = ProximityPromptService.PromptButtonHoldBegan:Connect(function(prompt)
                 fireproximityprompt(prompt)
             end)
         else
-            if _G.InstaInteractConnection then
-                _G.InstaInteractConnection:Disconnect()
-            end
+            if _G.InstaInteractConnection then _G.InstaInteractConnection:Disconnect() end
         end
     end
 })
 
-TabUtil:CreateSection("Server")
+TabUtil:Section({ Title = "Server" })
 
-TabUtil:CreateButton({
-    Name = "Rejoin",
-    Callback = function()
-        TeleportService:Teleport(game.PlaceId, LP)
-    end
+TabUtil:Button({
+    Title = "Rejoin",
+    Callback = function() TeleportService:Teleport(game.PlaceId, LP) end
 })
 
-TabUtil:CreateButton({
-    Name = "Server Hop",
+TabUtil:Button({
+    Title = "Server Hop",
     Callback = function()
-        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        local ok, servers = pcall(function()
+            return HttpService:JSONDecode(game:HttpGet(
+                "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            ))
+        end)
+        if not ok then
+            WindUI:Notify({ Title = "Erro", Content = "Falha ao obter servidores", Duration = 3 })
+            return
+        end
         for _, s in pairs(servers.data) do
             if s.playing < s.maxPlayers then
                 TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, LP)
@@ -3144,55 +2353,42 @@ TabUtil:CreateButton({
 local lastRuntimeUpdate = 0
 RunService.RenderStepped:Connect(function(dt)
     if not Character or not HRP or not Humanoid then return end
-
     local now = tick()
     if now - lastRuntimeUpdate < 0.033 then return end
     lastRuntimeUpdate = now
 
-    if flyUpImpulse > 0 then
-        flyUpImpulse = flyUpImpulse - dt
-    end
-
-    if flyEnabled then
-        if not HRP:FindFirstChild("FlyVel") then
-            local bv = Instance.new("BodyVelocity", HRP)
-            bv.Name = "FlyVel"
-            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-            local bg = Instance.new("BodyGyro", HRP)
-            bg.Name = "FlyGyro"
-            bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        end
-        local dir = Humanoid.MoveDirection
-        local vel = Vector3.new(dir.X, 0, dir.Z) * flySpeed
-        if flyUpImpulse > 0 then
-            vel = vel + Vector3.new(0, flySpeed, 0)
-        end
-        HRP.FlyVel.Velocity = vel
-        HRP.FlyGyro.CFrame = Camera.CFrame
-    end
-
+    -- Noclip
     if noclip then
         for _, p in pairs(Character:GetDescendants()) do
-            if p:IsA("BasePart") then
-                p.CanCollide = false
-            end
+            if p:IsA("BasePart") then p.CanCollide = false end
         end
     end
 
+    -- God Mode / Lock HP
     if godMode then
         Humanoid.MaxHealth = math.huge
-        Humanoid.Health = Humanoid.MaxHealth
+        Humanoid.Health    = Humanoid.MaxHealth
     elseif lockHP then
-        Humanoid.Health = Humanoid.MaxHealth
+        Humanoid.Health    = Humanoid.MaxHealth
     end
 
+    -- Anti Void
     if antiVoid and HRP.Position.Y < -80 then
         HRP.CFrame = HRP.CFrame + Vector3.new(0, 200, 0)
     end
 
+    -- Anti Knockback
     if antiKB then
         HRP.Velocity = HRP.Velocity * Vector3.new(0.8, 0.9, 0.8)
     end
+
+    -- Anti Fall (mantém HP ao cair)
+    if antiFall and Humanoid then
+        Humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+    end
 end)
 
-print("✅ Universal Hub Carregado - By ZakyzVortex!")
+-- Auto-load: carrega a HubConfig padrão ao iniciar (os Flags garantem restauração dos valores)
+pcall(function() hubConfig:Load() end)
+
+print("✅ Universal Hub v15 WindUI carregado - By ZakyzVortex!")
