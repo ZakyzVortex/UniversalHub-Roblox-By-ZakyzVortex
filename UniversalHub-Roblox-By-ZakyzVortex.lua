@@ -2272,8 +2272,8 @@ local TC = {
     Placeholder      = Color3.fromHex("#7a7a7a"),
     Button           = Color3.fromHex("#00ff00"),
     Icon             = Color3.fromHex("#a1a1aa"),
-    Toggle           = Color3.fromHex("#52525b"),
-    Slider           = Color3.fromHex("#52525b"),
+    Toggle           = Color3.fromHex("#00ff00"),
+    Slider           = Color3.fromHex("#00ff00"),
     GradStart        = Color3.fromHex("#1f1f23"),
     GradEnd          = Color3.fromHex("#18181b"),
 }
@@ -2398,6 +2398,26 @@ TabConfig:Button({
     Callback = function()
         applyTheme()
         WindUI:Notify({ Title = "Tema", Content = "✅ Tema aplicado!", Duration = 2 })
+    end,
+})
+
+TabConfig:Button({
+    Title    = "Resetar Tema (Padrão)",
+    Icon     = "rotate-ccw",
+    Callback = function()
+        TC.Accent      = Color3.fromHex("#18181b")
+        TC.Background  = Color3.fromHex("#101010")
+        TC.Outline     = Color3.fromHex("#FFFFFF")
+        TC.Text        = Color3.fromHex("#FFFFFF")
+        TC.Placeholder = Color3.fromHex("#7a7a7a")
+        TC.Button      = Color3.fromHex("#00ff00")
+        TC.Icon        = Color3.fromHex("#a1a1aa")
+        TC.Toggle      = Color3.fromHex("#00ff00")
+        TC.Slider      = Color3.fromHex("#00ff00")
+        TC.GradStart   = Color3.fromHex("#1f1f23")
+        TC.GradEnd     = Color3.fromHex("#18181b")
+        applyTheme()
+        WindUI:Notify({ Title = "Tema", Content = "🔄 Tema resetado ao padrão!", Duration = 2 })
     end,
 })
 
@@ -2570,5 +2590,11 @@ end)
 
 -- Auto-load: carrega a HubConfig padrão ao iniciar (os Flags garantem restauração dos valores)
 pcall(function() hubConfig:Load() end)
+
+-- Aplica o tema verde automaticamente ao iniciar
+task.spawn(function()
+    task.wait(1) -- aguarda a GUI renderizar completamente
+    applyTheme()
+end)
 
 print("✅ Universal Hub v16 WindUI carregado - By ZakyzVortex!")
