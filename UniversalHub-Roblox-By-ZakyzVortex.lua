@@ -1,4 +1,4 @@
--- ================== UNIVERSAL HUB v16 - WINDUI VERSION ==================
+-- ================== UNIVERSAL HUB - WINDUI VERSION ==================
 -- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
 
 -- ================== SERVICES ==================
@@ -429,43 +429,59 @@ TabCombat:Section({ Title = "Hit Range Extender" })
 
 local HIT_RANGE_ENABLED = false
 local HIT_RANGE_SIZE    = 10
-local originalSizes, originalTransparencies = {}, {}
+-- Salva tamanho/transparência originais do HRP para restaurar ao desativar
+local originalHRPData = {}
 
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
             if hrp and hrp:IsA("BasePart") then
-                if not originalSizes[player.UserId] then
-                    originalSizes[player.UserId]         = hrp.Size
-                    originalTransparencies[player.UserId] = hrp.Transparency
+                -- Salva dados originais na primeira vez
+                if not originalHRPData[player.UserId] then
+                    originalHRPData[player.UserId] = {
+                        Size         = hrp.Size,
+                        Transparency = hrp.Transparency,
+                        CanCollide   = hrp.CanCollide,
+                    }
                 end
-                if HIT_RANGE_ENABLED then
-                    hrp.Size         = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
-                    hrp.Transparency = 0.7
-                    hrp.CanCollide   = false
-                    hrp.Massless     = true
-                else
-                    hrp.Size         = originalSizes[player.UserId] or Vector3.new(2,2,1)
-                    hrp.Transparency = originalTransparencies[player.UserId] or 1
-                    hrp.CanCollide   = false
-                    hrp.Massless     = false
-                end
+                -- Expande o HRP (é assim que o dano funciona — jogos checam o HRP)
+                -- SEM Massless=true para não travar o personagem
+                hrp.Size         = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
+                hrp.Transparency = 0.7
+                hrp.CanCollide   = false
             end
         end
     end
 end
 
+local function restoreHitboxes()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local data = originalHRPData[player.UserId]
+            if hrp and data then
+                hrp.Size         = data.Size
+                hrp.Transparency = data.Transparency
+                hrp.CanCollide   = data.CanCollide
+            end
+        end
+    end
+    originalHRPData = {}
+end
+
 Players.PlayerRemoving:Connect(function(player)
-    originalSizes[player.UserId]         = nil
-    originalTransparencies[player.UserId] = nil
+    originalHRPData[player.UserId] = nil
 end)
 
 TabCombat:Toggle({
     Title = "Ativar Hit Range Extender",
     Flag     = "HitRange",
     Value = false,
-    Callback = function(v) HIT_RANGE_ENABLED = v extendHitboxes() end
+    Callback = function(v)
+        HIT_RANGE_ENABLED = v
+        if v then extendHitboxes() else restoreHitboxes() end
+    end
 })
 
 TabCombat:Slider({
@@ -479,12 +495,9 @@ TabCombat:Slider({
     end
 })
 
-local _lastHitboxUpdate = 0
-RunService.Heartbeat:Connect(function()
+-- Roda todo frame para manter o tamanho (o servidor pode resetar o HRP)
+RunService.RenderStepped:Connect(function()
     if not HIT_RANGE_ENABLED then return end
-    local now = tick()
-    if now - _lastHitboxUpdate < 0.5 then return end
-    _lastHitboxUpdate = now
     extendHitboxes()
 end)
 
@@ -2597,4 +2610,4 @@ task.spawn(function()
     applyTheme()
 end)
 
-print("✅ Universal Hub v16 WindUI carregado - By ZakyzVortex!")
+print("✅ Universal Hub WindUI carregado - By ZakyzVortex!")
