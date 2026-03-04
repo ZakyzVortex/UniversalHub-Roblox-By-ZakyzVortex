@@ -7,6 +7,7 @@ local RunService      = game:GetService("RunService")
 local Lighting        = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local UserInputService= game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local HttpService     = game:GetService("HttpService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 
@@ -2001,8 +2002,9 @@ end
 
 local statsFrame = Instance.new("Frame")
 statsFrame.Name                 = "StatsFrame"
-statsFrame.Size                 = UDim2.new(0, 210, 0, 110)
-statsFrame.Position             = UDim2.new(1, -218, 0, 70)   -- canto superior DIREITO, abaixo da barra FPS/CPU/GPU
+statsFrame.Size                 = UDim2.new(0, 210, 0, 0)       -- altura auto
+statsFrame.AutomaticSize        = Enum.AutomaticSize.Y          -- cresce com o conteúdo
+statsFrame.Position             = UDim2.new(1, -218, 0, 70)
 statsFrame.BackgroundColor3     = Color3.fromRGB(10, 10, 10)
 statsFrame.BackgroundTransparency = 0.35
 statsFrame.BorderSizePixel      = 0
@@ -2013,10 +2015,18 @@ local statsCorner = Instance.new("UICorner")
 statsCorner.CornerRadius = UDim.new(0, 6)
 statsCorner.Parent       = statsFrame
 
+-- Padding interno para não colar texto na borda
+local statsPad = Instance.new("UIPadding")
+statsPad.PaddingTop    = UDim.new(0, 5)
+statsPad.PaddingBottom = UDim.new(0, 5)
+statsPad.PaddingLeft   = UDim.new(0, 6)
+statsPad.PaddingRight  = UDim.new(0, 6)
+statsPad.Parent        = statsFrame
+
 local statsText = Instance.new("TextLabel")
 statsText.Name                   = "StatsText"
-statsText.Size                   = UDim2.new(1, -10, 1, -6)
-statsText.Position               = UDim2.new(0, 5, 0, 3)
+statsText.Size                   = UDim2.new(1, 0, 0, 0)        -- largura 100%, altura auto
+statsText.AutomaticSize          = Enum.AutomaticSize.Y
 statsText.BackgroundTransparency = 1
 statsText.TextColor3             = Color3.fromRGB(220, 220, 220)
 statsText.TextSize               = 12
@@ -2024,6 +2034,7 @@ statsText.Font                   = Enum.Font.Code
 statsText.TextXAlignment         = Enum.TextXAlignment.Left
 statsText.TextYAlignment         = Enum.TextYAlignment.Top
 statsText.RichText               = true
+statsText.TextWrapped            = false
 statsText.Text                   = "Carregando stats..."
 statsText.Parent                 = statsFrame
 
@@ -2093,7 +2104,8 @@ local keybindInfJump    = Enum.KeyCode.J
 local keybindAutoClicker = Enum.KeyCode.C
 local keybindGodMode    = Enum.KeyCode.G
 local keybindFullbright  = Enum.KeyCode.B
-local keybindGUI        = Enum.KeyCode.RightControl  -- exibido como "RCtrl"
+local keybindAimLock    = Enum.KeyCode.L
+local keybindGUI        = Enum.KeyCode.RightControl
 
 TabConfig:Section({ Title = "Keybinds de Movimento" })
 
@@ -2197,6 +2209,18 @@ TabConfig:Keybind({
     end
 })
 
+TabConfig:Section({ Title = "Keybind Aim Lock" })
+
+TabConfig:Keybind({
+    Title    = "Aim Lock",
+    Flag     = "KeyAimLock",
+    Value    = "L",
+    Callback = function(key)
+        keybindAimLock = type(key) == "string" and (Enum.KeyCode[key] or keybindAimLock) or key
+        _bindAimLock()
+    end
+})
+
 TabConfig:Section({ Title = "Keybind da GUI" })
 
 TabConfig:Keybind({
@@ -2209,8 +2233,12 @@ TabConfig:Keybind({
 })
 
 -- Keybind detection
+-- Não usa "gameProcessed" porque jogos Roblox marcam quase todas as teclas como processadas,
+-- bloqueando os keybinds. Em vez disso, só ignora quando o foco está em um TextBox.
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+    -- Permite passar mesmo com gameProcessed=true, exceto se estiver digitando
+    if UserInputService:GetFocusedTextBox() then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
 
     if input.KeyCode == keybindESP then
         ESP_ENABLED = not ESP_ENABLED
@@ -2268,6 +2296,29 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         Window:Toggle()
     end
 end)
+
+-- Keybind dedicado para Aim Lock via ContextActionService
+-- (garante captura do input mesmo que o jogo marque como processado)
+local function _bindAimLock()
+    ContextActionService:UnbindAction("HubAimLock")
+    ContextActionService:BindAction("HubAimLock", function(_, inputState, _input)
+        if inputState ~= Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
+        if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
+
+        aimLockEnabled = not aimLockEnabled
+        if aimLockEnabled then
+            aimLockTarget = getAimLockTarget()
+            startAimLockLoop()
+            WindUI:Notify({ Title = "🔒 Aim Lock", Content = aimLockTarget and ("Trancado em: " .. aimLockTarget.Name) or "Nenhum alvo na frente", Duration = 2 })
+        else
+            stopAimLockLoop()
+            WindUI:Notify({ Title = "🔓 Aim Lock", Content = "Desativado", Duration = 1.5 })
+        end
+        if _aimLockRefresh then _aimLockRefresh() end
+        return Enum.ContextActionResult.Sink
+    end, false, keybindAimLock)
+end
+_bindAimLock()
 
 -- ==================================================================================
 -- ============================== CONFIG TAB - TEMA & CONFIG ========================
@@ -2460,8 +2511,299 @@ TabConfig:Button({
 })
 
 -- ==================================================================================
+-- ============================== AIM LOCK SYSTEM ===================================
+-- ==================================================================================
+
+local aimLockEnabled  = false
+local aimLockTarget   = nil
+local aimLockConn     = nil
+local AIM_LOCK_FOV    = 160
+local _aimLockRefresh = nil
+local aimLockPosFrozen = false  -- trava a posição do botão na tela
+
+-- Encontra o jogador vivo mais próximo da direção da câmera
+local function getAimLockTarget()
+    if not HRP then return nil end
+    local camPos  = Camera.CFrame.Position
+    local camLook = Camera.CFrame.LookVector
+    local best, bestDot = nil, math.cos(math.rad(AIM_LOCK_FOV / 2))
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local tHRP = player.Character:FindFirstChild("HumanoidRootPart")
+            local tHum = player.Character:FindFirstChildWhichIsA("Humanoid")
+            if tHRP and tHum and tHum.Health > 0 then
+                local dot = (tHRP.Position - camPos).Unit:Dot(camLook)
+                if dot > bestDot then
+                    bestDot = dot
+                    best    = player
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- Loop principal do aim lock
+local function startAimLockLoop()
+    if aimLockConn then aimLockConn:Disconnect() end
+    aimLockConn = RunService.RenderStepped:Connect(function()
+        if not aimLockEnabled then return end
+
+        -- Revalida o alvo se morreu ou saiu
+        if aimLockTarget then
+            local tHum = aimLockTarget.Character and aimLockTarget.Character:FindFirstChildWhichIsA("Humanoid")
+            if not tHum or tHum.Health <= 0 then
+                aimLockTarget = getAimLockTarget()
+            end
+        else
+            aimLockTarget = getAimLockTarget()
+        end
+
+        if not aimLockTarget or not aimLockTarget.Character then return end
+        local tHRP  = aimLockTarget.Character:FindFirstChild("HumanoidRootPart")
+        local tHead = aimLockTarget.Character:FindFirstChild("Head")
+        if not tHRP then return end
+
+        local targetPos = tHead and tHead.Position or tHRP.Position
+        local camPos    = Camera.CFrame.Position
+
+        -- Tranca a câmera apontando pro alvo (funciona em 1ª e 3ª pessoa)
+        Camera.CFrame = CFrame.lookAt(camPos, targetPos)
+    end)
+end
+
+local function stopAimLockLoop()
+    if aimLockConn then aimLockConn:Disconnect(); aimLockConn = nil end
+    aimLockTarget = nil
+end
+
+-- ================== PADLOCK GUI (fora da UI principal) ==================
+local _aimLockGui = nil
+
+local function buildLockButton()
+    pcall(function()
+        local guiParent = (gethui and gethui()) or game:GetService("CoreGui")
+
+        -- Remove instância anterior se existir
+        local old = guiParent:FindFirstChild("AimLockPadlock")
+        if old then old:Destroy() end
+
+        local sg = Instance.new("ScreenGui")
+        sg.Name              = "AimLockPadlock"
+        sg.ResetOnSpawn      = false
+        sg.ZIndexBehavior    = Enum.ZIndexBehavior.Sibling
+        sg.IgnoreGuiInset    = true
+        sg.Enabled           = false   -- começa oculto
+        sg.Parent            = guiParent
+        _aimLockGui          = sg
+
+        -- Frame externo (sombra / glow)
+        local glow = Instance.new("Frame")
+        glow.Name             = "Glow"
+        glow.Size             = UDim2.fromOffset(58, 58)
+        glow.Position         = UDim2.fromOffset(30, 300)
+        glow.BackgroundColor3 = Color3.fromRGB(0, 255, 80)
+        glow.BackgroundTransparency = 1
+        glow.BorderSizePixel  = 0
+        glow.ZIndex           = 10
+        glow.Parent           = sg
+        Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 14)
+
+        -- Botão principal
+        local btn = Instance.new("TextButton")
+        btn.Name                  = "LockBtn"
+        btn.Size                  = UDim2.fromOffset(52, 52)
+        btn.Position              = UDim2.fromOffset(3, 3)
+        btn.BackgroundColor3      = Color3.fromRGB(22, 22, 28)
+        btn.BackgroundTransparency = 0.08
+        btn.BorderSizePixel       = 0
+        btn.Text                  = "🔓"
+        btn.TextSize              = 26
+        btn.Font                  = Enum.Font.GothamBold
+        btn.ZIndex                = 11
+        btn.Parent                = glow
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+
+        -- Borda do botão
+        local stroke = Instance.new("UIStroke")
+        stroke.Color     = Color3.fromRGB(50, 50, 60)
+        stroke.Thickness = 1.5
+        stroke.Parent    = btn
+
+        -- Label "AIM LOCK" abaixo
+        local label = Instance.new("TextLabel")
+        label.Size                  = UDim2.fromOffset(72, 16)
+        label.Position              = UDim2.new(0.5, -36, 1, 4)
+        label.BackgroundTransparency = 1
+        label.Text                  = "AIM LOCK"
+        label.TextColor3            = Color3.fromRGB(160, 160, 180)
+        label.TextSize              = 9
+        label.Font                  = Enum.Font.GothamBold
+        label.ZIndex                = 11
+        label.Parent                = glow
+
+        -- Função que atualiza visual do botão
+        local function refreshVisual()
+            if aimLockEnabled then
+                btn.Text              = "🔒"
+                btn.BackgroundColor3  = Color3.fromRGB(10, 32, 18)
+                stroke.Color          = Color3.fromRGB(0, 255, 80)
+                glow.BackgroundTransparency = 0.82
+                label.TextColor3      = Color3.fromRGB(0, 255, 80)
+            else
+                btn.Text              = "🔓"
+                btn.BackgroundColor3  = Color3.fromRGB(22, 22, 28)
+                stroke.Color          = Color3.fromRGB(50, 50, 60)
+                glow.BackgroundTransparency = 1
+                label.TextColor3      = Color3.fromRGB(160, 160, 180)
+            end
+        end
+        -- Expõe refreshVisual para o toggle da aba poder atualizar o visual
+        _aimLockRefresh = refreshVisual
+
+        -- ===== DRAG + TAP (mobile-safe) =====
+        -- O TextButton (btn) fica em cima do glow e intercepta todos os toques.
+        -- Por isso usamos os eventos do btn como origem do drag.
+        -- Distinguimos tap de arraste pela distância percorrida (> DRAG_THRESHOLD = drag).
+        local DRAG_THRESHOLD = 10
+        local dragging   = false
+        local wasDragged = false
+        local dragStart  = nil
+        local startPos   = nil
+
+        btn.AutoButtonColor = false  -- evita conflito visual com o drag
+
+        -- Função interna para executar o toggle do aim lock
+        local function doAimLockToggle()
+            aimLockEnabled = not aimLockEnabled
+            if aimLockEnabled then
+                aimLockTarget = getAimLockTarget()
+                startAimLockLoop()
+                WindUI:Notify({ Title = "🔒 Aim Lock", Content = aimLockTarget and ("Trancado em: " .. aimLockTarget.Name) or "Nenhum alvo na frente", Duration = 2 })
+            else
+                stopAimLockLoop()
+                WindUI:Notify({ Title = "🔓 Aim Lock", Content = "Desativado", Duration = 1.5 })
+            end
+            refreshVisual()
+        end
+
+        -- Toque/clique começa no botão
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+                if aimLockPosFrozen then
+                    -- Posição travada: tap direto no InputBegan (sem esperar o soltar)
+                    doAimLockToggle()
+                    return
+                end
+                dragging   = true
+                wasDragged = false
+                dragStart  = input.Position
+                startPos   = glow.Position
+            end
+        end)
+
+        -- Movimento global → move o botão se passou do threshold
+        UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+                local delta = input.Position - dragStart
+                if delta.Magnitude > DRAG_THRESHOLD then
+                    wasDragged = true
+                end
+                if wasDragged then
+                    glow.Position = UDim2.fromOffset(
+                        startPos.X.Offset + delta.X,
+                        startPos.Y.Offset + delta.Y
+                    )
+                end
+            end
+        end)
+
+        -- Soltar: se não arrastou = tap → toggle aim lock
+        UserInputService.InputEnded:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+                if not wasDragged then
+                    doAimLockToggle()
+                end
+                dragging   = false
+                wasDragged = false
+            end
+        end)
+
+        refreshVisual()
+    end)
+end
+
+-- Reconstrói o botão ao respawnar
+LP.CharacterAdded:Connect(function()
+    task.wait(1)
+    buildLockButton()
+end)
+
+-- Cria o botão ao carregar o script
+task.spawn(function()
+    task.wait(1.5)
+    buildLockButton()
+end)
+
+-- ==================================================================================
 -- ============================== UTILITY TAB =======================================
 -- ==================================================================================
+
+TabUtil:Section({ Title = "Aim Lock" })
+
+TabUtil:Toggle({
+    Title    = "Mostrar Botão Aim Lock",
+    Flag     = "AimLockToggle",
+    Value    = false,
+    Callback = function(v)
+        -- Mostra ou esconde o botão flutuante na tela
+        if _aimLockGui then
+            _aimLockGui.Enabled = v
+        end
+        if not v then
+            -- Se esconder, desativa o aim lock também
+            aimLockEnabled = false
+            stopAimLockLoop()
+            if _aimLockRefresh then _aimLockRefresh() end
+        end
+    end,
+})
+
+TabUtil:Slider({
+    Title = "FOV do Aim Lock",
+    Flag  = "AimLockFOV",
+    Step  = 5,
+    Value = { Min = 30, Max = 360, Default = 160 },
+    Callback = function(v) AIM_LOCK_FOV = v end,
+})
+
+TabUtil:Toggle({
+    Title    = "Travar Posição do Botão",
+    Flag     = "AimLockPosLock",
+    Value    = false,
+    Callback = function(v)
+        aimLockPosFrozen = v
+        -- Feedback visual: borda laranja quando travado
+        if _aimLockGui then
+            local btn    = _aimLockGui.Glow and _aimLockGui.Glow:FindFirstChild("LockBtn")
+            local stroke = btn and btn:FindFirstChildWhichIsA("UIStroke")
+            if stroke and not aimLockEnabled then
+                stroke.Color = v and Color3.fromRGB(255, 160, 0) or Color3.fromRGB(50, 50, 60)
+            end
+        end
+        WindUI:Notify({
+            Title   = v and "📌 Posição Travada" or "📌 Posição Livre",
+            Content = v and "Botão fixo — arraste desativado" or "Botão pode ser arrastado",
+            Duration = 2
+        })
+    end,
+})
 
 TabUtil:Section({ Title = "Noclip & ShiftLock" })
 
