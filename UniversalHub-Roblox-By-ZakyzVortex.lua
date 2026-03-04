@@ -7,7 +7,6 @@ local RunService      = game:GetService("RunService")
 local Lighting        = game:GetService("Lighting")
 local TeleportService = game:GetService("TeleportService")
 local UserInputService= game:GetService("UserInputService")
-local ContextActionService = game:GetService("ContextActionService")
 local HttpService     = game:GetService("HttpService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 
@@ -34,19 +33,6 @@ WindUI.Notify = function(self, data)
     return _originalNotify(self, data)
 end
 
--- ================== CAPTURE WINDOW CANVASGROUP (para toggle transparência) ==================
-local _windowCGs = {}  -- todos os CGs transparentes da janela
-task.spawn(function()
-    task.wait(2) -- garante que a janela já renderizou
-    pcall(function()
-        local guiRoot = (gethui and gethui()) or game:GetService("CoreGui")
-        for _, obj in pairs(guiRoot:GetDescendants()) do
-            if obj:IsA("CanvasGroup") and obj.GroupTransparency > 0 then
-                table.insert(_windowCGs, { cg = obj, original = obj.GroupTransparency })
-            end
-        end
-    end)
-end)
 local Character, Humanoid, HRP
 local function BindCharacter(char)
     Character = char
@@ -2107,6 +2093,10 @@ local keybindFullbright  = Enum.KeyCode.B
 local keybindAimLock    = Enum.KeyCode.L
 local keybindGUI        = Enum.KeyCode.RightControl
 
+-- Forward declarations das funções de aim lock
+-- (definidas mais abaixo, mas referenciadas no InputBegan)
+local getAimLockTarget, startAimLockLoop, stopAimLockLoop
+
 TabConfig:Section({ Title = "Keybinds de Movimento" })
 
 TabConfig:Keybind({
@@ -2217,7 +2207,6 @@ TabConfig:Keybind({
     Value    = "L",
     Callback = function(key)
         keybindAimLock = type(key) == "string" and (Enum.KeyCode[key] or keybindAimLock) or key
-        _bindAimLock()
     end
 })
 
@@ -2292,19 +2281,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         toggleFullbright(FULLBRIGHT_ENABLED)
         WindUI:Notify({ Title = "Fullbright", Content = FULLBRIGHT_ENABLED and "✅ Ativado" or "❌ Desativado", Duration = 1.5 })
 
-    elseif input.KeyCode == keybindGUI then
-        Window:Toggle()
-    end
-end)
-
--- Keybind dedicado para Aim Lock via ContextActionService
--- (garante captura do input mesmo que o jogo marque como processado)
-local function _bindAimLock()
-    ContextActionService:UnbindAction("HubAimLock")
-    ContextActionService:BindAction("HubAimLock", function(_, inputState, _input)
-        if inputState ~= Enum.UserInputState.Begin then return Enum.ContextActionResult.Pass end
-        if UserInputService:GetFocusedTextBox() then return Enum.ContextActionResult.Pass end
-
+    elseif input.KeyCode == keybindAimLock then
         aimLockEnabled = not aimLockEnabled
         if aimLockEnabled then
             aimLockTarget = getAimLockTarget()
@@ -2315,10 +2292,11 @@ local function _bindAimLock()
             WindUI:Notify({ Title = "🔓 Aim Lock", Content = "Desativado", Duration = 1.5 })
         end
         if _aimLockRefresh then _aimLockRefresh() end
-        return Enum.ContextActionResult.Sink
-    end, false, keybindAimLock)
-end
-_bindAimLock()
+
+    elseif input.KeyCode == keybindGUI then
+        Window:Toggle()
+    end
+end)
 
 -- ==================================================================================
 -- ============================== CONFIG TAB - TEMA & CONFIG ========================
@@ -2522,7 +2500,7 @@ local _aimLockRefresh = nil
 local aimLockPosFrozen = false  -- trava a posição do botão na tela
 
 -- Encontra o jogador vivo mais próximo da direção da câmera
-local function getAimLockTarget()
+getAimLockTarget = function()
     if not HRP then return nil end
     local camPos  = Camera.CFrame.Position
     local camLook = Camera.CFrame.LookVector
@@ -2545,7 +2523,7 @@ local function getAimLockTarget()
 end
 
 -- Loop principal do aim lock
-local function startAimLockLoop()
+startAimLockLoop = function()
     if aimLockConn then aimLockConn:Disconnect() end
     aimLockConn = RunService.RenderStepped:Connect(function()
         if not aimLockEnabled then return end
@@ -2573,7 +2551,7 @@ local function startAimLockLoop()
     end)
 end
 
-local function stopAimLockLoop()
+stopAimLockLoop = function()
     if aimLockConn then aimLockConn:Disconnect(); aimLockConn = nil end
     aimLockTarget = nil
 end
@@ -2750,6 +2728,8 @@ task.spawn(function()
     task.wait(1.5)
     buildLockButton()
 end)
+
+-- Ativa o keybind do Aim Lock agora que getAimLockTarget/startAimLockLoop/stopAimLockLoop existem
 
 -- ==================================================================================
 -- ============================== UTILITY TAB =======================================
