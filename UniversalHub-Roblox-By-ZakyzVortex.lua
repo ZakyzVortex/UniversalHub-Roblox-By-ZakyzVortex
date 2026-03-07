@@ -2757,6 +2757,219 @@ end)
 -- Ativa o keybind do Aim Lock agora que getAimLockTarget/startAimLockLoop/stopAimLockLoop existem
 
 -- ==================================================================================
+-- ============================== INVENTORY ESP =====================================
+-- ==================================================================================
+
+local INV_ESP_ENABLED = false
+local INV_ESP_MAX     = 5
+
+local _INV_BASE_BOX   = 34
+local _INV_BASE_GUI_W = 200
+local _INV_BASE_GUI_H = 40
+
+-- Tabela de estado por jogador: [player] = { gui, holder, layout, conns, lastScale }
+local _invData = {}
+
+local function _invDestroyPlayer(player)
+    local d = _invData[player]
+    if not d then return end
+    for _, c in ipairs(d.conns) do pcall(function() c:Disconnect() end) end
+    pcall(function() if d.gui then d.gui:Destroy() end end)
+    _invData[player] = nil
+end
+
+-- Reconstrói as caixas de item para um jogador (chamado por eventos de inventário ou mudança de escala)
+local function _invBuildBoxes(d, player, char, scale)
+    local holder = d.holder
+    local layout = d.layout
+
+    for _, v in ipairs(holder:GetChildren()) do
+        if v:IsA("Frame") then v:Destroy() end
+    end
+
+    local boxSize = math.max(16, math.round(_INV_BASE_BOX * scale))
+    layout.Padding = UDim.new(0, math.max(2, math.round(4 * scale)))
+
+    -- Coleta itens: equipados primeiro (destacados em verde), depois mochila
+    local items      = {}
+    local equippedSet = {}
+
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(items, { tool = tool, equipped = true })
+            equippedSet[tool] = true
+        end
+    end
+
+    local okBP, bp = pcall(function() return player.Backpack end)
+    if okBP and bp then
+        for _, tool in ipairs(bp:GetChildren()) do
+            if tool:IsA("Tool") and not equippedSet[tool] then
+                table.insert(items, { tool = tool, equipped = false })
+            end
+        end
+    end
+
+    for i, entry in ipairs(items) do
+        if i > INV_ESP_MAX then break end
+
+        local tool = entry.tool
+        local img  = tool.TextureId or ""
+        if img == "" then
+            local handle = tool:FindFirstChild("Handle")
+            if handle then
+                local decal = handle:FindFirstChildOfClass("Decal")
+                if decal then img = decal.Texture end
+            end
+        end
+
+        -- Caixa principal
+        local box = Instance.new("Frame")
+        box.Size                  = UDim2.new(0, boxSize, 0, boxSize)
+        box.BackgroundColor3      = entry.equipped
+            and Color3.fromRGB(8, 38, 14)
+            or  Color3.fromRGB(15, 15, 15)
+        box.BackgroundTransparency = 0.2
+        box.BorderSizePixel       = 0
+        box.Parent                = holder
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 6)
+        corner.Parent = box
+
+        -- Borda verde = equipado | branca = mochila
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness    = entry.equipped and 2 or 1.2
+        stroke.Color        = entry.equipped
+            and Color3.fromRGB(0, 220, 75)
+            or  Color3.fromRGB(220, 220, 220)
+        stroke.Transparency = entry.equipped and 0.05 or 0.45
+        stroke.Parent       = box
+
+        local imgLabel = Instance.new("ImageLabel")
+        imgLabel.Size                 = UDim2.new(1, -6, 1, -6)
+        imgLabel.Position             = UDim2.new(0, 3, 0, 3)
+        imgLabel.BackgroundTransparency = 1
+        imgLabel.Image                = img ~= "" and img or "rbxasset://textures/ui/GuiImagePlaceholder.png"
+        imgLabel.ScaleType            = Enum.ScaleType.Fit
+        imgLabel.Parent               = box
+    end
+end
+
+local function _invSetupPlayer(player)
+    if player == LP then return end
+
+    local function onChar(char)
+        if not char or not char.Parent then return end
+        _invDestroyPlayer(player)
+
+        local head = char:WaitForChild("Head", 10)
+        if not head then return end
+
+        local gui = Instance.new("BillboardGui")
+        gui.Name         = "InvESP"
+        gui.Adornee      = head
+        gui.Size         = UDim2.new(0, _INV_BASE_GUI_W, 0, _INV_BASE_GUI_H)
+        gui.StudsOffset  = Vector3.new(0, 2.6, 0)
+        gui.AlwaysOnTop  = true
+        gui.ResetOnSpawn = false
+        gui.Enabled      = INV_ESP_ENABLED
+        gui.Parent       = head
+
+        local holder = Instance.new("Frame")
+        holder.Size                 = UDim2.new(1, 0, 1, 0)
+        holder.BackgroundTransparency = 1
+        holder.Parent               = gui
+
+        local layout = Instance.new("UIListLayout")
+        layout.FillDirection        = Enum.FillDirection.Horizontal
+        layout.HorizontalAlignment  = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment    = Enum.VerticalAlignment.Center
+        layout.Padding              = UDim.new(0, 4)
+        layout.Parent               = holder
+
+        local d = { gui = gui, holder = holder, layout = layout, conns = {}, lastScale = -1 }
+        _invData[player] = d
+
+        local function safeConn(sig, fn)
+            local ok, c = pcall(function() return sig:Connect(fn) end)
+            if ok then table.insert(d.conns, c) end
+        end
+
+        -- Atualiza caixas quando inventário muda (event-driven, sem polling)
+        local function onInvChange()
+            if not INV_ESP_ENABLED then return end
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local scale = root
+                and math.clamp(1 - (Camera.CFrame.Position - root.Position).Magnitude / 200, 0.4, 1)
+                or 1
+            d.lastScale = scale
+            _invBuildBoxes(d, player, char, scale)
+        end
+
+        local okBP, bp = pcall(function() return player.Backpack end)
+        if okBP and bp then
+            safeConn(bp.ChildAdded,   onInvChange)
+            safeConn(bp.ChildRemoved, onInvChange)
+        end
+        safeConn(char.ChildAdded,   onInvChange)
+        safeConn(char.ChildRemoved, onInvChange)
+
+        -- Limpeza automática quando o personagem sai
+        safeConn(char.AncestryChanged, function()
+            if not char.Parent then _invDestroyPlayer(player) end
+        end)
+
+        if INV_ESP_ENABLED then _invBuildBoxes(d, player, char, 1) end
+    end
+
+    player.CharacterAdded:Connect(onChar)
+    if player.Character then task.spawn(onChar, player.Character) end
+end
+
+-- Loop de escala: throttle 10fps, compartilhado para todos os jogadores
+local _invScaleTick = 0
+RunService.RenderStepped:Connect(function()
+    if not INV_ESP_ENABLED then return end
+    local now = tick()
+    if now - _invScaleTick < 0.1 then return end
+    _invScaleTick = now
+
+    for player, d in pairs(_invData) do
+        if not d.gui or not d.gui.Parent then _invData[player] = nil; continue end
+        local char = player.Character
+        if not char then continue end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then continue end
+
+        local scale = math.clamp(1 - (Camera.CFrame.Position - root.Position).Magnitude / 200, 0.4, 1)
+        d.gui.Size = UDim2.new(0, _INV_BASE_GUI_W * scale, 0, _INV_BASE_GUI_H * scale)
+
+        -- Reconstrói só quando a escala muda o suficiente
+        if math.abs(scale - d.lastScale) > 0.025 then
+            d.lastScale = scale
+            _invBuildBoxes(d, player, char, scale)
+        end
+    end
+end)
+
+-- Helper: rebuild de todos (usado pelo toggle e pelo slider)
+local function _invRebuildAll()
+    for player, d in pairs(_invData) do
+        local char = player.Character
+        if char then
+            local s = math.max(d.lastScale, 0.4)
+            _invBuildBoxes(d, player, char, s)
+        end
+    end
+end
+
+-- Inicializa para jogadores já presentes
+for _, p in ipairs(Players:GetPlayers()) do _invSetupPlayer(p) end
+Players.PlayerAdded:Connect(_invSetupPlayer)
+Players.PlayerRemoving:Connect(_invDestroyPlayer)
+
+-- ==================================================================================
 -- ============================== UTILITY TAB =======================================
 -- ==================================================================================
 
@@ -2807,6 +3020,37 @@ TabUtil:Toggle({
             Content = v and "Botão fixo — arraste desativado" or "Botão pode ser arrastado",
             Duration = 2
         })
+    end,
+})
+
+TabUtil:Section({ Title = "Inventory ESP" })
+
+TabUtil:Toggle({
+    Title    = "Mostrar Inventário ESP",
+    Flag     = "InvESPEnabled",
+    Value    = false,
+    Callback = function(v)
+        INV_ESP_ENABLED = v
+        for _, d in pairs(_invData) do
+            if d.gui then d.gui.Enabled = v end
+        end
+        if v then _invRebuildAll() end
+        WindUI:Notify({
+            Title   = "🎒 Inventory ESP",
+            Content = v and "Ativado — itens verdes = equipados" or "Desativado",
+            Duration = 2,
+        })
+    end,
+})
+
+TabUtil:Slider({
+    Title = "Máx. Itens Visíveis",
+    Flag  = "InvESPMax",
+    Step  = 1,
+    Value = { Min = 1, Max = 10, Default = 5 },
+    Callback = function(v)
+        INV_ESP_MAX = v
+        if INV_ESP_ENABLED then _invRebuildAll() end
     end,
 })
 
