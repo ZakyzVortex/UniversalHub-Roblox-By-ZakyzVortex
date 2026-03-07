@@ -237,7 +237,7 @@ local function toggleFly(enabled)
             spawn(function()
                 local maxspeed, speed = 50, 0
                 while flyEnabled and hum.Health > 0 do
-                    wait()
+                    task.wait()
                     if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
                         speed = math.min(speed + 0.5 + speed / maxspeed, maxspeed)
                     elseif speed ~= 0 then
@@ -337,7 +337,7 @@ end)
 
 -- Reset ao morrer/respawn
 LP.CharacterAdded:Connect(function(char)
-    wait(0.7)
+    task.wait(0.7)
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then hum.PlatformStand = false end
     pcall(function() char.Animate.Disabled = false end)
@@ -482,9 +482,13 @@ TabCombat:Slider({
     end
 })
 
--- Roda todo frame para manter o tamanho (o servidor pode resetar o HRP)
+-- Roda com throttle de 0.1s para manter o tamanho sem sobrecarregar o GC
+local _lastHitboxUpdate = 0
 RunService.RenderStepped:Connect(function()
     if not HIT_RANGE_ENABLED then return end
+    local _now = tick()
+    if _now - _lastHitboxUpdate < 0.1 then return end
+    _lastHitboxUpdate = _now
     extendHitboxes()
 end)
 
@@ -641,6 +645,9 @@ end
 
 -- ESP render loop
 local lastESPUpdate = 0
+-- Variáveis reutilizáveis para evitar alocações de Vector2 a cada frame
+local _espScreenPos = Vector2.new(0, 0)
+local _espViewCenter = Vector2.new(0, 0)
 RunService.RenderStepped:Connect(function()
     local now = tick()
     if now - lastESPUpdate < 1/60 then return end
@@ -656,7 +663,7 @@ RunService.RenderStepped:Connect(function()
 
     local cam = Camera
     local viewportSize   = cam.ViewportSize
-    local viewportCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y)
+    _espViewCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y)
 
     for player, espData in pairs(ESP_OBJECTS) do
         if not espData.active then continue end
@@ -676,7 +683,7 @@ RunService.RenderStepped:Connect(function()
 
         local hrpPos     = hrp.Position
         local distance   = (hrpPos - HRP.Position).Magnitude
-        local screenPos, onScreen = cam:WorldToViewportPoint(hrpPos)
+        local sp, onScreen = cam:WorldToViewportPoint(hrpPos)
 
         -- Atualiza cor do ESP em tempo real
         if espData.txt     then espData.txt.TextColor3 = ESP_COLOR end
@@ -692,9 +699,10 @@ RunService.RenderStepped:Connect(function()
         end
 
         if espData.line and LINE_ENABLED then
-            if onScreen and screenPos.Z > 0 then
-                espData.line.From    = viewportCenter
-                espData.line.To      = Vector2.new(screenPos.X, screenPos.Y)
+            if onScreen and sp.Z > 0 then
+                _espScreenPos = Vector2.new(sp.X, sp.Y)
+                espData.line.From    = _espViewCenter
+                espData.line.To      = _espScreenPos
                 espData.line.Visible = true
             else
                 espData.line.Visible = false
@@ -703,7 +711,7 @@ RunService.RenderStepped:Connect(function()
             espData.line.Visible = false
         end
 
-        if espData.outline and OUTLINE_ENABLED and onScreen and screenPos.Z > 0 then
+        if espData.outline and OUTLINE_ENABLED and onScreen and sp.Z > 0 then
             local height, width = 2.5, 1.5
             local rightVector   = cam.CFrame.RightVector
             local corners = {
@@ -1014,12 +1022,13 @@ local AIM_WALLCHECK   = true
 local AIM_TEAM_FILTER = "Enemy Team"
 local currentTarget   = nil
 
+local _aimRayParams = RaycastParams.new()
+_aimRayParams.FilterType = Enum.RaycastFilterType.Blacklist
+
 local function isVisible(targetPart)
     if not targetPart or not HRP then return false end
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Blacklist
-    rp.FilterDescendantsInstances = { Character, targetPart.Parent }
-    local ray = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, rp)
+    _aimRayParams.FilterDescendantsInstances = { Character, targetPart.Parent }
+    local ray = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, _aimRayParams)
     return ray == nil
 end
 
@@ -1201,14 +1210,15 @@ local function CheckPlayerAimFOV(part)
     return (refPoint - Vector2.new(pos.X, pos.Y)).Magnitude <= PlayerAimFOVRadius
 end
 
+local _wallRayParams = RaycastParams.new()
+_wallRayParams.FilterType = Enum.RaycastFilterType.Exclude
+
 local function CheckPlayerAimWall(part)
     if not PlayerAimWallCheck then return true end
     local cam    = workspace.CurrentCamera
     local origin = cam.CFrame.Position
-    local rp     = RaycastParams.new()
-    rp.FilterDescendantsInstances = { LP.Character, part.Parent }
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    local result = workspace:Raycast(origin, part.Position - origin, rp)
+    _wallRayParams.FilterDescendantsInstances = { LP.Character, part.Parent }
+    local result = workspace:Raycast(origin, part.Position - origin, _wallRayParams)
     return not result or result.Instance:IsDescendantOf(part.Parent)
 end
 
@@ -1344,7 +1354,7 @@ end)
 
 -- Auto-refresh da lista a cada 5s (silencioso – não dispara callback)
 task.spawn(function()
-    while wait(5) do
+    while task.wait(5) do
         pcall(function()
             _isRefreshingAimList = true
             PlayerAimDropdown:Refresh(UpdatePlayerAimList())
@@ -1359,6 +1369,21 @@ end)
 
 local godMode, lockHP, antiKB, antiVoid = false, false, false, false
 local noclip = false  -- definido aqui, usado no runtime e no Utility Tab
+
+-- Cache de partes do personagem para o noclip (evita GetDescendants() todo frame)
+local _charPartsCache = {}
+local function _rebuildCharCache(char)
+    _charPartsCache = {}
+    if not char then return end
+    for _, p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then table.insert(_charPartsCache, p) end
+    end
+    char.DescendantAdded:Connect(function(d)
+        if d:IsA("BasePart") then table.insert(_charPartsCache, d) end
+    end)
+end
+if LP.Character then _rebuildCharCache(LP.Character) end
+LP.CharacterAdded:Connect(_rebuildCharCache)
 
 TabProt:Section({ Title = "Proteções" })
 
@@ -1897,7 +1922,7 @@ local function setupAdvancedAntiLag()
     end
 
     game.DescendantAdded:Connect(function(value)
-        wait(_G.LoadedWait or 1)
+        task.wait(_G.LoadedWait or 1)
         CheckIfBad(value)
     end)
 end
@@ -2894,8 +2919,8 @@ RunService.RenderStepped:Connect(function(dt)
 
     -- Noclip
     if noclip then
-        for _, p in pairs(Character:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = false end
+        for _, p in ipairs(_charPartsCache) do
+            if p and p.Parent then p.CanCollide = false end
         end
     end
 
