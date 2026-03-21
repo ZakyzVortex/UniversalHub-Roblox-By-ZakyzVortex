@@ -1,7 +1,3 @@
--- ================== UNIVERSAL HUB - WINDUI VERSION ==================
--- Universal Hub WindUI By ZakyzVortex (Mobile Optimized & Organized)
-
--- ================== SERVICES ==================
 local Players         = game:GetService("Players")
 local RunService      = game:GetService("RunService")
 local Lighting        = game:GetService("Lighting")
