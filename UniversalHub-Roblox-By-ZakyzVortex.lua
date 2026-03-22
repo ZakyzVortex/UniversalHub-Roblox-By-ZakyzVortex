@@ -917,7 +917,7 @@ do
         Title = "Transparência (NPC)",
         Flag  = "NPCAlpha",
         Step  = 0.05,
-        Value = { Min = 0, Max = 1, Default = 1 },
+        Value = { Min = 0, Max = 1, Default = 0.5 },
         Callback = function(v) NPC_ALPHA = v end
     })
 
@@ -1050,7 +1050,7 @@ do
         Title = "Transparência (Player)",
         Flag  = "PlayerAlpha",
         Step  = 0.05,
-        Value = { Min = 0, Max = 1, Default = 1 },
+        Value = { Min = 0, Max = 1, Default = 0.5 },
         Callback = function(v) PLAYER_ALPHA = v end
     })
 
