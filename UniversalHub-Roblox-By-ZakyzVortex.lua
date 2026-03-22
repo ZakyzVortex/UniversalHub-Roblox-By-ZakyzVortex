@@ -412,19 +412,274 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-TabCombat:Section({ Title = "Hit Range Extender" })
+TabCombat:Section({ Title = "Auto Clicker Alt" })
 
-local HIT_RANGE_ENABLED = false
-local HIT_RANGE_SIZE    = 10
--- Salva tamanho/transparência originais do HRP para restaurar ao desativar
-local originalHRPData = {}
+TabCombat:Button({
+    Title = "Ativar Auto Clicker Alt",
+    Callback = function()
+        pcall(function()
+            getgenv().key = "Hostile"
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Hosvile/The-telligence/main/MC%20KSystem%202"))()
+        end)
+        WindUI:Notify({ Title = "Auto Clicker Alt", Content = "Script carregado!", Duration = 2 })
+    end
+})
+
+TabCombat:Section({ Title = "Kill Aura" })
+
+do -- Kill Aura
+    local KA_ENABLED    = false
+    local KA_SIZE       = 10
+    local KA_DEATHCHECK = true
+
+    local function startKillAura()
+        -- Limpa instância anterior se existir
+        local prev = getgenv().configs
+        if prev then
+            local conns   = prev.connection
+            local disable = prev.Disable
+            if conns then for _, c in conns do pcall(function() c:Disconnect() end) end end
+            if disable then pcall(function() disable:Fire() disable:Destroy() end) end
+            table.clear(prev)
+        end
+
+        local Disable = Instance.new("BindableEvent")
+        getgenv().configs = {
+            connection   = {},
+            Disable      = Disable,
+            Size         = Vector3.new(KA_SIZE, KA_SIZE, KA_SIZE),
+            DeathCheck   = KA_DEATHCHECK,
+        }
+
+        local _Players    = cloneref(game:GetService("Players"))
+        local _RunService = cloneref(game:GetService("RunService"))
+        local lp          = _Players.LocalPlayer
+        local Run         = true
+        local Ignorelist  = OverlapParams.new()
+        Ignorelist.FilterType = Enum.RaycastFilterType.Include
+
+        local function getchar(plr) return (plr or lp).Character end
+        local function gethumanoid(plrOrChar)
+            local char = plrOrChar:IsA("Model") and plrOrChar or getchar(plrOrChar)
+            return char and char:FindFirstChildWhichIsA("Humanoid")
+        end
+        local function IsAlive(hum) return hum and hum.Health > 0 end
+        local function GetTouchInterest(tool)
+            return tool and tool:FindFirstChildWhichIsA("TouchTransmitter", true)
+        end
+        local function GetCharacters(localChar)
+            local chars = {}
+            for _, p in _Players:GetPlayers() do table.insert(chars, getchar(p)) end
+            local idx = table.find(chars, localChar)
+            if idx then table.remove(chars, idx) end
+            return chars
+        end
+        local function Attack(tool, touchPart, toTouch)
+            if tool:IsDescendantOf(workspace) then
+                tool:Activate()
+                firetouchinterest(touchPart, toTouch, 1)
+                firetouchinterest(touchPart, toTouch, 0)
+            end
+        end
+
+        table.insert(getgenv().configs.connection, Disable.Event:Connect(function()
+            Run = false
+        end))
+
+        task.spawn(function()
+            while Run do
+                local char = getchar()
+                if IsAlive(gethumanoid(char)) then
+                    local tool        = char and char:FindFirstChildWhichIsA("Tool")
+                    local touchInter  = tool and GetTouchInterest(tool)
+                    if touchInter then
+                        local touchPart = touchInter.Parent
+                        local chars     = GetCharacters(char)
+                        Ignorelist.FilterDescendantsInstances = chars
+                        local inBox = workspace:GetPartBoundsInBox(
+                            touchPart.CFrame,
+                            touchPart.Size + getgenv().configs.Size,
+                            Ignorelist
+                        )
+                        for _, v in inBox do
+                            local Character = v:FindFirstAncestorWhichIsA("Model")
+                            if table.find(chars, Character) then
+                                if getgenv().configs.DeathCheck then
+                                    if IsAlive(gethumanoid(Character)) then
+                                        Attack(tool, touchPart, v)
+                                    end
+                                else
+                                    Attack(tool, touchPart, v)
+                                end
+                            end
+                        end
+                    end
+                end
+                _RunService.Heartbeat:Wait()
+            end
+        end)
+    end
+
+    local function stopKillAura()
+        local cfg = getgenv().configs
+        if cfg then
+            local conns   = cfg.connection
+            local disable = cfg.Disable
+            if conns then for _, c in conns do pcall(function() c:Disconnect() end) end end
+            if disable then pcall(function() disable:Fire() disable:Destroy() end) end
+            table.clear(cfg)
+            getgenv().configs = nil
+        end
+    end
+
+    TabCombat:Toggle({
+        Title    = "Ativar Kill Aura",
+        Flag     = "KillAura",
+        Value    = false,
+        Callback = function(v)
+            KA_ENABLED = v
+            if v then startKillAura()
+            else stopKillAura() end
+        end
+    })
+
+    TabCombat:Slider({
+        Title = "Tamanho do Aura",
+        Flag  = "KillAuraSize",
+        Step  = 1,
+        Value = { Min = 1, Max = 200, Default = 10 },
+        Callback = function(v)
+            KA_SIZE = v
+            if getgenv().configs then
+                getgenv().configs.Size = Vector3.new(v, v, v)
+            end
+        end
+    })
+
+    TabCombat:Toggle({
+        Title    = "Death Check (não atacar mortos)",
+        Flag     = "KillAuraDeathCheck",
+        Value    = true,
+        Callback = function(v)
+            KA_DEATHCHECK = v
+            if getgenv().configs then
+                getgenv().configs.DeathCheck = v
+            end
+        end
+    })
+end -- Kill Aura
+
+TabCombat:Section({ Title = "Enemy Hitbox Extender" })
+
+local HIT_RANGE_ENABLED  = false
+local HIT_RANGE_SIZE     = 10
+local ENEMY_CIRCLE_SHOW  = true
+local ENEMY_CIRCLE_COLOR = Color3.fromRGB(255, 255, 255)
+local ENEMY_ALPHA        = 0.5
+local originalHRPData    = {}
+local enemyCircles       = {}  -- [UserId] = { lines = {Line,...} }
+
+local _SEGS = 4  -- quadrado = 4 vértices
+
+-- Pré-calcula os 4 cantos do quadrado unitário no plano XZ
+local _unitSquare = {
+    { x =  1, z =  1 },
+    { x = -1, z =  1 },
+    { x = -1, z = -1 },
+    { x =  1, z = -1 },
+}
+
+local function _makeRing(color)
+    local lines = {}
+    for i = 1, _SEGS do
+        local l = Drawing.new("Line")
+        l.Thickness    = 5
+        l.Transparency = 0
+        l.Color        = color
+        l.Visible      = false
+        lines[i]       = l
+    end
+    return lines
+end
+
+local function _hideRing(lines)
+    for _, l in ipairs(lines) do l.Visible = false end
+end
+
+local function _removeRing(lines)
+    for _, l in ipairs(lines) do pcall(function() l:Remove() end) end
+end
+
+local function _renderRing(lines, centerPos, radiusStuds, color, show, alpha)
+    if not show then _hideRing(lines); return end
+    local cam   = Camera
+    local camCF = cam.CFrame
+    local cx, cy, cz = centerPos.X, centerPos.Y, centerPos.Z
+    local trans = 1 - (alpha or 1)
+    local NEAR  = -0.1  -- plano near em camera space (Z negativo = frente)
+
+    for i = 1, _SEGS do
+        local n  = (i % _SEGS) + 1
+        local u1 = _unitSquare[i]
+        local u2 = _unitSquare[n]
+        local p1 = Vector3.new(cx + u1.x * radiusStuds, cy, cz + u1.z * radiusStuds)
+        local p2 = Vector3.new(cx + u2.x * radiusStuds, cy, cz + u2.z * radiusStuds)
+
+        -- Converte para camera space (Z negativo = na frente)
+        local c1 = camCF:PointToObjectSpace(p1)
+        local c2 = camCF:PointToObjectSpace(p2)
+        local in1 = c1.Z < NEAR
+        local in2 = c2.Z < NEAR
+
+        local from2, to2
+        local l = lines[i]
+
+        if not in1 and not in2 then
+            -- Ambos atrás: esconde
+            l.Visible = false
+            continue
+        elseif in1 and in2 then
+            -- Ambos na frente: projeta normalmente
+            local s1 = cam:WorldToViewportPoint(p1)
+            local s2 = cam:WorldToViewportPoint(p2)
+            from2 = Vector2.new(s1.X, s1.Y)
+            to2   = Vector2.new(s2.X, s2.Y)
+        else
+            -- Um na frente, outro atrás: clippa no near plane
+            local t    = (NEAR - c1.Z) / (c2.Z - c1.Z)
+            local clip = p1 + t * (p2 - p1)
+            local sc   = cam:WorldToViewportPoint(clip)
+            if in1 then
+                local s1 = cam:WorldToViewportPoint(p1)
+                from2 = Vector2.new(s1.X, s1.Y)
+                to2   = Vector2.new(sc.X,  sc.Y)
+            else
+                local s2 = cam:WorldToViewportPoint(p2)
+                from2 = Vector2.new(sc.X,  sc.Y)
+                to2   = Vector2.new(s2.X,  s2.Y)
+            end
+        end
+
+        l.From         = from2
+        l.To           = to2
+        l.Color        = color
+        l.Transparency = trans
+        l.Visible      = true
+    end
+end
+
+local function _removeEnemyCircle(uid)
+    if enemyCircles[uid] then
+        _removeRing(enemyCircles[uid])
+        enemyCircles[uid] = nil
+    end
+end
 
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
             local hrp = player.Character:FindFirstChild("HumanoidRootPart")
             if hrp and hrp:IsA("BasePart") then
-                -- Salva dados originais na primeira vez
                 if not originalHRPData[player.UserId] then
                     originalHRPData[player.UserId] = {
                         Size         = hrp.Size,
@@ -432,11 +687,13 @@ local function extendHitboxes()
                         CanCollide   = hrp.CanCollide,
                     }
                 end
-                -- Expande o HRP (é assim que o dano funciona — jogos checam o HRP)
-                -- SEM Massless=true para não travar o personagem
-                hrp.Size         = Vector3.new(HIT_RANGE_SIZE, HIT_RANGE_SIZE, HIT_RANGE_SIZE)
-                hrp.Transparency = 0.7
+                local origY = originalHRPData[player.UserId].Size.Y
+                hrp.Size         = Vector3.new(HIT_RANGE_SIZE, origY, HIT_RANGE_SIZE)
+                hrp.Transparency = 1
                 hrp.CanCollide   = false
+                if not enemyCircles[player.UserId] then
+                    enemyCircles[player.UserId] = _makeRing(ENEMY_CIRCLE_COLOR)
+                end
             end
         end
     end
@@ -445,7 +702,7 @@ end
 local function restoreHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LP and player.Character then
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local hrp  = player.Character:FindFirstChild("HumanoidRootPart")
             local data = originalHRPData[player.UserId]
             if hrp and data then
                 hrp.Size         = data.Size
@@ -453,18 +710,20 @@ local function restoreHitboxes()
                 hrp.CanCollide   = data.CanCollide
             end
         end
+        _removeEnemyCircle(player.UserId)
     end
     originalHRPData = {}
 end
 
 Players.PlayerRemoving:Connect(function(player)
     originalHRPData[player.UserId] = nil
+    _removeEnemyCircle(player.UserId)
 end)
 
 TabCombat:Toggle({
-    Title = "Ativar Hit Range Extender",
+    Title    = "Ativar Enemy Hitbox Extender",
     Flag     = "HitRange",
-    Value = false,
+    Value    = false,
     Callback = function(v)
         HIT_RANGE_ENABLED = v
         if v then extendHitboxes() else restoreHitboxes() end
@@ -473,23 +732,70 @@ TabCombat:Toggle({
 
 TabCombat:Slider({
     Title = "Tamanho da Hitbox",
-    Flag     = "HitboxSize",
+    Flag  = "HitboxSize",
     Step  = 1,
-    Value = { Min = 5, Max = 30, Default = 10 },
+    Value = { Min = 5, Max = 300, Default = 10 },
     Callback = function(v)
         HIT_RANGE_SIZE = v
         if HIT_RANGE_ENABLED then extendHitboxes() end
     end
 })
 
--- Roda com throttle de 0.1s para manter o tamanho sem sobrecarregar o GC
+TabCombat:Toggle({
+    Title    = "Mostrar Quadrado da Hitbox",
+    Flag     = "EnemyCircleShow",
+    Value    = true,
+    Callback = function(v)
+        ENEMY_CIRCLE_SHOW = v
+        if not v then
+            for _, lines in pairs(enemyCircles) do _hideRing(lines) end
+        end
+    end
+})
+
+TabCombat:Colorpicker({
+    Title    = "Cor do Quadrado (Enemy)",
+    Flag     = "EnemyCircleColor",
+    Color    = Color3.fromRGB(255, 255, 255),
+    Callback = function(col)
+        ENEMY_CIRCLE_COLOR = col
+        for _, lines in pairs(enemyCircles) do
+            for _, l in ipairs(lines) do l.Color = col end
+        end
+    end
+})
+
+TabCombat:Slider({
+    Title = "Transparência (Enemy)",
+    Flag  = "EnemyAlpha",
+    Step  = 0.05,
+    Value = { Min = 0, Max = 1, Default = 0.5 },
+    Callback = function(v)
+        ENEMY_ALPHA = v
+    end
+})
+
 local _lastHitboxUpdate = 0
 RunService.RenderStepped:Connect(function()
-    if not HIT_RANGE_ENABLED then return end
-    local _now = tick()
-    if _now - _lastHitboxUpdate < 0.1 then return end
-    _lastHitboxUpdate = _now
-    extendHitboxes()
+    if not HIT_RANGE_ENABLED then
+        for _, lines in pairs(enemyCircles) do _hideRing(lines) end
+        return
+    end
+    local now = tick()
+    if now - _lastHitboxUpdate >= 0.1 then
+        _lastHitboxUpdate = now
+        extendHitboxes()
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        local lines = enemyCircles[player.UserId]
+        if not lines then continue end
+        local char = player.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then _hideRing(lines); continue end
+        local origData = originalHRPData[player.UserId]
+        _renderRing(lines, hrp.Position, HIT_RANGE_SIZE / 2, ENEMY_CIRCLE_COLOR, ENEMY_CIRCLE_SHOW, ENEMY_ALPHA)
+    end
 end)
 
 Players.PlayerAdded:Connect(function(player)
@@ -498,6 +804,277 @@ Players.PlayerAdded:Connect(function(player)
         if HIT_RANGE_ENABLED then extendHitboxes() end
     end)
 end)
+
+-- ================== NPC HITBOX EXTENDER ==================
+do
+    local NPC_HIT_ENABLED  = false
+    local NPC_HIT_SIZE     = 10
+    local NPC_CIRCLE_SHOW  = true
+    local NPC_CIRCLE_COLOR = Color3.fromRGB(255, 255, 255)
+    local NPC_ALPHA        = 0.5
+    local originalNPCData  = {}
+    local npcCircles       = {}  -- [id] = { lines }
+
+    local function _removeNPCCircle(id)
+        if npcCircles[id] then
+            _removeRing(npcCircles[id])
+            npcCircles[id] = nil
+        end
+    end
+
+    local function extendNPCHitboxes()
+        local playerChars = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p.Character then playerChars[p.Character] = true end
+        end
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and not playerChars[obj] and obj:FindFirstChildWhichIsA("Humanoid") then
+                local hrp = obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChild("Torso")
+                if hrp and hrp:IsA("BasePart") then
+                    local id = tostring(hrp)
+                    if not originalNPCData[id] then
+                        originalNPCData[id] = {
+                            hrpRef       = hrp,
+                            Size         = hrp.Size,
+                            Transparency = hrp.Transparency,
+                            CanCollide   = hrp.CanCollide,
+                        }
+                    end
+                    local origY = originalNPCData[id].Size.Y
+                    hrp.Size         = Vector3.new(NPC_HIT_SIZE, origY, NPC_HIT_SIZE)
+                    hrp.Transparency = 1
+                    hrp.CanCollide   = false
+                    if not npcCircles[id] then
+                        npcCircles[id] = _makeRing(NPC_CIRCLE_COLOR)
+                    end
+                end
+            end
+        end
+    end
+
+    local function restoreNPCHitboxes()
+        for id, data in pairs(originalNPCData) do
+            pcall(function()
+                if data.hrpRef and data.hrpRef.Parent then
+                    data.hrpRef.Size         = data.Size
+                    data.hrpRef.Transparency = data.Transparency
+                    data.hrpRef.CanCollide   = data.CanCollide
+                end
+            end)
+            _removeNPCCircle(id)
+        end
+        originalNPCData = {}
+    end
+
+    TabCombat:Section({ Title = "NPC Hitbox Extender" })
+
+    TabCombat:Toggle({
+        Title    = "Ativar NPC Hitbox Extender",
+        Flag     = "NPCHitRange",
+        Value    = false,
+        Callback = function(v)
+            NPC_HIT_ENABLED = v
+            if v then extendNPCHitboxes() else restoreNPCHitboxes() end
+        end
+    })
+
+    TabCombat:Slider({
+        Title = "Tamanho da Hitbox NPC",
+        Flag  = "NPCHitboxSize",
+        Step  = 1,
+        Value = { Min = 5, Max = 300, Default = 10 },
+        Callback = function(v)
+            NPC_HIT_SIZE = v
+            if NPC_HIT_ENABLED then extendNPCHitboxes() end
+        end
+    })
+
+    TabCombat:Toggle({
+        Title    = "Mostrar Quadrado da Hitbox",
+        Flag     = "NPCCircleShow",
+        Value    = true,
+        Callback = function(v)
+            NPC_CIRCLE_SHOW = v
+            if not v then
+                for _, lines in pairs(npcCircles) do _hideRing(lines) end
+            end
+        end
+    })
+
+    TabCombat:Colorpicker({
+        Title    = "Cor do Quadrado (NPC)",
+        Flag     = "NPCCircleColor",
+        Color    = Color3.fromRGB(255, 255, 255),
+        Callback = function(col)
+            NPC_CIRCLE_COLOR = col
+            for _, lines in pairs(npcCircles) do
+                for _, l in ipairs(lines) do l.Color = col end
+            end
+        end
+    })
+
+    TabCombat:Slider({
+        Title = "Transparência (NPC)",
+        Flag  = "NPCAlpha",
+        Step  = 0.05,
+        Value = { Min = 0, Max = 1, Default = 1 },
+        Callback = function(v) NPC_ALPHA = v end
+    })
+
+    local _lastNPCTick = 0
+    RunService.RenderStepped:Connect(function()
+        if not NPC_HIT_ENABLED then
+            for _, lines in pairs(npcCircles) do _hideRing(lines) end
+            return
+        end
+        local n = tick()
+        if n - _lastNPCTick >= 0.1 then
+            _lastNPCTick = n
+            extendNPCHitboxes()
+        end
+        for id, data in pairs(originalNPCData) do
+            local lines = npcCircles[id]
+            if not lines then continue end
+            local hrp = data.hrpRef
+            if not hrp or not hrp.Parent then _hideRing(lines); continue end
+            _renderRing(lines, hrp.Position, NPC_HIT_SIZE / 2, NPC_CIRCLE_COLOR, NPC_CIRCLE_SHOW, NPC_ALPHA)
+        end
+    end)
+end
+
+-- ================== PLAYER HITBOX EXTENDER (próprio jogador) ==================
+do
+    local PLAYER_HIT_ENABLED    = false
+    local PLAYER_HIT_SIZE       = 10
+    local PLAYER_CIRCLE_SHOW    = true
+    local PLAYER_CIRCLE_COLOR   = Color3.fromRGB(255, 255, 255)
+    local PLAYER_ALPHA          = 0.5
+    local originalPlayerHRPData = nil
+    local selfLines             = nil  -- table of Drawing.Line
+
+    local function getLPHRP()
+        return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function _ensureSelfLines()
+        if not selfLines then
+            selfLines = _makeRing(PLAYER_CIRCLE_COLOR)
+        end
+    end
+
+    local function expandMyHitbox()
+        local hrp = getLPHRP()
+        if not hrp then return end
+        if not originalPlayerHRPData then
+            originalPlayerHRPData = {
+                Size         = hrp.Size,
+                Transparency = hrp.Transparency,
+                CanCollide   = hrp.CanCollide,
+            }
+        end
+        local origY = originalPlayerHRPData.Size.Y
+        hrp.Size         = Vector3.new(PLAYER_HIT_SIZE, origY, PLAYER_HIT_SIZE)
+        hrp.Transparency = 1
+        hrp.CanCollide   = false
+        _ensureSelfLines()
+    end
+
+    local function restoreMyHitbox()
+        local hrp = getLPHRP()
+        if hrp and originalPlayerHRPData then
+            pcall(function()
+                hrp.Size         = originalPlayerHRPData.Size
+                hrp.Transparency = originalPlayerHRPData.Transparency
+                hrp.CanCollide   = originalPlayerHRPData.CanCollide
+            end)
+        end
+        originalPlayerHRPData = nil
+        if selfLines then _hideRing(selfLines) end
+    end
+
+    LP.CharacterAdded:Connect(function()
+        originalPlayerHRPData = nil
+        task.wait(0.5)
+        if PLAYER_HIT_ENABLED then expandMyHitbox() end
+    end)
+
+    TabCombat:Section({ Title = "Player Hitbox Extender" })
+
+    TabCombat:Toggle({
+        Title    = "Ativar Player Hitbox Extender",
+        Flag     = "PlayerHitRange",
+        Value    = false,
+        Callback = function(v)
+            PLAYER_HIT_ENABLED = v
+            if v then expandMyHitbox() else restoreMyHitbox() end
+        end
+    })
+
+    TabCombat:Slider({
+        Title = "Tamanho da Hitbox (meu jogador)",
+        Flag  = "PlayerHitboxSize",
+        Step  = 1,
+        Value = { Min = 5, Max = 300, Default = 10 },
+        Callback = function(v)
+            PLAYER_HIT_SIZE = v
+            if PLAYER_HIT_ENABLED then
+                originalPlayerHRPData = nil
+                expandMyHitbox()
+            end
+        end
+    })
+
+    TabCombat:Toggle({
+        Title    = "Mostrar Quadrado da Hitbox",
+        Flag     = "PlayerCircleShow",
+        Value    = true,
+        Callback = function(v)
+            PLAYER_CIRCLE_SHOW = v
+            if not v and selfLines then _hideRing(selfLines) end
+        end
+    })
+
+    TabCombat:Colorpicker({
+        Title    = "Cor do Quadrado (Player)",
+        Flag     = "PlayerCircleColor",
+        Color    = Color3.fromRGB(255, 255, 255),
+        Callback = function(col)
+            PLAYER_CIRCLE_COLOR = col
+            if selfLines then
+                for _, l in ipairs(selfLines) do l.Color = col end
+            end
+        end
+    })
+
+    TabCombat:Slider({
+        Title = "Transparência (Player)",
+        Flag  = "PlayerAlpha",
+        Step  = 0.05,
+        Value = { Min = 0, Max = 1, Default = 1 },
+        Callback = function(v) PLAYER_ALPHA = v end
+    })
+
+    local _lastPHitTick = 0
+    RunService.RenderStepped:Connect(function()
+        if not PLAYER_HIT_ENABLED then
+            if selfLines then _hideRing(selfLines) end
+            return
+        end
+        local n = tick()
+        if n - _lastPHitTick >= 0.1 then
+            _lastPHitTick = n
+            expandMyHitbox()
+        end
+        if selfLines then
+            local hrp = getLPHRP()
+            if hrp and originalPlayerHRPData then
+                _renderRing(selfLines, hrp.Position, PLAYER_HIT_SIZE / 2, PLAYER_CIRCLE_COLOR, PLAYER_CIRCLE_SHOW, PLAYER_ALPHA)
+            else
+                _hideRing(selfLines)
+            end
+        end
+    end)
+end
 
 TabCombat:Section({ Title = "Auto Press" })
 
@@ -767,10 +1344,9 @@ TabESP:Toggle({
 })
 
 -- Pre-definição das opções (evita dropdown vazio no WindUI)
-local ESP_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
 TabESP:Dropdown({
     Title   = "Filtro de Time",
-    Values  = ESP_TEAM_OPTIONS,
+    Values  = { "All", "My Team", "Enemy Team" },
     Flag     = "ESPTeamFilter",
     Multi   = false,
     Default = 1,   -- "All"
@@ -934,10 +1510,9 @@ TabHighlight:Toggle({
     Callback = function(v) HIGHLIGHT_ENABLED = v updateAllHighlights() end
 })
 
-local HIGHLIGHT_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
 TabHighlight:Dropdown({
     Title   = "Filtro de Time",
-    Values  = HIGHLIGHT_TEAM_OPTIONS,
+    Values  = { "All", "My Team", "Enemy Team" },
     Flag     = "HighlightTeamFilter",
     Multi   = false,
     Default = 1,   -- "All"
@@ -1051,10 +1626,9 @@ TabAim:Toggle({
     end
 })
 
-local AIM_TEAM_OPTIONS = { "All", "My Team", "Enemy Team" }
 TabAim:Dropdown({
     Title   = "Filtro de Time",
-    Values  = AIM_TEAM_OPTIONS,
+    Values  = { "All", "My Team", "Enemy Team" },
     Flag     = "AimTeamFilter",
     Multi   = false,
     Default = 3,   -- "Enemy Team"
@@ -1085,10 +1659,9 @@ TabAim:Slider({
     Callback = function(v) AIM_SMOOTH = v end
 })
 
-local AIM_PART_OPTIONS = { "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso" }
 TabAim:Dropdown({
     Title   = "Parte do Corpo",
-    Values  = AIM_PART_OPTIONS,
+    Values  = { "Head", "HumanoidRootPart", "UpperTorso", "LowerTorso" },
     Flag     = "AimPart",
     Multi   = false,
     Default = 1,   -- "Head"
@@ -1304,10 +1877,9 @@ TabPlayerAim:Slider({
     Callback = function(v) PlayerAimSmoothness = v end
 })
 
-local PLAYER_AIM_PART_OPTIONS = { "Head", "Torso", "HumanoidRootPart" }
 TabPlayerAim:Dropdown({
     Title   = "Parte do Corpo",
-    Values  = PLAYER_AIM_PART_OPTIONS,
+    Values  = { "Head", "Torso", "HumanoidRootPart" },
     Flag     = "PlayerAimPart",
     Multi   = false,
     Default = 1,   -- "Head"
@@ -1398,53 +1970,55 @@ TabProt:Toggle({ Title = "Anti Void",        Flag = "AntiVoid", Value = false, C
 
 TabPlayers:Section({ Title = "Teleporte e Spectate" })
 
-local selectedName = nil
+do -- Players Tab
+    local selectedName = nil
 
-local function getPlayerNames()
-    local t = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LP then table.insert(t, p.Name) end
-    end
-    return t
-end
-
-local playerDropdown = TabPlayers:Dropdown({
-    Title   = "Selecionar Player",
-    Values  = getPlayerNames(),
-    Multi   = false,
-    Default = 1,
-    Callback = function(v) selectedName = parseDropdownValue(v) end
-})
-
-TabPlayers:Button({
-    Title = "Atualizar Lista",
-    Callback = function() playerDropdown:Refresh(getPlayerNames()) end
-})
-
-TabPlayers:Button({
-    Title = "TP para Player",
-    Callback = function()
-        local t = Players:FindFirstChild(selectedName)
-        if t and t.Character and HRP then
-            HRP.CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+    local function getPlayerNames()
+        local t = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LP then table.insert(t, p.Name) end
         end
+        return t
     end
-})
 
-TabPlayers:Button({
-    Title = "Spectate",
-    Callback = function()
-        local t = Players:FindFirstChild(selectedName)
-        if t and t.Character then
-            Camera.CameraSubject = t.Character:FindFirstChildOfClass("Humanoid")
+    local playerDropdown = TabPlayers:Dropdown({
+        Title   = "Selecionar Player",
+        Values  = getPlayerNames(),
+        Multi   = false,
+        Default = 1,
+        Callback = function(v) selectedName = parseDropdownValue(v) end
+    })
+
+    TabPlayers:Button({
+        Title = "Atualizar Lista",
+        Callback = function() playerDropdown:Refresh(getPlayerNames()) end
+    })
+
+    TabPlayers:Button({
+        Title = "TP para Player",
+        Callback = function()
+            local t = Players:FindFirstChild(selectedName)
+            if t and t.Character and HRP then
+                HRP.CFrame = t.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+            end
         end
-    end
-})
+    })
 
-TabPlayers:Button({
-    Title = "Voltar Camera",
-    Callback = function() Camera.CameraSubject = Humanoid end
-})
+    TabPlayers:Button({
+        Title = "Spectate",
+        Callback = function()
+            local t = Players:FindFirstChild(selectedName)
+            if t and t.Character then
+                Camera.CameraSubject = t.Character:FindFirstChildOfClass("Humanoid")
+            end
+        end
+    })
+
+    TabPlayers:Button({
+        Title = "Voltar Camera",
+        Callback = function() Camera.CameraSubject = Humanoid end
+    })
+end -- Players Tab
 
 -- ==================================================================================
 -- ============================== WAYPOINTS TAB =====================================
@@ -1452,110 +2026,112 @@ TabPlayers:Button({
 
 TabWaypoints:Section({ Title = "Sistema de Waypoints" })
 
-local savedWaypoints  = {}
-local waypointSelected = nil
-local waypointNameInput = ""
+do -- Waypoints Tab
+    local savedWaypoints   = {}
+    local waypointSelected = nil
+    local waypointNameInput = ""
 
-local function resolvePosition(pos)
-    if type(pos) == "userdata" then return pos end
-    if type(pos) == "table" then return Vector3.new(pos.X or 0, pos.Y or 0, pos.Z or 0) end
-    return nil
-end
-
-local function getWaypointList()
-    local list = {}
-    for name, _ in pairs(savedWaypoints) do table.insert(list, name) end
-    table.sort(list)
-    return #list > 0 and list or { "Nenhum waypoint salvo" }
-end
-
-TabWaypoints:Input({
-    Title       = "Nome do Waypoint",
-    Placeholder = "Digite o nome...",
-    Callback    = function(text) waypointNameInput = text end
-})
-
-local waypointDropdown = TabWaypoints:Dropdown({
-    Title   = "Selecionar Waypoint",
-    Values  = getWaypointList(),
-    Multi   = false,
-    Default = 1,
-    Callback = function(opt)
-        waypointSelected = parseDropdownValue(opt)
+    local function resolvePosition(pos)
+        if type(pos) == "userdata" then return pos end
+        if type(pos) == "table" then return Vector3.new(pos.X or 0, pos.Y or 0, pos.Z or 0) end
+        return nil
     end
-})
 
-TabWaypoints:Button({
-    Title = "Salvar Posição Atual",
-    Callback = function()
-        if not waypointNameInput or waypointNameInput == "" then
-            WindUI:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
-            return
+    local function getWaypointList()
+        local list = {}
+        for name, _ in pairs(savedWaypoints) do table.insert(list, name) end
+        table.sort(list)
+        return #list > 0 and list or { "Nenhum waypoint salvo" }
+    end
+
+    TabWaypoints:Input({
+        Title       = "Nome do Waypoint",
+        Placeholder = "Digite o nome...",
+        Callback    = function(text) waypointNameInput = text end
+    })
+
+    local waypointDropdown = TabWaypoints:Dropdown({
+        Title   = "Selecionar Waypoint",
+        Values  = getWaypointList(),
+        Multi   = false,
+        Default = 1,
+        Callback = function(opt)
+            waypointSelected = parseDropdownValue(opt)
         end
-        if not HRP then return end
-        local pos = HRP.CFrame.Position
-        savedWaypoints[waypointNameInput] = { Position = { X = pos.X, Y = pos.Y, Z = pos.Z }, Time = os.date("%H:%M:%S") }
-        waypointDropdown:Refresh(getWaypointList())
-        WindUI:Notify({ Title = "Waypoint Salvo", Content = "'" .. waypointNameInput .. "' salvo!", Duration = 3 })
-    end
-})
+    })
 
-TabWaypoints:Button({
-    Title = "Teleportar para Waypoint",
-    Callback = function()
-        local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
-        if not name or name == "" or name == "Nenhum waypoint salvo" then
-            WindUI:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
-            return
+    TabWaypoints:Button({
+        Title = "Salvar Posição Atual",
+        Callback = function()
+            if not waypointNameInput or waypointNameInput == "" then
+                WindUI:Notify({ Title = "Erro", Content = "Digite um nome para o waypoint!", Duration = 3 })
+                return
+            end
+            if not HRP then return end
+            local pos = HRP.CFrame.Position
+            savedWaypoints[waypointNameInput] = { Position = { X = pos.X, Y = pos.Y, Z = pos.Z }, Time = os.date("%H:%M:%S") }
+            waypointDropdown:Refresh(getWaypointList())
+            WindUI:Notify({ Title = "Waypoint Salvo", Content = "'" .. waypointNameInput .. "' salvo!", Duration = 3 })
         end
-        local wpData = savedWaypoints[name]
-        if not wpData or not HRP then WindUI:Notify({ Title = "Erro", Content = "Waypoint inválido!", Duration = 3 }) return end
-        local pos = resolvePosition(wpData.Position)
-        if pos then
-            HRP.CFrame = CFrame.new(pos)
-            WindUI:Notify({ Title = "Teleportado", Content = "Chegou em '" .. name .. "'!", Duration = 2 })
-        end
-    end
-})
+    })
 
-TabWaypoints:Button({
-    Title = "Deletar Waypoint",
-    Callback = function()
-        local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
-        if not name or name == "Nenhum waypoint salvo" then return end
-        savedWaypoints[name] = nil
-        waypointSelected     = nil
-        waypointDropdown:Refresh(getWaypointList())
-        WindUI:Notify({ Title = "Deletado", Content = "Waypoint removido!", Duration = 2 })
-    end
-})
-
-TabWaypoints:Button({
-    Title = "Atualizar Lista",
-    Callback = function() waypointDropdown:Refresh(getWaypointList()) end
-})
-
-TabWaypoints:Section({ Title = "Teleporte Rápido" })
-
-TabWaypoints:Button({
-    Title = "TP para Spawn",
-    Callback = function()
-        if not HRP then return end
-        local spawnLocation = workspace:FindFirstChildOfClass("SpawnLocation") or workspace:FindFirstChild("Spawn")
-        if not spawnLocation then
-            for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("SpawnLocation") then spawnLocation = obj break end
+    TabWaypoints:Button({
+        Title = "Teleportar para Waypoint",
+        Callback = function()
+            local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
+            if not name or name == "" or name == "Nenhum waypoint salvo" then
+                WindUI:Notify({ Title = "Erro", Content = "Selecione um waypoint válido!", Duration = 3 })
+                return
+            end
+            local wpData = savedWaypoints[name]
+            if not wpData or not HRP then WindUI:Notify({ Title = "Erro", Content = "Waypoint inválido!", Duration = 3 }) return end
+            local pos = resolvePosition(wpData.Position)
+            if pos then
+                HRP.CFrame = CFrame.new(pos)
+                WindUI:Notify({ Title = "Teleportado", Content = "Chegou em '" .. name .. "'!", Duration = 2 })
             end
         end
-        if spawnLocation then
-            HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
-            WindUI:Notify({ Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2 })
-        else
-            HRP.CFrame = CFrame.new(0, 5, 0)
-            WindUI:Notify({ Title = "Aviso", Content = "Spawn não encontrado. Foi para (0,5,0)", Duration = 3 })
+    })
+
+    TabWaypoints:Button({
+        Title = "Deletar Waypoint",
+        Callback = function()
+            local name = type(waypointSelected) == "table" and waypointSelected[1] or tostring(waypointSelected or "")
+            if not name or name == "Nenhum waypoint salvo" then return end
+            savedWaypoints[name] = nil
+            waypointSelected     = nil
+            waypointDropdown:Refresh(getWaypointList())
+            WindUI:Notify({ Title = "Deletado", Content = "Waypoint removido!", Duration = 2 })
         end
-    end
-})
+    })
+
+    TabWaypoints:Button({
+        Title = "Atualizar Lista",
+        Callback = function() waypointDropdown:Refresh(getWaypointList()) end
+    })
+
+    TabWaypoints:Section({ Title = "Teleporte Rápido" })
+
+    TabWaypoints:Button({
+        Title = "TP para Spawn",
+        Callback = function()
+            if not HRP then return end
+            local spawnLocation = workspace:FindFirstChildOfClass("SpawnLocation") or workspace:FindFirstChild("Spawn")
+            if not spawnLocation then
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj:IsA("SpawnLocation") then spawnLocation = obj break end
+                end
+            end
+            if spawnLocation then
+                HRP.CFrame = spawnLocation.CFrame + Vector3.new(0, 5, 0)
+                WindUI:Notify({ Title = "Teleportado", Content = "Chegou no Spawn!", Duration = 2 })
+            else
+                HRP.CFrame = CFrame.new(0, 5, 0)
+                WindUI:Notify({ Title = "Aviso", Content = "Spawn não encontrado. Foi para (0,5,0)", Duration = 3 })
+            end
+        end
+    })
+end -- Waypoints Tab
 
 -- ==================================================================================
 -- ============================== VISUALS TAB =======================================
@@ -1998,107 +2574,86 @@ TabFPS:Slider({
 
 TabFPS:Section({ Title = "📊 Stats em Tempo Real" })
 
--- ScreenGui independente para exibir stats no canto da tela
-local statsGui = Instance.new("ScreenGui")
-statsGui.Name            = "HubStatsHUD"
-statsGui.ResetOnSpawn    = false
-statsGui.ZIndexBehavior  = Enum.ZIndexBehavior.Sibling
-statsGui.IgnoreGuiInset  = true
-pcall(function()
-    statsGui.Parent = game:GetService("CoreGui")
-end)
-if not statsGui.Parent then
-    statsGui.Parent = LP.PlayerGui
-end
+do -- Stats HUD
+    local statsGui = Instance.new("ScreenGui")
+    statsGui.Name           = "HubStatsHUD"
+    statsGui.ResetOnSpawn   = false
+    statsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    statsGui.IgnoreGuiInset = true
+    pcall(function() statsGui.Parent = game:GetService("CoreGui") end)
+    if not statsGui.Parent then statsGui.Parent = LP.PlayerGui end
 
-local statsFrame = Instance.new("Frame")
-statsFrame.Name                 = "StatsFrame"
-statsFrame.Size                 = UDim2.new(0, 210, 0, 0)       -- altura auto
-statsFrame.AutomaticSize        = Enum.AutomaticSize.Y          -- cresce com o conteúdo
-statsFrame.Position             = UDim2.new(1, -218, 0, 70)
-statsFrame.BackgroundColor3     = Color3.fromRGB(10, 10, 10)
-statsFrame.BackgroundTransparency = 0.35
-statsFrame.BorderSizePixel      = 0
-statsFrame.Visible              = false
-statsFrame.Parent               = statsGui
+    local statsFrame = Instance.new("Frame")
+    statsFrame.Name                   = "StatsFrame"
+    statsFrame.Size                   = UDim2.new(0, 210, 0, 0)
+    statsFrame.AutomaticSize          = Enum.AutomaticSize.Y
+    statsFrame.Position               = UDim2.new(1, -218, 0, 70)
+    statsFrame.BackgroundColor3       = Color3.fromRGB(10, 10, 10)
+    statsFrame.BackgroundTransparency = 0.35
+    statsFrame.BorderSizePixel        = 0
+    statsFrame.Visible                = false
+    statsFrame.Parent                 = statsGui
+    Instance.new("UICorner", statsFrame).CornerRadius = UDim.new(0, 6)
+    local pad = Instance.new("UIPadding", statsFrame)
+    pad.PaddingTop = UDim.new(0,5); pad.PaddingBottom = UDim.new(0,5)
+    pad.PaddingLeft = UDim.new(0,6); pad.PaddingRight = UDim.new(0,6)
 
-local statsCorner = Instance.new("UICorner")
-statsCorner.CornerRadius = UDim.new(0, 6)
-statsCorner.Parent       = statsFrame
+    local statsText = Instance.new("TextLabel", statsFrame)
+    statsText.Size                   = UDim2.new(1, 0, 0, 0)
+    statsText.AutomaticSize          = Enum.AutomaticSize.Y
+    statsText.BackgroundTransparency = 1
+    statsText.TextColor3             = Color3.fromRGB(220, 220, 220)
+    statsText.TextSize               = 12
+    statsText.Font                   = Enum.Font.Code
+    statsText.TextXAlignment         = Enum.TextXAlignment.Left
+    statsText.RichText               = true
+    statsText.TextWrapped            = false
+    statsText.Text                   = "Carregando stats..."
 
--- Padding interno para não colar texto na borda
-local statsPad = Instance.new("UIPadding")
-statsPad.PaddingTop    = UDim.new(0, 5)
-statsPad.PaddingBottom = UDim.new(0, 5)
-statsPad.PaddingLeft   = UDim.new(0, 6)
-statsPad.PaddingRight  = UDim.new(0, 6)
-statsPad.Parent        = statsFrame
+    local STATS_HUD_ENABLED = false
+    local _fpsCount, _lastFpsUpdate, _currentFPS = 0, tick(), 0
 
-local statsText = Instance.new("TextLabel")
-statsText.Name                   = "StatsText"
-statsText.Size                   = UDim2.new(1, 0, 0, 0)        -- largura 100%, altura auto
-statsText.AutomaticSize          = Enum.AutomaticSize.Y
-statsText.BackgroundTransparency = 1
-statsText.TextColor3             = Color3.fromRGB(220, 220, 220)
-statsText.TextSize               = 12
-statsText.Font                   = Enum.Font.Code
-statsText.TextXAlignment         = Enum.TextXAlignment.Left
-statsText.TextYAlignment         = Enum.TextYAlignment.Top
-statsText.RichText               = true
-statsText.TextWrapped            = false
-statsText.Text                   = "Carregando stats..."
-statsText.Parent                 = statsFrame
+    TabFPS:Toggle({
+        Title = "Mostrar Stats HUD (overlay)",
+        Flag  = "StatsHUD",
+        Value = false,
+        Callback = function(v)
+            STATS_HUD_ENABLED  = v
+            statsFrame.Visible = v
+        end
+    })
 
-local STATS_HUD_ENABLED = false
+    RunService.RenderStepped:Connect(function()
+        _fpsCount = _fpsCount + 1
+        if tick() - _lastFpsUpdate >= 1 then
+            _currentFPS    = _fpsCount
+            _fpsCount      = 0
+            _lastFpsUpdate = tick()
+        end
+    end)
 
-TabFPS:Toggle({
-    Title = "Mostrar Stats HUD (overlay)",
-    Flag     = "StatsHUD",
-    Value = false,
-    Callback = function(v)
-        STATS_HUD_ENABLED  = v
-        statsFrame.Visible = v
-    end
-})
-
--- Contador de FPS
-local _fpsCount      = 0
-local _lastFpsUpdate = tick()
-local _currentFPS    = 0
-
-RunService.RenderStepped:Connect(function()
-    _fpsCount = _fpsCount + 1
-    if tick() - _lastFpsUpdate >= 1 then
-        _currentFPS    = _fpsCount
-        _fpsCount      = 0
-        _lastFpsUpdate = tick()
-    end
-end)
-
--- Loop de atualização do HUD
-task.spawn(function()
-    while task.wait(0.5) do
-        if not STATS_HUD_ENABLED then continue end
-        pcall(function()
-            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
-            local playerCount = #Players:GetPlayers()
-            local maxPlayers  = Players.MaxPlayers
-
-            local hp, maxhp, speed, jump = "?", "?", "?", "?"
-            if Character and Humanoid then
-                hp     = math.floor(Humanoid.Health)
-                maxhp  = math.floor(Humanoid.MaxHealth)
-                speed  = math.floor(Humanoid.WalkSpeed)
-                jump   = math.floor(Humanoid.JumpPower)
-            end
-
-            statsText.Text = string.format(
-                "<b>FPS:</b> %d\n<b>Ping:</b> %.0f ms\n<b>Players:</b> %d/%d\n<b>HP:</b> %s/%s\n<b>Speed:</b> %s  <b>Jump:</b> %s",
-                _currentFPS, ping, playerCount, maxPlayers, hp, maxhp, speed, jump
-            )
-        end)
-    end
-end)
+    task.spawn(function()
+        while task.wait(0.5) do
+            if not STATS_HUD_ENABLED then continue end
+            pcall(function()
+                local ping        = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+                local playerCount = #Players:GetPlayers()
+                local maxPlayers  = Players.MaxPlayers
+                local hp, maxhp, speed, jump = "?", "?", "?", "?"
+                if Character and Humanoid then
+                    hp    = math.floor(Humanoid.Health)
+                    maxhp = math.floor(Humanoid.MaxHealth)
+                    speed = math.floor(Humanoid.WalkSpeed)
+                    jump  = math.floor(Humanoid.JumpPower)
+                end
+                statsText.Text = string.format(
+                    "<b>FPS:</b> %d\n<b>Ping:</b> %.0f ms\n<b>Players:</b> %d/%d\n<b>HP:</b> %s/%s\n<b>Speed:</b> %s  <b>Jump:</b> %s",
+                    _currentFPS, ping, playerCount, maxPlayers, hp, maxhp, speed, jump
+                )
+            end)
+        end
+    end)
+end -- Stats HUD
 
 -- ==================================================================================
 -- ============================== CONFIG TAB ========================================
