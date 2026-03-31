@@ -573,6 +573,7 @@ TabCombat:Section({ Title = "Enemy Hitbox Extender" })
 
 local HIT_RANGE_ENABLED  = false
 local HIT_RANGE_SIZE     = 10
+local HIT_RANGE_FILTER   = "Enemy"  -- "Enemy" | "My Team" | "All"
 local ENEMY_CIRCLE_SHOW  = true
 local ENEMY_CIRCLE_COLOR = Color3.fromRGB(255, 255, 255)
 local ENEMY_ALPHA        = 0.5
@@ -677,24 +678,42 @@ end
 
 local function extendHitboxes()
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LP and player.Character then
-            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if hrp and hrp:IsA("BasePart") then
-                if not originalHRPData[player.UserId] then
-                    originalHRPData[player.UserId] = {
-                        Size         = hrp.Size,
-                        Transparency = hrp.Transparency,
-                        CanCollide   = hrp.CanCollide,
-                    }
-                end
-                local origY = originalHRPData[player.UserId].Size.Y
-                hrp.Size         = Vector3.new(HIT_RANGE_SIZE, origY, HIT_RANGE_SIZE)
-                hrp.Transparency = 1
-                hrp.CanCollide   = false
-                if not enemyCircles[player.UserId] then
-                    enemyCircles[player.UserId] = _makeRing(ENEMY_CIRCLE_COLOR)
+        if player == LP then continue end
+        local uid = player.UserId
+        if shouldShowPlayer(player, HIT_RANGE_FILTER) then
+            -- Jogador passa no filtro: expande hitbox
+            if player.Character then
+                local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp:IsA("BasePart") then
+                    if not originalHRPData[uid] then
+                        originalHRPData[uid] = {
+                            Size         = hrp.Size,
+                            Transparency = hrp.Transparency,
+                            CanCollide   = hrp.CanCollide,
+                        }
+                    end
+                    local origY = originalHRPData[uid].Size.Y
+                    hrp.Size         = Vector3.new(HIT_RANGE_SIZE, origY, HIT_RANGE_SIZE)
+                    hrp.Transparency = 1
+                    hrp.CanCollide   = false
+                    if not enemyCircles[uid] then
+                        enemyCircles[uid] = _makeRing(ENEMY_CIRCLE_COLOR)
+                    end
                 end
             end
+        else
+            -- Jogador fora do filtro: restaura hitbox original e remove círculo
+            if player.Character then
+                local hrp  = player.Character:FindFirstChild("HumanoidRootPart")
+                local data = originalHRPData[uid]
+                if hrp and data then
+                    hrp.Size         = data.Size
+                    hrp.Transparency = data.Transparency
+                    hrp.CanCollide   = data.CanCollide
+                end
+            end
+            originalHRPData[uid] = nil
+            _removeEnemyCircle(uid)
         end
     end
 end
@@ -728,6 +747,18 @@ TabCombat:Toggle({
         HIT_RANGE_ENABLED = v
         if v then extendHitboxes() else restoreHitboxes() end
     end
+})
+
+TabCombat:Dropdown({
+    Title    = "Filtro de Time (Hitbox)",
+    Flag     = "HitboxTeamFilter",
+    Values   = {"Enemy", "My Team", "All"},
+    Value    = "Enemy",
+    Multi    = false,
+    Callback = function(v)
+        HIT_RANGE_FILTER = parseDropdownValue(v)
+        if HIT_RANGE_ENABLED then extendHitboxes() end
+    end,
 })
 
 TabCombat:Slider({
